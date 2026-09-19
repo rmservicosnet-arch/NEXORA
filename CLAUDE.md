@@ -107,6 +107,9 @@ o runtime.
 | `SET` em vez de `SET LOCAL` | O pool reaproveita a conexão e vaza o tenant anterior |
 | Pacote CommonJS consumido pelo Vite | `@estoque/contracts` tem saída dupla ESM/CJS |
 | Várias renovações de token simultâneas | O cliente web compartilha uma só promessa; senão o servidor vê reuso e derruba a sessão |
+| Cache do TanStack Query sobrevivendo à troca de usuário | `queryClient.clear()` ao entrar e ao sair; a chave descreve o filtro, não quem perguntou — foi assim que a coluna de custo do admin apareceu para uma vendedora |
+| `Slot` do Radix com mais de um filho | `Botao` com `comoFilho` emite só `children`; `{spinner}{children}` vira array e o Radix lança |
+| Mensagem de validação do Zod em inglês | `packages/contracts/src/idioma.ts` configura pt-BR; o mesmo schema valida no navegador e na API |
 
 ## Testes
 

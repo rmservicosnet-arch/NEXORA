@@ -1,4 +1,5 @@
 import { temPermissao, type UsuarioSessao } from '@estoque/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
@@ -25,6 +26,7 @@ const Contexto = createContext<ValorSessao | null>(null);
 export function ProvedorSessao({ children }: { readonly children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioSessao | null>(null);
   const [restaurando, setRestaurando] = useState(true);
+  const fila = useQueryClient();
 
   // Ao abrir a aplicação o token de acesso não existe — ele vive em memória
   // e morreu no recarregamento. O cookie de refresh sobreviveu, então a
@@ -49,16 +51,41 @@ export function ProvedorSessao({ children }: { readonly children: ReactNode }) {
     };
   }, []);
 
-  const entrar = useCallback(async (email: string, senha: string) => {
-    const sessao = await api.entrar(email, senha);
-    definirToken(sessao.tokenAcesso);
-    setUsuario(sessao.usuario);
-  }, []);
+  /**
+   * Esvazia o cache de consultas.
+   *
+   * Trocar de usuário sem isto entrega ao próximo o que o anterior viu: as
+   * chaves de consulta descrevem o filtro (`['produtos', busca, status]`),
+   * não quem perguntou. Foi assim que a coluna de custo do administrador
+   * continuou na tela de uma vendedora que não tem `produto.ver_custo` — o
+   * servidor nunca mandou aquele campo para ela, o cache é que ainda o
+   * guardava.
+   *
+   * Vale na saída E na entrada: sair pode falhar na rede e o usuário seguinte
+   * entrar com o cache do anterior intacto.
+   */
+  const esvaziarCache = useCallback(() => {
+    fila.clear();
+  }, [fila]);
+
+  const entrar = useCallback(
+    async (email: string, senha: string) => {
+      esvaziarCache();
+      const sessao = await api.entrar(email, senha);
+      definirToken(sessao.tokenAcesso);
+      setUsuario(sessao.usuario);
+    },
+    [esvaziarCache],
+  );
 
   const sair = useCallback(async () => {
-    await api.sair();
-    setUsuario(null);
-  }, []);
+    try {
+      await api.sair();
+    } finally {
+      setUsuario(null);
+      esvaziarCache();
+    }
+  }, [esvaziarCache]);
 
   const permissoes = useMemo(() => new Set(usuario?.permissoes ?? []), [usuario]);
 

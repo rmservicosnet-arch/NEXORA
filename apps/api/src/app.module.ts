@@ -11,6 +11,8 @@ import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { LojasController } from './lojas/lojas.controller';
+import { ProdutosController } from './produtos/produtos.controller';
+import { ProdutosService } from './produtos/produtos.service';
 import { SaudeController } from './saude/saude.controller';
 
 @Module({
@@ -41,8 +43,10 @@ import { SaudeController } from './saude/saude.controller';
     PrismaModule,
     AuthModule,
   ],
-  controllers: [SaudeController, LojasController],
+  controllers: [SaudeController, LojasController, ProdutosController],
   providers: [
+    ProdutosService,
+
     // A ordem importa e é esta:
     //
     //   1. Throttler       antes de tudo, inclusive de verificar senha

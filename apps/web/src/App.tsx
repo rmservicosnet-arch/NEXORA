@@ -7,6 +7,8 @@ import { Shell } from './layout/Shell';
 import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
+import { NovoProduto } from './paginas/NovoProduto';
+import { Produtos } from './paginas/Produtos';
 import { EstadoVazio } from './ui/Estados';
 
 const cliente = new QueryClient({
@@ -35,6 +37,8 @@ export function App() {
             <Route element={<Shell />}>
               <Route index element={<Inicio />} />
               <Route path="lojas" element={<Lojas />} />
+              <Route path="produtos" element={<Produtos />} />
+              <Route path="produtos/novo" element={<NovoProduto />} />
               <Route
                 path="*"
                 element={

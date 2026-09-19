@@ -56,8 +56,23 @@ export function Botao({
       aria-busy={carregando || undefined}
       {...resto}
     >
-      {carregando ? <Girando /> : null}
-      {children}
+      {/*
+        Com `comoFilho`, o `Slot` do Radix repassa as props ao ÚNICO filho —
+        e aqui só pode haver um. Emitir `{spinner}{children}` manda dois
+        (mesmo que o primeiro seja `null`, vira um array) e o Radix lança
+        "Slot failed to slot onto its children".
+
+        Não é perda: `comoFilho` existe para vestir um `<Link>` de botão, e
+        link não fica carregando — a navegação é imediata.
+      */}
+      {comoFilho ? (
+        children
+      ) : (
+        <>
+          {carregando ? <Girando /> : null}
+          {children}
+        </>
+      )}
     </Componente>
   );
 }

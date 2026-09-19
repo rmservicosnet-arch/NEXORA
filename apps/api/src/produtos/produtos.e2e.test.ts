@@ -1,0 +1,249 @@
+/**
+ * Testes de ponta a ponta dos produtos.
+ *
+ * O que estes testes existem para impedir:
+ *
+ *  1. **Custo vazando por omissão de coluna.** Esconder `custoMedio` na tela e
+ *     mandá-lo no JSON não é permissão, é decoração: basta abrir a aba de rede
+ *     do navegador. Aqui se verifica a AUSÊNCIA DA CHAVE, não o valor.
+ *  2. **Permissão de escrita confundida com permissão de leitura.** Quem lista
+ *     produto não necessariamente cadastra produto.
+ *  3. **Mensagem de validação em inglês.** O mesmo schema valida no navegador
+ *     e aqui; se o idioma quebrar, quebra nos dois.
+ *
+ * Pré-requisito: `npm run db:seed`.
+ */
+
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
+import request from 'supertest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { AppModule } from '../app.module';
+
+const temBanco = Boolean(process.env['DATABASE_URL'] && process.env['DIRECT_URL']);
+
+/** Tem `produto.ver_custo` e `produto.criar`. */
+const ADMIN = { email: 'rodrigo@lojacentro.com.br', senha: 'Estoque@2026' };
+/** Tem `produto.visualizar`, mas NÃO tem `produto.ver_custo` nem `produto.criar`. */
+const VENDEDORA = { email: 'marina@lojacentro.com.br', senha: 'Estoque@2026' };
+
+let app: INestApplication;
+let http: ReturnType<typeof request>;
+
+interface Sessao {
+  tokenAcesso: string;
+  usuario: { permissoes: string[] };
+}
+
+interface ItemLista {
+  id: string;
+  skuBase: string;
+  saldoTotal: string;
+  custoMedio?: string | null;
+  valorEstoque?: string;
+}
+
+async function entrar(dados: { email: string; senha: string }): Promise<Sessao> {
+  const resposta = await http
+    .post('/api/auth/login')
+    .send({ ...dados, canal: 'app' })
+    .expect(200);
+  return resposta.body as Sessao;
+}
+
+beforeAll(async () => {
+  if (!temBanco) {
+    return;
+  }
+
+  const modulo = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  app = modulo.createNestApplication();
+  app.use(cookieParser());
+  app.setGlobalPrefix('api');
+  await app.init();
+  http = request(app.getHttpServer());
+}, 60_000);
+
+afterAll(async () => {
+  if (app) {
+    await app.close();
+  }
+});
+
+describe.runIf(temBanco)('listagem de produtos', () => {
+  it('entrega custo a quem tem produto.ver_custo', async () => {
+    const sessao = await entrar(ADMIN);
+    expect(sessao.usuario.permissoes).toContain('produto.ver_custo');
+
+    const resposta = await http
+      .get('/api/produtos?limite=5')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    const itens = resposta.body.itens as ItemLista[];
+    expect(itens.length).toBeGreaterThan(0);
+
+    for (const item of itens) {
+      // A chave existe sempre que a permissão existe. O VALOR pode ser `null`
+      // — produto sem saldo não tem custo médio, e zero seria mentira.
+      expect(Object.keys(item)).toContain('custoMedio');
+      expect(item).toHaveProperty('valorEstoque');
+    }
+  });
+
+  it('com saldo zero manda custoMedio null — não omite a chave, nem zera', async () => {
+    const sessao = await entrar(ADMIN);
+
+    const resposta = await http
+      .get('/api/produtos?busca=CAM-TRN')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    const item = (resposta.body.itens as ItemLista[])[0];
+
+    expect(item?.saldoTotal).toBe('0');
+    expect(Object.keys(item ?? {})).toContain('custoMedio');
+    expect(item?.custoMedio).toBeNull();
+    expect(item?.valorEstoque).toBe('0.00');
+  });
+
+  it('OMITE A CHAVE de custo para quem não tem a permissão', async () => {
+    const sessao = await entrar(VENDEDORA);
+    expect(sessao.usuario.permissoes).toContain('produto.visualizar');
+    expect(sessao.usuario.permissoes).not.toContain('produto.ver_custo');
+
+    const resposta = await http
+      .get('/api/produtos?limite=5')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    const itens = resposta.body.itens as ItemLista[];
+    expect(itens.length).toBeGreaterThan(0);
+
+    for (const item of itens) {
+      // `toHaveProperty` falha para chave ausente E para chave com `undefined`
+      // explícito só no primeiro caso — que é o que queremos garantir: a chave
+      // não existe no corpo serializado.
+      expect(item).not.toHaveProperty('custoMedio');
+      expect(item).not.toHaveProperty('valorEstoque');
+      expect(Object.keys(item)).not.toContain('custoMedio');
+    }
+
+    // E o corpo cru, por via das dúvidas: nem a palavra aparece.
+    expect(resposta.text).not.toContain('custoMedio');
+    expect(resposta.text).not.toContain('valorEstoque');
+  });
+
+  it('os dois veem os mesmos produtos — o corte é no campo, não na linha', async () => {
+    const admin = await entrar(ADMIN);
+    const vendedora = await entrar(VENDEDORA);
+
+    const doAdmin = await http
+      .get('/api/produtos?limite=100')
+      .set('Authorization', `Bearer ${admin.tokenAcesso}`)
+      .expect(200);
+
+    const daVendedora = await http
+      .get('/api/produtos?limite=100')
+      .set('Authorization', `Bearer ${vendedora.tokenAcesso}`)
+      .expect(200);
+
+    expect(daVendedora.body.total).toBe(doAdmin.body.total);
+    expect((daVendedora.body.itens as ItemLista[]).map((i) => i.skuBase)).toEqual(
+      (doAdmin.body.itens as ItemLista[]).map((i) => i.skuBase),
+    );
+  });
+
+  it('exige autenticação', async () => {
+    await http.get('/api/produtos').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('cadastro de produto', () => {
+  it('recusa quem não tem produto.criar', async () => {
+    const sessao = await entrar(VENDEDORA);
+
+    await http
+      .post('/api/produtos')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .send({
+        skuBase: 'NAO-DEVE',
+        nome: 'Não deve ser criado',
+        variacoes: [{ sku: 'NAO-DEVE-1', descricao: 'única', precoPadrao: '10.00' }],
+      })
+      .expect(403);
+  });
+
+  it('devolve os campos inválidos, em português', async () => {
+    const sessao = await entrar(ADMIN);
+
+    const resposta = await http
+      .post('/api/produtos')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .send({ skuBase: '', nome: '', variacoes: [] })
+      .expect(400);
+
+    const campos = resposta.body.campos as { campo: string; problema: string }[];
+    expect(campos.map((c) => c.campo)).toContain('skuBase');
+    expect(campos.map((c) => c.campo)).toContain('nome');
+
+    const texto = campos.map((c) => c.problema).join(' ');
+    expect(texto).toMatch(/[Pp]recisa/);
+    expect(texto).not.toMatch(/expected|Too small|characters/i);
+  });
+
+  it('cria, e o produto passa a aparecer na listagem', async () => {
+    const sessao = await entrar(ADMIN);
+    const sufixo = Date.now().toString(36).toUpperCase().slice(-6);
+    const sku = `TST-${sufixo}`;
+
+    const criacao = await http
+      .post('/api/produtos')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .send({
+        skuBase: sku,
+        nome: `Produto de teste ${sufixo}`,
+        variacoes: [
+          { sku: `${sku}-A`, descricao: 'Tamanho A', precoPadrao: '99.90' },
+          { sku: `${sku}-B`, descricao: 'Tamanho B', precoPadrao: '109.90' },
+        ],
+      })
+      .expect(201);
+
+    expect(criacao.body.id).toBeTruthy();
+
+    const lista = await http
+      .get(`/api/produtos?busca=${sku}`)
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    const itens = lista.body.itens as (ItemLista & {
+      totalVariacoes: number;
+      publicadoNoCatalogo: boolean;
+      totalFotos: number;
+    })[];
+
+    expect(itens).toHaveLength(1);
+    expect(itens[0]?.totalVariacoes).toBe(2);
+    expect(itens[0]?.saldoTotal).toBe('0');
+    // Nasce fora do catálogo: sem foto, não se publica. docs/MEDIA.md §3.
+    expect(itens[0]?.totalFotos).toBe(0);
+    expect(itens[0]?.publicadoNoCatalogo).toBe(false);
+  });
+
+  it('recusa SKU base repetido', async () => {
+    const sessao = await entrar(ADMIN);
+
+    await http
+      .post('/api/produtos')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .send({
+        skuBase: 'KIM-TRC',
+        nome: 'Tentativa de SKU repetido',
+        variacoes: [{ sku: 'KIM-TRC-DUP', descricao: 'dup', precoPadrao: '10.00' }],
+      })
+      .expect(409);
+  });
+});

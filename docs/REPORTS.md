@@ -207,6 +207,25 @@ consulta ao vivo. Documentar aqui quando acontecer.
 A segunda linha é servidor, não interface: esconder a coluna no front e mandar
 o custo no JSON é o mesmo que não ter permissão nenhuma.
 
+### Ausente, `null` e zero são três coisas
+
+| No JSON | Significa |
+|---|---|
+| chave ausente | quem pediu não tem a permissão de custo |
+| chave com `null` | tem a permissão, mas não há custo a informar — saldo zero, e divisão por zero não existe |
+| chave com `"0.000000"` | o custo é realmente zero (brinde, bonificação, doação) |
+
+Colapsar os três em zero faz o relatório mentir sobre patrimônio; colapsar
+ausente e `null` faz a interface confundir "sem direito" com "sem estoque".
+
+Fixado em `produtos.e2e.test.ts`: um teste verifica a **ausência da chave**
+para quem não tem `produto.ver_custo`, outro verifica que o produto de saldo
+zero traz a chave com `null` para quem tem.
+
+O mesmo corte vale para o cache do cliente: ele é indexado pelo filtro, não por
+quem perguntou. Trocar de usuário sem esvaziá-lo serve ao próximo o que o
+anterior viu. Ver `apps/web/src/auth/sessao.tsx`.
+
 ## 7. Exportação
 
 CSV (UTF-8 com BOM, para o Excel em português abrir certo) e XLSX.
