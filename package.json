@@ -31,7 +31,9 @@
     "db:deploy:ci": "npm run deploy:ci -w @estoque/db",
     "db:seed:ci": "npm run seed:ci -w @estoque/db",
     "db:generate:ci": "npm run generate:ci -w @estoque/db",
-    "db:verificar": "dotenv -e .env -- tsx scripts/verificar-banco.ts"
+    "db:verificar": "dotenv -e .env -- tsx scripts/verificar-banco.ts",
+    "db:sync-perfis": "dotenv -e .env -- tsx scripts/sincronizar-perfis.ts",
+    "db:sync-perfis:ci": "tsx scripts/sincronizar-perfis.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -119,6 +119,9 @@ o runtime.
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |
 | `LANG=pt_BR.UTF-8` em imagem Debian | Não existe gerada. Ordenação vem do ICU; `LANG` fica `C.UTF-8` |
+| Chamar uma função de conferência e descartar o retorno | `conferirLimite` devolve "excedeu com autorização". Descartar grava o movimento como se tivesse cabido — e "nunca silencioso" vira silencioso |
+| Helper de teste `async` devolvendo a cadeia do supertest | Sem `async`: a Promise não tem `.expect`. O `await` continua funcionando, a cadeia é thenable |
+| Perfil do seed mais permissivo que o documento | `docs/` é a verdade. `npm run db:sync-perfis` aplica a correção sem apagar dados |
 
 ## Testes
 

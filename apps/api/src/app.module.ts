@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
 import { CaixaModule } from './caixa/caixa.module';
+import { CarteiraModule } from './carteira/carteira.module';
 import { AutenticacaoGuard } from './comum/autenticacao.guard';
 import { ComumModule } from './comum/comum.module';
 import { ContextoInterceptor } from './comum/contexto.interceptor';
@@ -50,6 +51,7 @@ import { VendasModule } from './vendas/vendas.module';
     ProdutosModule,
     EstoqueModule,
     CaixaModule,
+    CarteiraModule,
     VendasModule,
     MidiaModule,
   ],

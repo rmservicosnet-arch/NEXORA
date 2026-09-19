@@ -1084,6 +1084,7 @@ model Venda {
 
   itens      VendaItem[]
   pagamentos VendaPagamento[]
+  movimentosCarteira CarteiraMovimento[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, lojaId, status])
@@ -1298,6 +1299,8 @@ model Pedido {
   @@index([tenantId, status, enviadoEm])
   @@index([tenantId, lojaId, status])
   @@index([tenantId, clienteId])
+  movimentosCarteira CarteiraMovimento[]
+
   @@map("pedido")
 }
 
@@ -1432,8 +1435,14 @@ model CarteiraMovimento {
   /// justificativa. Permitido quando autorizado, nunca silencioso.
   excedeuLimite Boolean @default(false) @map("excedeu_limite")
 
+  /// A venda ou o pedido que originou o movimento.
+  ///
+  /// Com chave estrangeira: sem ela, o id é só um texto, e o extrato podia
+  /// apontar para uma venda de outra empresa — ou para nenhuma.
   vendaId  String? @map("venda_id") @db.Uuid
+  venda    Venda?  @relation(fields: [vendaId], references: [id], onDelete: Restrict)
   pedidoId String? @map("pedido_id") @db.Uuid
+  pedido   Pedido? @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
 
   /// Como o dinheiro entrou, quando o movimento é QUITACAO ou DEPOSITO.
   formaPagamento FormaPagamento? @map("forma_pagamento")

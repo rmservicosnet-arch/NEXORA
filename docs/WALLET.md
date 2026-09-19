@@ -1,7 +1,8 @@
 # Carteira do cliente (conta corrente)
 
-> Fase 5, junto com o financeiro. Documentado agora porque muda o modelo de
-> pagamento e o de contas a receber.
+> Fase 5. **Implementado**: saldo, limite, extrato, lançamentos manuais,
+> estorno, bloqueio e o débito na venda paga com `CARTEIRA`. O que ainda não
+> existe está em §11.
 
 ## 1. O que é
 
@@ -159,6 +160,7 @@ No aplicativo, sua própria carteira: saldo, limite, disponível e extrato.
 | Permissão | Quem |
 |---|---|
 | `carteira.visualizar` | Gestor, Financeiro, Vendedor |
+| | **O seed dava ao Financeiro `ajustar`, `definir_limite`, `exceder_limite` e `estornar`, contra o que está escrito aqui.** Corrigido: quem concilia a conta não pode ajustá-la em silêncio. `npm run db:sync-perfis` aplica a mudança num banco existente sem tocar em dado de negócio. |
 | `carteira.lancar_quitacao` | Gestor, Financeiro |
 | `carteira.lancar_deposito` | Gestor, Financeiro |
 | `carteira.ajustar` | Gestor. **Cria dinheiro** — sempre com justificativa |
@@ -166,13 +168,55 @@ No aplicativo, sua própria carteira: saldo, limite, disponível e extrato.
 | `carteira.exceder_limite` | Gestor |
 | `carteira.estornar` | Gestor |
 
-## 10. Testes obrigatórios
+## 10. As invariantes que vivem no banco
+
+A migração `carteira_invariantes` põe quatro CHECKs no PostgreSQL. O
+`schema.prisma` já afirmava que a justificativa era "garantida por CHECK" —
+não era; não havia CHECK nenhum. Isto fechou a diferença.
+
+| Restrição | Impede |
+|---|---|
+| `valor > 0` | valor negativo com sentido `DEBITO`, que seria um crédito disfarçado — e a soma do extrato continuaria "fechando" |
+| sentido combina com tipo | uma `QUITACAO` gravada como `DEBITO`, que aumentaria a dívida de quem acabou de pagar |
+| justificativa em `AJUSTE_*` e `BONIFICACAO` | dinheiro criado sem motivo escrito |
+| `limite_credito >= 0` | limite negativo, que faria `saldo + limite` ser menor que o saldo |
+
+**Por que no banco e não só na aplicação:** a carteira é dinheiro. Uma correção
+feita por script de manutenção passa por cima da aplicação — não do banco.
+
+## 11. O que ainda não existe
+
+- **Venda a prazo** (`VENDA_A_PRAZO`): hoje só `PAGAMENTO_VENDA`, quando o
+  cliente paga usando a conta. Lançar a venda inteira na conta corrente é a
+  outra metade do §6.
+- **Devolução gerando crédito** (`DEVOLUCAO_VENDA`): o cancelamento de venda
+  ainda não devolve dinheiro à carteira.
+- **Aging FIFO** dos débitos em aberto, para a cobrança.
+- **`cliente.usaCarteira`**: a decisão do §6 — carteira *ou* título — ainda não
+  é configurável por cliente; hoje quem tem carteira usa carteira.
+
+## 12. Testes obrigatórios
+
+Em `apps/api/src/carteira/carteira.e2e.test.ts`, 22 testes. Os do documento:
 
 1. Saldo da carteira é sempre igual à soma dos movimentos. Divergência falha.
 2. Crédito aumenta o saldo; débito diminui. Em toda camada, sem inversão.
 3. Quitação de saldo `−1.000,00` com `R$ 400,00` deixa `−600,00`.
-4. Compra acima de `saldo + limite` é recusada sem a permissão de exceder.
+4. Compra acima de `saldo + limite` é recusada sem a permissão de exceder —
+   testada pelo caminho real, a **venda**: nenhum perfil consegue lançar débito
+   manual sem também poder exceder, porque débito manual exige
+   `carteira.ajustar`, que é do Gestor.
 5. Com a permissão, passa, exige justificativa e marca `excedeuLimite`.
+
+E os que o uso acrescentou:
+
+6. O extrato encadeia: `saldoPosterior` de um é `saldoAnterior` do seguinte.
+7. Estorno anula com lançamento contrário, sem apagar o original; não estorna
+   duas vezes; não estorna um estorno.
+8. Venda paga em carteira **debita** — e o movimento aponta para a venda.
+9. Pagamento em carteira sem cliente é recusado.
+10. Carteira bloqueada recusa débito e **continua aceitando quitação**.
+11. Se o débito falhar, a venda inteira volta atrás — o estoque não baixa.
 6. Venda paga com carteira debita na mesma transação; falha na venda não
    deixa débito órfão.
 7. Reenvio com a mesma `Idempotency-Key` não debita duas vezes.

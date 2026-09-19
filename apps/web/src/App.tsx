@@ -5,6 +5,7 @@ import { ErroRequisicao } from './api/cliente';
 import { ProvedorSessao } from './auth/sessao';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
+import { Carteiras } from './paginas/Carteiras';
 import { Estoque } from './paginas/Estoque';
 import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
@@ -47,6 +48,7 @@ export function App() {
               <Route path="estoque" element={<Estoque />} />
               <Route path="pdv" element={<Pdv />} />
               <Route path="caixa" element={<Caixa />} />
+              <Route path="carteiras" element={<Carteiras />} />
               <Route
                 path="*"
                 element={

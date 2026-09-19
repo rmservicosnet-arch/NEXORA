@@ -28,6 +28,7 @@ import {
 
 import type { Principal } from '../auth/dominios';
 import { CaixaService } from '../caixa/caixa.service';
+import { CarteiraService } from '../carteira/carteira.service';
 import { AuditoriaService } from '../comum/auditoria.service';
 import { EstoqueService } from '../estoque/estoque.service';
 import { PRISMA } from '../infra/prisma/prisma.module';
@@ -46,6 +47,7 @@ export class VendasService {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly estoque: EstoqueService,
     private readonly caixa: CaixaService,
+    private readonly carteira: CarteiraService,
     private readonly auditoria: AuditoriaService,
   ) {}
 
@@ -179,6 +181,41 @@ export class VendasService {
         }
 
         const troco = await this.registrarPagamentos(tx, venda.id, dados, total, contexto.tenantId);
+
+        // Pagamento em carteira DEBITA a conta corrente do cliente, na mesma
+        // transação. Enquanto isto não existia, o PDV aceitava a forma
+        // `CARTEIRA` e não lançava nada: a venda fechava e o cliente não devia
+        // nada. Ver docs/WALLET.md §5.
+        const emCarteira = dados.pagamentos
+          .filter((p) => p.forma === 'CARTEIRA')
+          .reduce((soma, p) => soma.plus(dec(p.valor)), dec(0));
+
+        if (emCarteira.greaterThan(0)) {
+          if (!clienteId) {
+            throw new BadRequestException({
+              codigo: 'CARTEIRA_EXIGE_CLIENTE',
+              mensagem: 'Pagamento em carteira exige identificar o cliente.',
+            });
+          }
+
+          const debito = await this.carteira.debitarPorVenda(
+            tx,
+            { clienteId, valor: emCarteira, vendaId: venda.id },
+            principal,
+          );
+
+          if (debito.excedeuLimite) {
+            avisosColetados.push({
+              codigo: 'LIMITE_DE_CARTEIRA_EXCEDIDO',
+              mensagem: `A compra passou do limite. O saldo do cliente ficou em R$ ${debito.saldoPosterior.toFixed(2)}.`,
+            });
+          } else {
+            avisosColetados.push({
+              codigo: 'DEBITADO_EM_CARTEIRA',
+              mensagem: `R$ ${emCarteira.toFixed(2)} debitados. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
+            });
+          }
+        }
 
         await tx.venda.update({
           where: { id: venda.id },

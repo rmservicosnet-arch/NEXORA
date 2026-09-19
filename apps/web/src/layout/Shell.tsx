@@ -52,6 +52,13 @@ const ICONE = {
       <path d="M10 16h4" />
     </>
   ),
+  conta: (
+    <>
+      <path d="M4 4h12l4 4v12H4z" />
+      <path d="M8 11h8" />
+      <path d="M8 15h5" />
+    </>
+  ),
   movimento: (
     <>
       <path d="M4 8h13" />
@@ -112,6 +119,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Cadastros',
     permissoes: [PERM.produto.visualizar],
     icone: ICONE.caixa,
+  },
+  {
+    rotulo: 'Carteiras',
+    para: '/carteiras',
+    grupo: 'Gestão',
+    permissoes: [PERM.carteira.visualizar],
+    icone: ICONE.conta,
   },
   {
     rotulo: 'Relatórios',

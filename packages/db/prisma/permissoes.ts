@@ -229,7 +229,22 @@ export const PERFIS: readonly DefinicaoPerfil[] = [
       'venda.ver_todas',
       'pedido.visualizar_fila',
       'pedido.faturar',
-      ...apenas('financeiro', 'carteira', 'comissao'),
+      ...apenas('financeiro', 'comissao'),
+
+      // Carteira: o Financeiro RECEBE e CONCILIA; não corrige.
+      //
+      // `apenas('carteira')` dava a ele `ajustar`, `bonificacao` por tabela,
+      // `exceder_limite` e `estornar` — ou seja, criar dinheiro sem
+      // contrapartida e apagar o efeito de um lançamento. Quem concilia a
+      // conta não pode também ajustá-la em silêncio: é a separação de funções
+      // que torna a conciliação uma conferência de verdade.
+      //
+      // docs/WALLET.md §9 sempre disse que esses quatro eram do Gestor. O
+      // seed é que discordava.
+      'carteira.visualizar',
+      'carteira.lancar_quitacao',
+      'carteira.lancar_deposito',
+
       'caixa.conferir',
       'compra.visualizar',
       'relatorio.visualizar',

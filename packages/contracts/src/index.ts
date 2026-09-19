@@ -23,6 +23,35 @@ export { PERM, temPermissao, type ChavePermissao } from './permissoes.js';
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {
+  bloqueioCarteiraSchema,
+  carteiraSchema,
+  estornoCarteiraSchema,
+  extratoCarteiraSchema,
+  filtroCarteirasSchema,
+  filtroExtratoSchema,
+  lancamentoCarteiraSchema,
+  limiteCarteiraSchema,
+  movimentoCarteiraSchema,
+  paginaCarteirasSchema,
+  sentidoCarteiraSchema,
+  tipoLancamentoManualSchema,
+  tipoMovimentoCarteiraSchema,
+  type BloqueioCarteira,
+  type Carteira,
+  type EstornoCarteira,
+  type ExtratoCarteira,
+  type FiltroCarteiras,
+  type FiltroExtrato,
+  type LancamentoCarteira,
+  type LimiteCarteira,
+  type MovimentoCarteira,
+  type PaginaCarteiras,
+  type SentidoCarteira,
+  type TipoLancamentoManual,
+  type TipoMovimentoCarteira,
+} from './carteira.js';
+
+export {
   aberturaCaixaSchema,
   caixaAtualSchema,
   caixaSchema,

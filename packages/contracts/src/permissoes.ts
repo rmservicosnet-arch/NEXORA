@@ -59,6 +59,7 @@ export const PERM = {
     ajustar: 'carteira.ajustar',
     definirLimite: 'carteira.definir_limite',
     excederLimite: 'carteira.exceder_limite',
+    estornar: 'carteira.estornar',
   },
   financeiro: {
     visualizar: 'financeiro.visualizar',
