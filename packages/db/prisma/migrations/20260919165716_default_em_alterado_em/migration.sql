@@ -1,0 +1,56 @@
+-- AlterTable
+ALTER TABLE "carteira" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "cliente" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "cliente_acesso" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "fornecedor" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "local_estoque" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "loja" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "pedido" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "pedido_item" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "perfil" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "preco_item" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "produto" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "produto_imagem" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "saldo_estoque" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "tabela_preco" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "tenant" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "tenant_configuracao" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "usuario" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "variacao" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "venda" ALTER COLUMN "alterado_em" SET DEFAULT CURRENT_TIMESTAMP;

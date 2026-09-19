@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Segredos — nunca versionados
+.env
+.env.*
+!.env.example
+
+# Prisma Client gerado
+packages/db/src/generated/
+
+# Editores e sistema
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs e temporários
+*.log
+npm-debug.log*
+.tmp/
+
+# Uploads locais de desenvolvimento
+.storage/

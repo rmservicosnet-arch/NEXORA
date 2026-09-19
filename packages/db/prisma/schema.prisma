@@ -1,0 +1,1359 @@
+// Estoque SaaS — modelo de dados
+//
+// Regras que valem para o arquivo inteiro:
+//
+//  1. Toda tabela de domínio carrega `tenantId`. Ver docs/TENANCY.md.
+//  2. Chave primária é UUID v7, gerado pelo PostgreSQL 18 (`uuidv7()`).
+//     v7 é ordenável no tempo — índice não fragmenta como v4 — e não é
+//     enumerável como `serial`.
+//  3. Dinheiro e quantidade são `Decimal`. Nunca `Float`. Ver ARCHITECTURE §7.
+//       valor/preço      numeric(14,2)
+//       custo            numeric(18,6)   divisão acumula erro em 2 casas
+//       quantidade       numeric(18,6)   unidades fracionárias
+//       percentual       numeric(9,6)
+//  4. Unicidade é sempre POR TENANT. Um SKU repetido entre empresas é normal.
+//  5. Tabelas append-only (`MovimentoEstoque`, `AuditLog`, `PedidoEvento`) não
+//     têm `updatedAt` de propósito: elas não são atualizadas.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated"
+}
+
+// Prisma 7: a URL de conexão NÃO vive mais aqui.
+//
+//   Migração  → `prisma.config.ts`, com o usuário `estoque_migrator` (dono)
+//   Runtime   → driver adapter no PrismaClient, com `estoque_app` (sem
+//               BYPASSRLS e não dono das tabelas)
+//
+// A separação que o docs/TENANCY.md exige passou a ser a forma natural de
+// configurar. Ver packages/db/src/client.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ===========================================================================
+// Enums
+// ===========================================================================
+
+enum TipoPrincipal {
+  FUNCIONARIO
+  CLIENTE
+}
+
+enum ModoCheckout {
+  PAGAMENTO_IMEDIATO
+  PEDIDO_COM_CONFIRMACAO
+}
+
+enum MomentoCobranca {
+  NA_CONFIRMACAO
+  NO_FATURAMENTO
+}
+
+enum ModoCaixa {
+  POR_OPERADOR
+  COMPARTILHADO_POR_LOJA
+}
+
+enum StatusRegistro {
+  ATIVO
+  INATIVO
+}
+
+enum StatusProduto {
+  RASCUNHO
+  ATIVO
+  INATIVO
+}
+
+enum StatusImagem {
+  PROCESSANDO
+  PRONTA
+  FALHA
+}
+
+enum SentidoMovimento {
+  ENTRADA
+  SAIDA
+}
+
+enum TipoMovimento {
+  ENTRADA_COMPRA
+  ENTRADA_DEVOLUCAO_CLIENTE
+  ENTRADA_TRANSFERENCIA
+  ENTRADA_AJUSTE
+  ENTRADA_INVENTARIO
+  SAIDA_VENDA
+  SAIDA_DEVOLUCAO_FORNECEDOR
+  SAIDA_TRANSFERENCIA
+  SAIDA_AJUSTE
+  SAIDA_PERDA
+  SAIDA_AVARIA
+  SAIDA_CONSUMO
+  SAIDA_INVENTARIO
+}
+
+/// Qual regra de custo médio foi aplicada neste movimento.
+/// Gravada no movimento para que a auditoria não precise re-deduzir.
+/// Ver docs/COST_POLICY.md.
+enum PoliticaCusto {
+  /// Entrada com saldo anterior > 0: média ponderada.
+  MEDIA_PONDERADA
+  /// Entrada com saldo anterior <= 0: adota o custo da entrada.
+  CUSTO_REDEFINIDO
+  /// Devolução de venda: reentra pelo custo gravado na saída original.
+  CUSTO_HISTORICO
+  /// Saída: consome ao custo médio vigente, sem alterá-lo.
+  SEM_EFEITO
+}
+
+enum OrigemVenda {
+  PDV
+  PEDIDO
+}
+
+enum StatusVenda {
+  RASCUNHO
+  CONCLUIDA
+  CANCELADA
+  DEVOLVIDA_PARCIAL
+  DEVOLVIDA_TOTAL
+}
+
+enum FormaPagamento {
+  DINHEIRO
+  PIX
+  DEBITO
+  CREDITO
+  TRANSFERENCIA
+  BOLETO
+  PRAZO
+  /// Conta corrente do cliente. Ver docs/WALLET.md §5.
+  CARTEIRA
+}
+
+/// Sinal do movimento de carteira.
+///   CREDITO aumenta o saldo (+) — a loja passa a dever ao cliente
+///   DEBITO  diminui o saldo (−) — o cliente passa a dever à loja
+/// A convenção está em docs/WALLET.md §2 e não se inverte em nenhuma camada.
+enum SentidoCarteira {
+  CREDITO
+  DEBITO
+}
+
+enum TipoMovimentoCarteira {
+  // Créditos (+)
+  DEPOSITO
+  QUITACAO
+  DEVOLUCAO_VENDA
+  BONIFICACAO
+  ESTORNO_DEBITO
+  AJUSTE_CREDITO
+  // Débitos (−)
+  PAGAMENTO_VENDA
+  VENDA_A_PRAZO
+  TAXA
+  ESTORNO_CREDITO
+  AJUSTE_DEBITO
+}
+
+/// Ver o diagrama de transições em docs/ORDERS.md §3.
+/// Transição fora do diagrama é rejeitada no servidor.
+enum StatusPedido {
+  RASCUNHO
+  AGUARDANDO_CONFIRMACAO
+  /// A equipe alterou o pedido e o total SUBIU. Aguarda um toque do cliente.
+  /// Ver docs/ORDERS.md §6.
+  AGUARDANDO_ACEITE_CLIENTE
+  CONFIRMADO
+  CONFIRMADO_PARCIALMENTE
+  DEVOLVIDO
+  RECUSADO
+  FATURADO
+  CONCLUIDO
+  CANCELADO
+  EXPIRADO
+}
+
+enum StatusPedidoItem {
+  PENDENTE
+  CONFIRMADO
+  /// A equipe não conseguiu atender — falta de saldo.
+  DEVOLVIDO
+  /// A equipe retirou o item após alinhar com o cliente.
+  /// Distinto de DEVOLVIDO: aqui houve acordo, não falta.
+  REMOVIDO
+  CANCELADO
+}
+
+/// Quem colocou o item no pedido. A equipe pode incluir itens depois de
+/// falar com o solicitante. Ver docs/ORDERS.md §6.
+enum OrigemPedidoItem {
+  SOLICITADO_CLIENTE
+  ADICIONADO_EQUIPE
+}
+
+enum StatusReserva {
+  ATIVA
+  CONSUMIDA
+  LIBERADA
+  EXPIRADA
+}
+
+enum AtorTipo {
+  FUNCIONARIO
+  CLIENTE
+  SISTEMA
+}
+
+enum Plataforma {
+  ANDROID
+  IOS
+}
+
+enum AppDestino {
+  EQUIPE
+  CLIENTE
+}
+
+enum EventoNotificacao {
+  PEDIDO_RECEBIDO
+  PEDIDO_AGUARDANDO_HA_MUITO
+  /// A equipe incluiu ou retirou itens. O app do cliente reflete na hora.
+  PEDIDO_ALTERADO_PELA_EQUIPE
+  /// Alteração fez o total subir: precisa do aceite do cliente.
+  PEDIDO_AGUARDANDO_ACEITE
+  PEDIDO_ACEITO_PELO_CLIENTE
+  PEDIDO_CONFIRMADO
+  PEDIDO_CONFIRMADO_PARCIAL
+  PEDIDO_DEVOLVIDO
+  PEDIDO_RECUSADO
+  RESERVA_EXPIRANDO
+  SALDO_NEGATIVO_CRIADO
+}
+
+enum StatusNotificacao {
+  PENDENTE
+  ENVIADA
+  FALHA
+  DESCARTADA
+}
+
+// ===========================================================================
+// Plataforma e empresa
+// ===========================================================================
+
+model Tenant {
+  id         String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  nome       String         @db.VarChar(160)
+  slug       String         @unique @db.VarChar(80)
+  documento  String?        @db.VarChar(20)
+  status     StatusRegistro @default(ATIVO)
+  criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  configuracao TenantConfiguracao?
+  lojas        Loja[]
+  usuarios     Usuario[]
+  perfis       Perfil[]
+  clientes     Cliente[]
+  categorias   Categoria[]
+  marcas       Marca[]
+  produtos     Produto[]
+  tabelasPreco TabelaPreco[]
+  vendas       Venda[]
+  pedidos      Pedido[]
+  auditoria    AuditLog[]
+
+  @@map("tenant")
+}
+
+/// Configurações de negócio da empresa. Uma linha por tenant.
+model TenantConfiguracao {
+  tenantId String @id @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Requisito atual: permitir sempre. Continua configurável — e a venda
+  /// negativa nunca é silenciosa. Ver docs/ARCHITECTURE.md e o razão.
+  permitirSaldoNegativo Boolean @default(true) @map("permitir_saldo_negativo")
+
+  /// O carrinho do CLIENTE gera venda direta ou pedido para confirmação.
+  /// Não afeta o PDV, que é sempre venda imediata. Ver docs/ORDERS.md §7.
+  modoCheckout    ModoCheckout    @default(PEDIDO_COM_CONFIRMACAO) @map("modo_checkout")
+  momentoCobranca MomentoCobranca @default(NO_FATURAMENTO) @map("momento_cobranca")
+
+  /// Prazo do preço congelado no pedido.
+  validadePedidoHoras Int @default(72) @map("validade_pedido_horas")
+  /// Prazo da reserva criada na confirmação, antes de liberar o estoque.
+  prazoReservaHoras   Int @default(168) @map("prazo_reserva_horas")
+
+  /// A equipe pode incluir e retirar itens do pedido depois de falar com o
+  /// solicitante. Se a edição fizer o total SUBIR, o pedido vai para aceite
+  /// do cliente antes de ser confirmado.
+  ///
+  /// Desligar isto faz a equipe confirmar direto, mesmo aumentando o valor.
+  /// Só faça isso se houver outro registro do acordo — cobrar mais que o
+  /// enviado sem aceite é exposição. Ver docs/ORDERS.md §6.
+  exigirAceiteAumento Boolean @default(true) @map("exigir_aceite_aumento")
+
+  modoCaixa ModoCaixa @default(POR_OPERADOR) @map("modo_caixa")
+
+  /// Desligado: o push não carrega cliente nem valor, porque aparece na tela
+  /// bloqueada do aparelho. Ver docs/NOTIFICATIONS.md §3.
+  pushDetalhado Boolean @default(false) @map("push_detalhado")
+
+  fusoHorario String @default("America/Sao_Paulo") @map("fuso_horario") @db.VarChar(64)
+  moeda       String @default("BRL") @db.VarChar(3)
+
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@map("tenant_configuracao")
+}
+
+model Loja {
+  id         String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome       String         @db.VarChar(120)
+  codigo     String         @db.VarChar(30)
+  status     StatusRegistro @default(ATIVO)
+  criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  locais         LocalEstoque[]
+  acessosUsuario UsuarioLojaAcesso[]
+  vendas         Venda[]
+  pedidos        Pedido[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, status])
+  @@map("loja")
+}
+
+model LocalEstoque {
+  id          String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId    String         @map("tenant_id") @db.Uuid
+  lojaId      String         @map("loja_id") @db.Uuid
+  loja        Loja           @relation(fields: [lojaId], references: [id], onDelete: Cascade)
+  nome        String         @db.VarChar(120)
+  codigo      String         @db.VarChar(30)
+  /// Local padrão de venda da loja. Um por loja, garantido por índice parcial.
+  padraoVenda Boolean        @default(false) @map("padrao_venda")
+  status      StatusRegistro @default(ATIVO)
+  criadoEm    DateTime       @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm  DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  saldos     SaldoEstoque[]
+  movimentos MovimentoEstoque[]
+  reservas   EstoqueReserva[]
+
+  @@unique([tenantId, lojaId, codigo])
+  @@index([tenantId, lojaId])
+  @@map("local_estoque")
+}
+
+// ===========================================================================
+// Autenticação — domínio FUNCIONÁRIO
+// Ver ADR-009: cliente externo vive em `ClienteAcesso`, tabela separada.
+// ===========================================================================
+
+model Usuario {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String         @map("tenant_id") @db.Uuid
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome      String         @db.VarChar(160)
+  email     String         @db.VarChar(180)
+  /// Argon2id. Ver docs/ARCHITECTURE.md §6.
+  senhaHash String         @map("senha_hash") @db.VarChar(255)
+  status    StatusRegistro @default(ATIVO)
+
+  /// Administrador da plataforma (multi-tenant). Fora do RBAC da empresa.
+  plataformaAdmin Boolean @default(false) @map("plataforma_admin")
+
+  ultimoLoginEm DateTime? @map("ultimo_login_em") @db.Timestamptz(3)
+  criadoEm      DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm    DateTime  @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  perfis       UsuarioPerfil[]
+  acessosLoja  UsuarioLojaAcesso[]
+  sessoes      SessaoRefresh[]
+  vendasFeitas Venda[]             @relation("VendaVendedor")
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@map("usuario")
+}
+
+/// Autenticação do CLIENTE externo. Domínio separado de propósito:
+/// o token carrega `aud: "cliente"` e não passa no guard de funcionário.
+model ClienteAcesso {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String         @map("tenant_id") @db.Uuid
+  clienteId String         @map("cliente_id") @db.Uuid
+  cliente   Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  nome      String         @db.VarChar(160)
+  email     String         @db.VarChar(180)
+  senhaHash String         @map("senha_hash") @db.VarChar(255)
+  status    StatusRegistro @default(ATIVO)
+
+  ultimoLoginEm DateTime? @map("ultimo_login_em") @db.Timestamptz(3)
+  criadoEm      DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm    DateTime  @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  sessoes SessaoRefresh[]
+  pedidos Pedido[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, clienteId])
+  @@map("cliente_acesso")
+}
+
+/// Refresh token rotativo, armazenado HASHEADO.
+/// Reuso de um token já rotacionado revoga a família inteira.
+model SessaoRefresh {
+  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId      String        @map("tenant_id") @db.Uuid
+  principalTipo TipoPrincipal @map("principal_tipo")
+
+  usuarioId String?  @map("usuario_id") @db.Uuid
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  clienteAcessoId String?        @map("cliente_acesso_id") @db.Uuid
+  clienteAcesso   ClienteAcesso? @relation(fields: [clienteAcessoId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 do token. O valor cru nunca é persistido.
+  tokenHash String @unique @map("token_hash") @db.VarChar(64)
+  /// Agrupa a cadeia de rotações. Reuso revoga toda a família.
+  familiaId String @map("familia_id") @db.Uuid
+
+  expiraEm        DateTime  @map("expira_em") @db.Timestamptz(3)
+  revogadoEm      DateTime? @map("revogado_em") @db.Timestamptz(3)
+  motivoRevogacao String?   @map("motivo_revogacao") @db.VarChar(60)
+
+  userAgent String? @map("user_agent") @db.VarChar(255)
+  ip        String? @db.VarChar(64)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, familiaId])
+  @@index([usuarioId])
+  @@index([clienteAcessoId])
+  @@index([expiraEm])
+  @@map("sessao_refresh")
+}
+
+// ===========================================================================
+// RBAC
+// ===========================================================================
+
+/// Catálogo global de permissões. Não tem tenant: é o vocabulário do sistema.
+/// Seed em packages/db/prisma/seed.ts.
+model Permissao {
+  chave     String @id @db.VarChar(60)
+  grupo     String @db.VarChar(40)
+  descricao String @db.VarChar(200)
+
+  perfis PerfilPermissao[]
+
+  @@index([grupo])
+  @@map("permissao")
+}
+
+model Perfil {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome      String  @db.VarChar(80)
+  chave     String  @db.VarChar(40)
+  descricao String? @db.VarChar(200)
+  /// Perfil de sistema não pode ser excluído nem ter a chave alterada.
+  sistema   Boolean @default(false)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  permissoes PerfilPermissao[]
+  usuarios   UsuarioPerfil[]
+
+  @@unique([tenantId, chave])
+  @@map("perfil")
+}
+
+model PerfilPermissao {
+  perfilId       String    @map("perfil_id") @db.Uuid
+  perfil         Perfil    @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  permissaoChave String    @map("permissao_chave") @db.VarChar(60)
+  permissao      Permissao @relation(fields: [permissaoChave], references: [chave], onDelete: Cascade)
+  tenantId       String    @map("tenant_id") @db.Uuid
+
+  @@id([perfilId, permissaoChave])
+  @@index([tenantId])
+  @@map("perfil_permissao")
+}
+
+model UsuarioPerfil {
+  usuarioId String  @map("usuario_id") @db.Uuid
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  perfilId  String  @map("perfil_id") @db.Uuid
+  perfil    Perfil  @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  tenantId  String  @map("tenant_id") @db.Uuid
+
+  @@id([usuarioId, perfilId])
+  @@index([tenantId])
+  @@map("usuario_perfil")
+}
+
+/// Tenant não é o único escopo: um vendedor da Loja Centro não movimenta o
+/// estoque da Loja Shopping. Ver docs/TENANCY.md §3.
+model UsuarioLojaAcesso {
+  usuarioId String  @map("usuario_id") @db.Uuid
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  lojaId    String  @map("loja_id") @db.Uuid
+  loja      Loja    @relation(fields: [lojaId], references: [id], onDelete: Cascade)
+  tenantId  String  @map("tenant_id") @db.Uuid
+
+  @@id([usuarioId, lojaId])
+  @@index([tenantId, lojaId])
+  @@map("usuario_loja_acesso")
+}
+
+// ===========================================================================
+// Auditoria — append-only
+// ===========================================================================
+
+model AuditLog {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  atorTipo AtorTipo @map("ator_tipo")
+  atorId   String?  @map("ator_id") @db.Uuid
+  atorNome String?  @map("ator_nome") @db.VarChar(160)
+
+  acao       String  @db.VarChar(80)
+  entidade   String  @db.VarChar(60)
+  entidadeId String? @map("entidade_id") @db.Uuid
+
+  /// Já mascarado na origem. Ver docs/TENANCY.md §5.
+  antes  Json?
+  depois Json?
+
+  motivo       String? @db.VarChar(400)
+  correlacaoId String? @map("correlacao_id") @db.Uuid
+  ip           String? @db.VarChar(64)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, criadoEm])
+  @@index([tenantId, entidade, entidadeId])
+  @@index([tenantId, acao])
+  @@map("audit_log")
+}
+
+/// Toda mutação idempotente grava aqui antes de executar.
+/// Ver docs/ORDERS.md §8 e docs/MOBILE.md §4.
+model ChaveIdempotencia {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  chave          String   @db.VarChar(120)
+  rota           String   @db.VarChar(120)
+  /// Hash do corpo. Mesma chave com corpo diferente é conflito, não repetição.
+  corpoHash      String   @map("corpo_hash") @db.VarChar(64)
+  respostaStatus Int?     @map("resposta_status")
+  resposta       Json?
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@unique([tenantId, chave, rota])
+  @@index([criadoEm])
+  @@map("chave_idempotencia")
+}
+
+// ===========================================================================
+// Clientes e fornecedores
+// ===========================================================================
+
+model Cliente {
+  id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String         @map("tenant_id") @db.Uuid
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome      String         @db.VarChar(160)
+  documento String?        @db.VarChar(20)
+  email     String?        @db.VarChar(180)
+  telefone  String?        @db.VarChar(30)
+  status    StatusRegistro @default(ATIVO)
+
+  tabelaPrecoId String?      @map("tabela_preco_id") @db.Uuid
+  tabelaPreco   TabelaPreco? @relation(fields: [tabelaPrecoId], references: [id], onDelete: SetNull)
+
+  /// Sobrepõe `TenantConfiguracao.modoCheckout` para este cliente.
+  /// NULL = usa o padrão da empresa. Uma loja que atende varejo e atacado
+  /// quer pagamento imediato no varejo e pedido com confirmação no revendedor.
+  modoCheckout ModoCheckout? @map("modo_checkout")
+
+  /// Cliente com conta corrente. Decide onde a dívida dele vive — e evita
+  /// contá-la duas vezes. Ver docs/WALLET.md §6.
+  ///
+  ///   true  → venda a prazo vira DÉBITO na carteira; sem título a receber
+  ///   false → venda a prazo vira TÍTULO em contas a receber
+  usaCarteira Boolean @default(false) @map("usa_carteira")
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  acessos  ClienteAcesso[]
+  vendas   Venda[]
+  pedidos  Pedido[]
+  carteira Carteira?
+
+  @@unique([tenantId, documento])
+  @@index([tenantId, nome])
+  @@index([tenantId, status])
+  @@map("cliente")
+}
+
+model Fornecedor {
+  id         String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  nome       String         @db.VarChar(160)
+  documento  String?        @db.VarChar(20)
+  email      String?        @db.VarChar(180)
+  telefone   String?        @db.VarChar(30)
+  status     StatusRegistro @default(ATIVO)
+  criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@unique([tenantId, documento])
+  @@index([tenantId, nome])
+  @@map("fornecedor")
+}
+
+// ===========================================================================
+// Produtos
+// ===========================================================================
+
+model Categoria {
+  id       String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String      @map("tenant_id") @db.Uuid
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome     String      @db.VarChar(120)
+  paiId    String?     @map("pai_id") @db.Uuid
+  pai      Categoria?  @relation("CategoriaArvore", fields: [paiId], references: [id], onDelete: SetNull)
+  filhos   Categoria[] @relation("CategoriaArvore")
+
+  produtos Produto[]
+
+  @@unique([tenantId, nome, paiId])
+  @@index([tenantId])
+  @@map("categoria")
+}
+
+model Marca {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome     String @db.VarChar(120)
+
+  produtos Produto[]
+
+  @@unique([tenantId, nome])
+  @@map("marca")
+}
+
+model Produto {
+  id        String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String        @map("tenant_id") @db.Uuid
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  skuBase   String        @map("sku_base") @db.VarChar(40)
+  nome      String        @db.VarChar(180)
+  descricao String?       @db.Text
+  status    StatusProduto @default(RASCUNHO)
+
+  categoriaId String?    @map("categoria_id") @db.Uuid
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  marcaId     String?    @map("marca_id") @db.Uuid
+  marca       Marca?     @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+
+  unidade String @default("UN") @db.VarChar(6)
+
+  /// Produto sem foto não pode ser publicado. Regra em docs/MEDIA.md §5,
+  /// garantida por CHECK na migração.
+  publicadoNoCatalogo Boolean @default(false) @map("publicado_no_catalogo")
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  variacoes Variacao[]
+  imagens   ProdutoImagem[]
+
+  @@unique([tenantId, skuBase])
+  @@index([tenantId, status])
+  @@index([tenantId, categoriaId])
+  @@index([tenantId, publicadoNoCatalogo])
+  @@map("produto")
+}
+
+model Variacao {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  produtoId String  @map("produto_id") @db.Uuid
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  sku          String  @db.VarChar(60)
+  codigoBarras String? @map("codigo_barras") @db.VarChar(60)
+  descricao    String  @db.VarChar(160)
+
+  /// Atributos que definem a variação: { "tamanho": "A2", "cor": "Branco" }.
+  atributos Json @default("{}")
+
+  estoqueMinimo Decimal        @default(0) @map("estoque_minimo") @db.Decimal(18, 6)
+  status        StatusRegistro @default(ATIVO)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  imagens     ProdutoImagem[]
+  precos      PrecoItem[]
+  saldos      SaldoEstoque[]
+  movimentos  MovimentoEstoque[]
+  reservas    EstoqueReserva[]
+  itensVenda  VendaItem[]
+  itensPedido PedidoItem[]
+
+  @@unique([tenantId, sku])
+  @@unique([tenantId, codigoBarras])
+  @@index([tenantId, produtoId])
+  @@map("variacao")
+}
+
+/// Metadados. O binário vive em armazenamento de objetos — nunca aqui.
+/// Ver docs/MEDIA.md.
+model ProdutoImagem {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  produtoId String  @map("produto_id") @db.Uuid
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  /// NULL = foto do produto. Preenchido = foto específica da variação.
+  /// Variação sem foto própria herda a `principal` do produto.
+  variacaoId String?   @map("variacao_id") @db.Uuid
+  variacao   Variacao? @relation(fields: [variacaoId], references: [id], onDelete: Cascade)
+
+  chaveObjeto String  @map("chave_objeto") @db.VarChar(400)
+  ordem       Int     @default(0)
+  /// Exatamente uma por produto, garantida por índice único parcial.
+  principal   Boolean @default(false)
+
+  textoAlternativo String  @default("") @map("texto_alternativo") @db.VarChar(255)
+  largura          Int?
+  altura           Int?
+  bytes            BigInt?
+  /// Deduplicação: a mesma foto enviada por vendedores diferentes.
+  hashConteudo     String? @map("hash_conteudo") @db.VarChar(64)
+
+  status StatusImagem @default(PROCESSANDO)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, produtoId, ordem])
+  @@index([tenantId, variacaoId])
+  @@map("produto_imagem")
+}
+
+// ===========================================================================
+// Tabelas de preço
+// ===========================================================================
+
+model TabelaPreco {
+  id       String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String         @map("tenant_id") @db.Uuid
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome     String         @db.VarChar(80)
+  chave    String         @db.VarChar(40)
+  padrao   Boolean        @default(false)
+  status   StatusRegistro @default(ATIVO)
+
+  vigenciaInicio DateTime? @map("vigencia_inicio") @db.Timestamptz(3)
+  vigenciaFim    DateTime? @map("vigencia_fim") @db.Timestamptz(3)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  precos   PrecoItem[]
+  clientes Cliente[]
+  vendas   Venda[]
+  pedidos  Pedido[]
+
+  @@unique([tenantId, chave])
+  @@map("tabela_preco")
+}
+
+model PrecoItem {
+  id            String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  tabelaPrecoId String      @map("tabela_preco_id") @db.Uuid
+  tabelaPreco   TabelaPreco @relation(fields: [tabelaPrecoId], references: [id], onDelete: Cascade)
+  variacaoId    String      @map("variacao_id") @db.Uuid
+  variacao      Variacao    @relation(fields: [variacaoId], references: [id], onDelete: Cascade)
+
+  preco Decimal @db.Decimal(14, 2)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  historico PrecoHistorico[]
+
+  @@unique([tabelaPrecoId, variacaoId])
+  @@index([tenantId, variacaoId])
+  @@map("preco_item")
+}
+
+/// Append-only. Mudança de preço não apaga o anterior.
+model PrecoHistorico {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  precoItemId String    @map("preco_item_id") @db.Uuid
+  precoItem   PrecoItem @relation(fields: [precoItemId], references: [id], onDelete: Cascade)
+
+  precoAnterior Decimal? @map("preco_anterior") @db.Decimal(14, 2)
+  precoNovo     Decimal  @map("preco_novo") @db.Decimal(14, 2)
+
+  alteradoPorId String?  @map("alterado_por_id") @db.Uuid
+  criadoEm      DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, precoItemId, criadoEm])
+  @@map("preco_historico")
+}
+
+// ===========================================================================
+// Estoque
+// ===========================================================================
+
+/// Saldo atual e custo médio por (variação × local). Única linha mutável do
+/// estoque. Travada com SELECT ... FOR UPDATE nas operações concorrentes.
+model SaldoEstoque {
+  id         String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String       @map("tenant_id") @db.Uuid
+  variacaoId String       @map("variacao_id") @db.Uuid
+  variacao   Variacao     @relation(fields: [variacaoId], references: [id], onDelete: Cascade)
+  localId    String       @map("local_id") @db.Uuid
+  local      LocalEstoque @relation(fields: [localId], references: [id], onDelete: Cascade)
+
+  /// Pode ser negativo por configuração. A divergência nunca é escondida.
+  quantidade Decimal @default(0) @db.Decimal(18, 6)
+  /// 6 casas: truncar em 2 acumula erro a cada movimentação.
+  custoMedio Decimal @default(0) @map("custo_medio") @db.Decimal(18, 6)
+
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@unique([variacaoId, localId])
+  @@index([tenantId, localId])
+  @@index([tenantId, variacaoId])
+  @@map("saldo_estoque")
+}
+
+/// APPEND-ONLY. Nunca atualizado, nunca excluído.
+/// Estorno gera lançamento contrário referenciando o original.
+/// O saldo é derivado daqui; o histórico é a verdade.
+model MovimentoEstoque {
+  id         String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String       @map("tenant_id") @db.Uuid
+  variacaoId String       @map("variacao_id") @db.Uuid
+  variacao   Variacao     @relation(fields: [variacaoId], references: [id], onDelete: Restrict)
+  localId    String       @map("local_id") @db.Uuid
+  local      LocalEstoque @relation(fields: [localId], references: [id], onDelete: Restrict)
+
+  sentido SentidoMovimento
+  tipo    TipoMovimento
+
+  /// Sempre positiva. O sinal está em `sentido`.
+  quantidade     Decimal @db.Decimal(18, 6)
+  saldoAnterior  Decimal @map("saldo_anterior") @db.Decimal(18, 6)
+  saldoPosterior Decimal @map("saldo_posterior") @db.Decimal(18, 6)
+
+  custoUnitario    Decimal       @map("custo_unitario") @db.Decimal(18, 6)
+  custoMedioAntes  Decimal       @map("custo_medio_antes") @db.Decimal(18, 6)
+  custoMedioDepois Decimal       @map("custo_medio_depois") @db.Decimal(18, 6)
+  politicaCusto    PoliticaCusto @map("politica_custo")
+
+  /// Movimento que levou o saldo abaixo de zero, ou o manteve negativo.
+  saldoNegativo Boolean @default(false) @map("saldo_negativo")
+
+  documentoTipo   String? @map("documento_tipo") @db.VarChar(40)
+  documentoId     String? @map("documento_id") @db.Uuid
+  documentoNumero String? @map("documento_numero") @db.VarChar(40)
+
+  /// Estorno aponta para o movimento original. O original permanece.
+  estornoDeId String?            @map("estorno_de_id") @db.Uuid
+  estornoDe   MovimentoEstoque?  @relation("Estorno", fields: [estornoDeId], references: [id], onDelete: Restrict)
+  estornos    MovimentoEstoque[] @relation("Estorno")
+
+  justificativa String? @db.VarChar(400)
+
+  atorTipo AtorTipo @map("ator_tipo")
+  atorId   String?  @map("ator_id") @db.Uuid
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, variacaoId, localId, criadoEm])
+  @@index([tenantId, criadoEm])
+  @@index([tenantId, documentoTipo, documentoId])
+  @@index([tenantId, saldoNegativo])
+  @@map("movimento_estoque")
+}
+
+/// Compromisso de estoque, NÃO movimentação. Não entra no razão porque nada
+/// se moveu. Criada na confirmação do pedido, consumida no faturamento.
+/// Ver docs/ORDERS.md §4.
+///
+/// Disponível = SaldoEstoque.quantidade − soma das reservas ATIVAS.
+model EstoqueReserva {
+  id         String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String       @map("tenant_id") @db.Uuid
+  variacaoId String       @map("variacao_id") @db.Uuid
+  variacao   Variacao     @relation(fields: [variacaoId], references: [id], onDelete: Restrict)
+  localId    String       @map("local_id") @db.Uuid
+  local      LocalEstoque @relation(fields: [localId], references: [id], onDelete: Restrict)
+
+  pedidoId     String     @map("pedido_id") @db.Uuid
+  pedido       Pedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedidoItemId String     @unique @map("pedido_item_id") @db.Uuid
+  pedidoItem   PedidoItem @relation(fields: [pedidoItemId], references: [id], onDelete: Cascade)
+
+  quantidade Decimal       @db.Decimal(18, 6)
+  status     StatusReserva @default(ATIVA)
+
+  /// Reserva confirmada e não faturada libera o estoque no vencimento.
+  expiraEm    DateTime? @map("expira_em") @db.Timestamptz(3)
+  consumidaEm DateTime? @map("consumida_em") @db.Timestamptz(3)
+  liberadaEm  DateTime? @map("liberada_em") @db.Timestamptz(3)
+
+  criadoEm    DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  criadaPorId String?  @map("criada_por_id") @db.Uuid
+
+  @@index([tenantId, variacaoId, localId, status])
+  @@index([tenantId, status, expiraEm])
+  @@index([pedidoId])
+  @@map("estoque_reserva")
+}
+
+// ===========================================================================
+// Vendas
+//
+// Uma venda nasce no PDV (balcão) ou do faturamento de um pedido.
+// Em ambos os casos é a MESMA entidade, pelo mesmo serviço, com as mesmas
+// regras de baixa, custo e comissão. Ver ADR-008.
+// ===========================================================================
+
+model Venda {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lojaId   String @map("loja_id") @db.Uuid
+  loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+  localId  String @map("local_id") @db.Uuid
+
+  numero Int
+  origem OrigemVenda @default(PDV)
+  status StatusVenda @default(RASCUNHO)
+
+  clienteId String?  @map("cliente_id") @db.Uuid
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  vendedorId String  @map("vendedor_id") @db.Uuid
+  vendedor   Usuario @relation("VendaVendedor", fields: [vendedorId], references: [id], onDelete: Restrict)
+
+  tabelaPrecoId String?      @map("tabela_preco_id") @db.Uuid
+  tabelaPreco   TabelaPreco? @relation(fields: [tabelaPrecoId], references: [id], onDelete: SetNull)
+
+  subtotal  Decimal @db.Decimal(14, 2)
+  desconto  Decimal @default(0) @db.Decimal(14, 2)
+  acrescimo Decimal @default(0) @db.Decimal(14, 2)
+  total     Decimal @db.Decimal(14, 2)
+
+  /// Pedido que originou esta venda. Faturar o mesmo pedido duas vezes é
+  /// impedido pelo índice único.
+  pedidoId String? @unique @map("pedido_id") @db.Uuid
+  pedido   Pedido? @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+
+  concluidaEm        DateTime? @map("concluida_em") @db.Timestamptz(3)
+  canceladaEm        DateTime? @map("cancelada_em") @db.Timestamptz(3)
+  motivoCancelamento String?   @map("motivo_cancelamento") @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  itens      VendaItem[]
+  pagamentos VendaPagamento[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, lojaId, status])
+  @@index([tenantId, concluidaEm])
+  @@index([tenantId, vendedorId])
+  @@map("venda")
+}
+
+model VendaItem {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  vendaId    String   @map("venda_id") @db.Uuid
+  venda      Venda    @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  variacaoId String   @map("variacao_id") @db.Uuid
+  variacao   Variacao @relation(fields: [variacaoId], references: [id], onDelete: Restrict)
+
+  quantidade Decimal @db.Decimal(18, 6)
+
+  /// PREÇO EFETIVO CONGELADO. Mudança futura na tabela de preços não
+  /// recalcula venda histórica. Ver docs/ARCHITECTURE.md §3.
+  precoUnitario Decimal @map("preco_unitario") @db.Decimal(14, 2)
+  descontoItem  Decimal @default(0) @map("desconto_item") @db.Decimal(14, 2)
+  totalItem     Decimal @map("total_item") @db.Decimal(14, 2)
+
+  tabelaPrecoId String? @map("tabela_preco_id") @db.Uuid
+  precoOrigem   String  @default("TABELA") @map("preco_origem") @db.VarChar(20)
+
+  /// Custo médio no instante da saída. A devolução reentra por ESTE valor,
+  /// não pelo custo médio atual. Ver docs/COST_POLICY.md.
+  custoUnitario Decimal @map("custo_unitario") @db.Decimal(18, 6)
+
+  quantidadeDevolvida Decimal @default(0) @map("quantidade_devolvida") @db.Decimal(18, 6)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, vendaId])
+  @@index([tenantId, variacaoId])
+  @@map("venda_item")
+}
+
+model VendaPagamento {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  vendaId  String @map("venda_id") @db.Uuid
+  venda    Venda  @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+
+  forma    FormaPagamento
+  valor    Decimal        @db.Decimal(14, 2)
+  parcelas Int            @default(1)
+
+  /// Nunca dados completos de cartão. Só o suficiente para conferência.
+  bandeira      String? @db.VarChar(30)
+  ultimosQuatro String? @map("ultimos_quatro") @db.VarChar(4)
+  autorizacao   String? @db.VarChar(60)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, vendaId])
+  @@map("venda_pagamento")
+}
+
+// ===========================================================================
+// Pedidos com confirmação
+//
+// Entidade PRÓPRIA, não um status de venda. Pedido em espera não é
+// faturamento. Ver ADR-008 e docs/ORDERS.md.
+// ===========================================================================
+
+model Pedido {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lojaId   String @map("loja_id") @db.Uuid
+  loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+  localId  String @map("local_id") @db.Uuid
+
+  numero Int
+  status StatusPedido @default(RASCUNHO)
+
+  clienteId String  @map("cliente_id") @db.Uuid
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+
+  /// Quem enviou. NULL quando um funcionário registrou em nome do cliente.
+  clienteAcessoId String?        @map("cliente_acesso_id") @db.Uuid
+  clienteAcesso   ClienteAcesso? @relation(fields: [clienteAcessoId], references: [id], onDelete: SetNull)
+
+  tabelaPrecoId String?      @map("tabela_preco_id") @db.Uuid
+  tabelaPreco   TabelaPreco? @relation(fields: [tabelaPrecoId], references: [id], onDelete: SetNull)
+
+  /// Valor que o CLIENTE enviou. Congelado — nunca recalculado. É a
+  /// referência contra a qual se compara qualquer edição da equipe.
+  valorSolicitado Decimal @default(0) @map("valor_solicitado") @db.Decimal(14, 2)
+  /// Valor do que a equipe confirmou. Difere quando há devolução parcial,
+  /// remoção acordada ou inclusão de itens pela equipe.
+  valorConfirmado Decimal @default(0) @map("valor_confirmado") @db.Decimal(14, 2)
+
+  /// Preenchido quando a equipe editou os itens. Guarda o que foi acordado.
+  editadoPelaEquipeEm DateTime? @map("editado_pela_equipe_em") @db.Timestamptz(3)
+  editadoPorId        String?   @map("editado_por_id") @db.Uuid
+  /// O que a equipe alinhou com o solicitante, em texto. Vai para o app.
+  resumoAlteracao     String?   @map("resumo_alteracao") @db.VarChar(400)
+
+  /// Aceite do cliente quando a edição aumentou o total.
+  aceiteClienteEm    DateTime? @map("aceite_cliente_em") @db.Timestamptz(3)
+  aceiteClientePorId String?   @map("aceite_cliente_por_id") @db.Uuid
+
+  /// Preço congelado no envio expira aqui. Depois disso, preço maior exige
+  /// aceite do cliente. Ver docs/ORDERS.md §5.
+  validoAte DateTime? @map("valido_ate") @db.Timestamptz(3)
+
+  enviadoEm       DateTime? @map("enviado_em") @db.Timestamptz(3)
+  confirmadoEm    DateTime? @map("confirmado_em") @db.Timestamptz(3)
+  confirmadoPorId String?   @map("confirmado_por_id") @db.Uuid
+  faturadoEm      DateTime? @map("faturado_em") @db.Timestamptz(3)
+  encerradoEm     DateTime? @map("encerrado_em") @db.Timestamptz(3)
+
+  motivo String? @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  itens    PedidoItem[]
+  eventos  PedidoEvento[]
+  reservas EstoqueReserva[]
+  venda    Venda?
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, status, enviadoEm])
+  @@index([tenantId, lojaId, status])
+  @@index([tenantId, clienteId])
+  @@map("pedido")
+}
+
+model PedidoItem {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  pedidoId   String   @map("pedido_id") @db.Uuid
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  variacaoId String   @map("variacao_id") @db.Uuid
+  variacao   Variacao @relation(fields: [variacaoId], references: [id], onDelete: Restrict)
+
+  /// Quem colocou o item aqui. Item incluído pela equipe entra com
+  /// `quantidadeSolicitada` = 0: o cliente não pediu aquilo.
+  origem OrigemPedidoItem @default(SOLICITADO_CLIENTE)
+
+  quantidadeSolicitada Decimal @map("quantidade_solicitada") @db.Decimal(18, 6)
+  /// Pode ser menor que a solicitada: confirmação parcial de quantidade.
+  quantidadeConfirmada Decimal @default(0) @map("quantidade_confirmada") @db.Decimal(18, 6)
+
+  /// Congelado, como em VendaItem. Item incluído pela equipe é precificado
+  /// no momento da inclusão, pela tabela do pedido.
+  precoUnitario    Decimal  @map("preco_unitario") @db.Decimal(14, 2)
+  totalItem        Decimal  @map("total_item") @db.Decimal(14, 2)
+  precoCongeladoEm DateTime @default(now()) @map("preco_congelado_em") @db.Timestamptz(3)
+
+  status StatusPedidoItem @default(PENDENTE)
+
+  motivoDevolucao    String? @map("motivo_devolucao") @db.VarChar(200)
+  /// Confirmado acima do disponível, com permissão e justificativa.
+  confirmadoSemSaldo Boolean @default(false) @map("confirmado_sem_saldo")
+
+  /// Inclusão e remoção pela equipe. Remoção é LÓGICA — o item some da
+  /// conta mas permanece na linha do tempo, com autor e motivo.
+  adicionadoPorId String?   @map("adicionado_por_id") @db.Uuid
+  removidoPorId   String?   @map("removido_por_id") @db.Uuid
+  removidoEm      DateTime? @map("removido_em") @db.Timestamptz(3)
+  motivoRemocao   String?   @map("motivo_remocao") @db.VarChar(200)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  reserva EstoqueReserva?
+
+  @@index([tenantId, pedidoId])
+  @@index([tenantId, variacaoId])
+  @@map("pedido_item")
+}
+
+/// APPEND-ONLY. Um registro por transição de status.
+/// `atorTipo = SISTEMA` cobre expiração — transições que ninguém disparou e
+/// que, sem registro, viram mistério no suporte.
+model PedidoEvento {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  pedidoId String @map("pedido_id") @db.Uuid
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  deStatus   StatusPedido? @map("de_status")
+  paraStatus StatusPedido  @map("para_status")
+
+  atorTipo AtorTipo @map("ator_tipo")
+  atorId   String?  @map("ator_id") @db.Uuid
+  atorNome String?  @map("ator_nome") @db.VarChar(160)
+
+  motivo        String? @db.VarChar(400)
+  itensAfetados Json?   @map("itens_afetados")
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, pedidoId, criadoEm])
+  @@map("pedido_evento")
+}
+
+// ===========================================================================
+// Carteira do cliente (conta corrente) — ver docs/WALLET.md
+//
+// Mesma arquitetura do estoque: saldo mutável e travável, razão imutável.
+//   saldo POSITIVO = crédito do cliente (a loja deve a ele)
+//   saldo NEGATIVO = débito do cliente (ele deve à loja)
+// ===========================================================================
+
+model Carteira {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  clienteId String  @unique @map("cliente_id") @db.Uuid
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  /// Derivado do razão, mantido aqui para travar e conferir.
+  /// Divergência contra a soma de `carteira_movimento` é BUG, não
+  /// arredondamento — existe teste para isso.
+  saldo Decimal @default(0) @db.Decimal(14, 2)
+
+  /// Quanto o saldo pode ficar NEGATIVO. Sempre positivo ou zero.
+  /// Disponível para compra = saldo + limiteCredito.
+  limiteCredito Decimal @default(0) @map("limite_credito") @db.Decimal(14, 2)
+
+  status              StatusRegistro @default(ATIVO)
+  /// Bloqueia novos débitos sem bloquear quitação.
+  bloqueadaParaCompra Boolean        @default(false) @map("bloqueada_para_compra")
+
+  observacao String? @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  movimentos CarteiraMovimento[]
+
+  @@index([tenantId, status])
+  @@map("carteira")
+}
+
+/// APPEND-ONLY. Nunca atualizado, nunca excluído.
+/// Estorno gera movimento contrário referenciando o original — o extrato do
+/// cliente não pode mudar de ontem para hoje.
+model CarteiraMovimento {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  carteiraId String   @map("carteira_id") @db.Uuid
+  carteira   Carteira @relation(fields: [carteiraId], references: [id], onDelete: Restrict)
+
+  sentido SentidoCarteira
+  tipo    TipoMovimentoCarteira
+
+  /// Sempre positivo. O sinal está em `sentido`.
+  valor Decimal @db.Decimal(14, 2)
+
+  /// Permitem reconstruir o extrato de qualquer data sem reprocessar tudo.
+  saldoAnterior  Decimal @map("saldo_anterior") @db.Decimal(14, 2)
+  saldoPosterior Decimal @map("saldo_posterior") @db.Decimal(14, 2)
+
+  /// Débito que passou de `saldo + limiteCredito`. Exigiu permissão e
+  /// justificativa. Permitido quando autorizado, nunca silencioso.
+  excedeuLimite Boolean @default(false) @map("excedeu_limite")
+
+  vendaId  String? @map("venda_id") @db.Uuid
+  pedidoId String? @map("pedido_id") @db.Uuid
+
+  /// Como o dinheiro entrou, quando o movimento é QUITACAO ou DEPOSITO.
+  formaPagamento FormaPagamento? @map("forma_pagamento")
+  documento      String?         @db.VarChar(60)
+
+  estornoDeId String?             @map("estorno_de_id") @db.Uuid
+  estornoDe   CarteiraMovimento?  @relation("EstornoCarteira", fields: [estornoDeId], references: [id], onDelete: Restrict)
+  estornos    CarteiraMovimento[] @relation("EstornoCarteira")
+
+  /// Obrigatória em AJUSTE_* e BONIFICACAO — os tipos que criam dinheiro
+  /// sem contrapartida. Garantido por CHECK na migração.
+  justificativa String? @db.VarChar(400)
+
+  atorTipo AtorTipo @map("ator_tipo")
+  atorId   String?  @map("ator_id") @db.Uuid
+  atorNome String?  @map("ator_nome") @db.VarChar(160)
+
+  /// Reenvio não debita duas vezes.
+  chaveIdempotencia String? @map("chave_idempotencia") @db.VarChar(120)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@unique([tenantId, chaveIdempotencia])
+  @@index([tenantId, carteiraId, criadoEm])
+  @@index([tenantId, tipo])
+  @@index([tenantId, vendaId])
+  @@index([tenantId, excedeuLimite])
+  @@map("carteira_movimento")
+}
+
+// ===========================================================================
+// Notificações push — ver docs/NOTIFICATIONS.md
+// ===========================================================================
+
+model DispositivoPush {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  principalTipo TipoPrincipal @map("principal_tipo")
+  principalId   String        @map("principal_id") @db.Uuid
+
+  /// Único GLOBALMENTE: aparelho que trocou de dono não continua recebendo
+  /// pedido da empresa antiga.
+  token      String     @unique @db.VarChar(255)
+  plataforma Plataforma
+  app        AppDestino
+  versaoApp  String?    @map("versao_app") @db.VarChar(20)
+
+  ativo Boolean @default(true)
+
+  registradoEm DateTime  @default(now()) @map("registrado_em") @db.Timestamptz(3)
+  ultimoUsoEm  DateTime? @map("ultimo_uso_em") @db.Timestamptz(3)
+  desativadoEm DateTime? @map("desativado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, principalTipo, principalId, ativo])
+  @@index([tenantId, app, ativo])
+  @@map("dispositivo_push")
+}
+
+/// Fila. O envio acontece FORA da transação do pedido: se o provedor cair,
+/// o pedido é confirmado do mesmo jeito. Ver docs/NOTIFICATIONS.md §5.
+model NotificacaoSaida {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  evento   EventoNotificacao
+  pedidoId String?           @map("pedido_id") @db.Uuid
+
+  destinatarios Json
+  /// Payload sem valor e sem nome de cliente, salvo `pushDetalhado`.
+  carga         Json
+
+  status     StatusNotificacao @default(PENDENTE)
+  tentativas Int               @default(0)
+  ultimoErro String?           @map("ultimo_erro") @db.VarChar(400)
+
+  /// evento + pedido + principal. Reprocessar não notifica duas vezes.
+  chaveIdempotencia String @unique @map("chave_idempotencia") @db.VarChar(160)
+
+  criadoEm  DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
+  enviadaEm DateTime? @map("enviada_em") @db.Timestamptz(3)
+
+  @@index([status, criadoEm])
+  @@index([tenantId, evento])
+  @@map("notificacao_saida")
+}
+
+model NotificacaoPreferencia {
+  id            String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId      String            @map("tenant_id") @db.Uuid
+  principalTipo TipoPrincipal     @map("principal_tipo")
+  principalId   String            @map("principal_id") @db.Uuid
+  evento        EventoNotificacao
+
+  push  Boolean @default(true)
+  email Boolean @default(false)
+
+  /// Fuso da loja, não o do servidor.
+  silencioInicio String? @map("silencio_inicio") @db.VarChar(5)
+  silencioFim    String? @map("silencio_fim") @db.VarChar(5)
+
+  @@unique([principalTipo, principalId, evento])
+  @@index([tenantId])
+  @@map("notificacao_preferencia")
+}

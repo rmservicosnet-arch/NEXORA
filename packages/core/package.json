@@ -1,0 +1,18 @@
+{
+  "name": "@estoque/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Regras puras e determinísticas: custo médio, preço, comissão",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "decimal.js": "10.6.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
