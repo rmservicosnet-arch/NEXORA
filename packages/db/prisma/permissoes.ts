@@ -102,6 +102,11 @@ export const PERMISSOES: readonly DefinicaoPermissao[] = [
   { chave: 'cliente.criar', grupo: 'cliente', descricao: 'Cadastrar clientes' },
   { chave: 'cliente.editar', grupo: 'cliente', descricao: 'Alterar clientes' },
   { chave: 'cliente.inativar', grupo: 'cliente', descricao: 'Inativar clientes' },
+  {
+    chave: 'cliente.gerenciar_acesso',
+    grupo: 'cliente',
+    descricao: 'Criar e revogar o login do cliente no portal',
+  },
 
   // --- Relatórios ----------------------------------------------------------
   { chave: 'relatorio.visualizar', grupo: 'relatorio', descricao: 'Acessar relatórios' },
@@ -188,7 +193,16 @@ export const PERFIS: readonly DefinicaoPerfil[] = [
       'estoque.visualizar',
       'venda.criar',
       'venda.devolver',
-      ...apenas('cliente'),
+      // Lista explícita, e não `apenas('cliente')`.
+      //
+      // O curinga concede TODA permissão futura do grupo. Foi assim que o
+      // perfil FINANCEIRO ganhou `ajustar` sem ninguém decidir (ver abaixo), e
+      // seria assim que quem atende no balcão passaria a emitir login de
+      // portal só porque a permissão nasceu no grupo certo.
+      'cliente.visualizar',
+      'cliente.criar',
+      'cliente.editar',
+      'cliente.inativar',
       'pedido.visualizar_fila',
       'pedido.editar_itens',
       'pedido.confirmar',

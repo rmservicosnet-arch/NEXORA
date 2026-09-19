@@ -77,6 +77,13 @@ export const PERM = {
     visualizar: 'cliente.visualizar',
     criar: 'cliente.criar',
     editar: 'cliente.editar',
+    /**
+     * Emitir e revogar o login do cliente no portal.
+     *
+     * Separada de `editar` de proposito: corrigir um telefone e criar uma
+     * credencial de acesso nao sao o mesmo grau de autoridade.
+     */
+    gerenciarAcesso: 'cliente.gerenciar_acesso',
   },
   compra: {
     visualizar: 'compra.visualizar',

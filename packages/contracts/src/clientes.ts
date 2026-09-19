@@ -106,3 +106,49 @@ export const apoioClienteSchema = z.object({
   modoCheckoutPadrao: modoCheckoutSchema,
 });
 export type ApoioCliente = z.infer<typeof apoioClienteSchema>;
+
+// ---------------------------------------------------------------------------
+// Acesso ao portal
+// ---------------------------------------------------------------------------
+
+/**
+ * O login do cliente no portal.
+ *
+ * Nunca traz senha nem hash. A senha provisoria aparece UMA vez, na resposta
+ * de quem a gerou, e nao e recuperavel depois — o hash e argon2id, e o unico
+ * caminho de volta e gerar outra.
+ */
+export const acessoClienteSchema = z.object({
+  id: z.string(),
+  nome: z.string(),
+  email: z.string(),
+  status: statusClienteSchema,
+  ultimoLoginEm: z.string().nullable(),
+  criadoEm: z.string(),
+});
+export type AcessoCliente = z.infer<typeof acessoClienteSchema>;
+
+export const novoAcessoClienteSchema = z.object({
+  nome: z.string().trim().min(2).max(160),
+  email: z.string().trim().email().max(180),
+});
+export type NovoAcessoCliente = z.infer<typeof novoAcessoClienteSchema>;
+
+export const alteracaoAcessoClienteSchema = z.object({
+  nome: z.string().trim().min(2).max(160).optional(),
+  status: statusClienteSchema.optional(),
+});
+export type AlteracaoAcessoCliente = z.infer<typeof alteracaoAcessoClienteSchema>;
+
+/**
+ * A resposta de quem cria o acesso ou redefine a senha.
+ *
+ * `senhaProvisoria` so existe aqui. A tela avisa que ela nao volta a
+ * aparecer: quem fechar sem copiar precisa gerar outra, o que e melhor do que
+ * a alternativa — guardar a senha em algum lugar para poder mostrar de novo.
+ */
+export const acessoCriadoSchema = z.object({
+  acesso: acessoClienteSchema,
+  senhaProvisoria: z.string(),
+});
+export type AcessoCriado = z.infer<typeof acessoCriadoSchema>;

@@ -554,8 +554,44 @@ Dois avisos que a tela dá porque o silêncio custa caro:
 alguém para a tabela Revendedor é conceder desconto permanente sem passar por
 `preco.aplicar_desconto`. Separar exigiria uma permissão própria.
 
-**Não incluído:** criar acesso ao portal (`cliente_acesso`). Um cadastro novo
-tem tabela e não tem login — só o seed cria credencial de cliente.
+### 10.5 O acesso ao portal
+
+Cadastro e acesso são coisas diferentes: quem compra no balcão nunca precisa
+entrar. O acesso vive numa seção própria de `/clientes/:id`, atrás de
+**`cliente.gerenciar_acesso`** — permissão nova, separada de `cliente.editar`
+de propósito. Corrigir um telefone e emitir uma credencial de login não são o
+mesmo grau de autoridade, e o perfil VENDEDOR tem a primeira e não a segunda.
+
+Isso obrigou a trocar `...apenas('cliente')` por uma lista explícita no perfil
+VENDEDOR. O curinga concede toda permissão **futura** do grupo — foi assim que
+o FINANCEIRO ganhou `ajustar` sem ninguém decidir, e seria assim que quem
+atende no balcão passaria a emitir login de portal só porque a permissão
+nasceu no grupo certo. O vendedor não perdeu nada: mantém visualizar, criar,
+editar e inativar.
+
+#### A senha nunca é escolhida por quem cria
+
+O servidor gera (`node:crypto`, 14 caracteres, alfabeto sem `0/O` e `1/l/I`
+porque ela vai ser lida ao telefone), devolve **uma vez** e guarda só o hash
+argon2id. Quem cria o acesso não digita senha de terceiro, e não há caminho de
+volta: perdeu, gera outra. Guardar a senha em algum lugar para poder mostrá-la
+de novo seria trocar uma inconveniência por um vazamento.
+
+Redefinir a senha **revoga as sessões abertas** daquele acesso. Redefinir é o
+que se faz quando a senha pode ter vazado; uma sessão viva sobreviveria à
+troca e a operação não teria servido de nada.
+
+#### `credencial_login` não é detalhe
+
+É ela que resolve a empresa a partir do e-mail, no login, e fica **fora do
+RLS** de propósito (não tem `tenant_id`). Criar `cliente_acesso` sem a linha
+correspondente produz um acesso que existe e não autentica. O índice único é
+`(dominio, email)` e é **global**: o mesmo e-mail não pode ser cliente de duas
+empresas — limitação conhecida, respondida com `EMAIL_EM_USO` em vez de uma
+violação de chave.
+
+O teste que prova a criação não é "a rota devolveu 201": é entrar no portal
+com a senha gerada e carregar o catálogo.
 
 ### O que ainda não existe
 
@@ -568,5 +604,6 @@ tem tabela e não tem login — só o seed cria credencial de cliente.
   faturamento.
 - **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
   ainda não é conferido.
-- **Criar acesso ao portal** pela aplicação: o cadastro de cliente existe
-  (§10.4), a credencial dele não. Ver §10.4.
+- **Troca de senha pelo próprio cliente.** Ele recebe uma provisória e ela
+  continua valendo; não há "alterar minha senha" no portal, nem exigência de
+  troca no primeiro acesso.

@@ -128,6 +128,11 @@ o runtime.
 | Invariante do razão inteiro medido numa página | Somar a primeira página e comparar com o saldo total passa enquanto o cadastro é novo. Siga o cursor até o fim |
 | SKU fixo em teste de ponta a ponta | Passa na primeira execução e dá 409 em todas as seguintes, contra o mesmo banco. Sufixo aleatório |
 | Schema novo em `@estoque/contracts` sem rebuild | A API importa o pacote CONSTRUÍDO: o schema chega `undefined` e o `ZodPipe` quebra com `safeParse of undefined` |
+| Perfil montado com `apenas('grupo')` | O curinga concede toda permissão FUTURA do grupo. Já aconteceu duas vezes. Permissão sensível quer lista explícita |
+| `cliente_acesso` sem `credencial_login` | A credencial existe e não autentica: o login não descobre de qual empresa a pessoa é. E o índice `(dominio, email)` é GLOBAL |
+| Redefinir senha sem revogar sessão | Redefine-se porque a senha pode ter vazado; a sessão aberta sobreviveria à troca |
+| Senha de terceiro digitada por quem cadastra | O servidor gera, mostra uma vez e guarda só o hash. Poder mostrar de novo significa ter guardado |
+| Teste procurando a palavra "senha" no JSON | Um e-mail com ela derruba o teste sem nada ter vazado. Procure `senhaHash` e `$argon2` |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

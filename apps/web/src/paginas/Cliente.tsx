@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
+import { AcessosDoCliente } from './AcessosDoCliente';
 import { useSessao } from '../auth/sessao';
 import { Aviso } from '../ui/Aviso';
 import { Botao } from '../ui/Botao';
@@ -298,13 +299,9 @@ export function Cliente() {
                 setSalvo(false);
               }}
             />
-
-            <p className="text-[12px] text-neutral-500">
-              {cliente.acessos > 0
-                ? `${String(cliente.acessos)} ${cliente.acessos === 1 ? 'acesso' : 'acessos'} ao portal.`
-                : 'Este cadastro ainda não tem acesso ao portal — criar acesso não existe nesta tela.'}
-            </p>
           </section>
+
+          {clienteId ? <AcessosDoCliente clienteId={clienteId} /> : null}
         </div>
       </main>
     </>
