@@ -449,6 +449,46 @@ model SessaoRefresh {
   @@map("sessao_refresh")
 }
 
+/// Diretório de login. Resolve e-mail → empresa.
+///
+/// **Esta é a única tabela sem Row-Level Security, e é de propósito.**
+///
+/// O login acontece ANTES de existir contexto de tenant: com RLS ativo, uma
+/// consulta sem `app.tenant_id` devolve zero linhas — inclusive a do usuário
+/// que está tentando entrar. Sem um diretório fora do escopo, a tela de login
+/// teria de pedir a empresa junto com o e-mail.
+///
+/// O que ela expõe: apenas que um e-mail existe e a qual empresa pertence.
+/// Nada de senha, nome ou permissão. E a resposta do login não revela a
+/// diferença entre "e-mail não existe" e "senha errada", então o diretório
+/// não ajuda um atacante a enumerar contas.
+///
+/// Escrita apenas na mesma transação que cria o usuário ou o acesso de
+/// cliente. A aplicação só tem SELECT aqui.
+///
+/// **Limitação conhecida:** e-mail é único por domínio em toda a plataforma.
+/// A mesma pessoa em duas empresas precisa de dois e-mails. Para suportar
+/// isso de verdade, a unicidade cai e o login passa a devolver um seletor de
+/// empresa antes da senha — decisão pendente.
+model CredencialLogin {
+  id      String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  dominio TipoPrincipal
+  email   String        @db.VarChar(180)
+
+  /// Não se chama `tenant_id` de propósito: a migração de RLS protege toda
+  /// coluna com aquele nome, e esta tabela precisa ficar de fora.
+  empresaId   String  @map("empresa_id") @db.Uuid
+  principalId String  @map("principal_id") @db.Uuid
+  ativo       Boolean @default(true)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@unique([dominio, email])
+  @@index([empresaId])
+  @@map("credencial_login")
+}
+
 // ===========================================================================
 // RBAC
 // ===========================================================================

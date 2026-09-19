@@ -124,6 +124,10 @@ async function criarRazao(
 async function limparEmpresa(prisma: PrismaClient, tenantId: string): Promise<void> {
   const onde = { where: { tenantId } };
 
+  // O diretório de login não tem tenant_id (de propósito — ver o schema),
+  // então precisa ser limpo pela empresa.
+  await prisma.credencialLogin.deleteMany({ where: { empresaId: tenantId } });
+
   await prisma.carteiraMovimento.deleteMany(onde);
   await prisma.carteira.deleteMany(onde);
 
@@ -282,13 +286,31 @@ async function main(): Promise<void> {
 
   const hashPadrao = await gerarHashSenha(SENHA_DEMO);
 
-  const usuarios = [
+  // `lojas` vazio significa todas. Sérgio é estoquista de uma loja só — é o
+  // caso realista, e é o que dá o que testar no guard de escopo de loja.
+  const usuarios: Array<{
+    nome: string;
+    email: string;
+    perfil: string;
+    lojas?: readonly string[];
+  }> = [
     { nome: 'Rodrigo Bandeira', email: 'rodrigo@lojacentro.com.br', perfil: 'ADMIN_EMPRESA' },
     { nome: 'Marina Alves', email: 'marina@lojacentro.com.br', perfil: 'VENDEDOR' },
     { nome: 'Luan Pereira', email: 'luan@lojacentro.com.br', perfil: 'VENDEDOR' },
     { nome: 'Beatriz Nunes', email: 'beatriz@lojacentro.com.br', perfil: 'FINANCEIRO' },
-    { nome: 'Sérgio Matos', email: 'sergio@lojacentro.com.br', perfil: 'ESTOQUISTA' },
+    {
+      nome: 'Sérgio Matos',
+      email: 'sergio@lojacentro.com.br',
+      perfil: 'ESTOQUISTA',
+      lojas: ['CENTRO'],
+    },
   ];
+
+  const lojaIdPorCodigo = new Map<string, string>();
+  lojas.forEach((l, i) => {
+    const id = lojaIds[i];
+    if (id) lojaIdPorCodigo.set(l.codigo, id);
+  });
 
   let adminId = '';
   for (const u of usuarios) {
@@ -300,14 +322,34 @@ async function main(): Promise<void> {
         email: u.email,
         senhaHash: hashPadrao,
         perfis: perfilId ? { create: [{ tenantId, perfilId }] } : undefined,
-        acessosLoja: { create: lojaIds.map((lojaId) => ({ tenantId, lojaId })) },
+        acessosLoja: {
+          create: (u.lojas
+            ? u.lojas.map((c) => lojaIdPorCodigo.get(c)).filter((id): id is string => Boolean(id))
+            : lojaIds
+          ).map((lojaId) => ({ tenantId, lojaId })),
+        },
       },
     });
+    // Diretório de login: é o que permite a tela pedir só e-mail e senha.
+    // Ver o comentário do model CredencialLogin no schema.
+    await prisma.credencialLogin.create({
+      data: {
+        dominio: 'FUNCIONARIO',
+        email: u.email,
+        empresaId: tenantId,
+        principalId: usuario.id,
+      },
+    });
+
     if (u.perfil === 'ADMIN_EMPRESA') {
       adminId = usuario.id;
     }
   }
-  passo(`${usuarios.length} usuários, com acesso às três lojas`);
+  const restritos = usuarios.filter((u) => u.lojas).length;
+  passo(
+    `${usuarios.length} usuários — ${usuarios.length - restritos} com acesso a todas as lojas, ` +
+      `${restritos} restrito a uma`,
+  );
 
   // --- Tabelas de preço ----------------------------------------------------
 
@@ -537,8 +579,19 @@ async function main(): Promise<void> {
         create: { tenantId, saldo: '0', limiteCredito: '5000.00' },
       },
     },
-    include: { carteira: true },
+    include: { carteira: true, acessos: true },
   });
+
+  for (const acesso of academia.acessos) {
+    await prisma.credencialLogin.create({
+      data: {
+        dominio: 'CLIENTE',
+        email: acesso.email,
+        empresaId: tenantId,
+        principalId: acesso.id,
+      },
+    });
+  }
 
   await prisma.cliente.create({
     data: {

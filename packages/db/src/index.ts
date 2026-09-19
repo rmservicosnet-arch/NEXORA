@@ -23,4 +23,12 @@ export {
   type OpcoesEscopo,
 } from './escopo';
 
+export {
+  PARAMETROS_SENHA,
+  SenhaFracaError,
+  TAMANHO_MINIMO_SENHA,
+  conferirSenha,
+  gerarHashSenha,
+} from './senha';
+
 export { Prisma } from '../generated';

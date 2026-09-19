@@ -128,6 +128,33 @@ Isolamento não é só `SELECT`. Também vaza por:
 
 ## 6. Critério de aceite — Fase 1
 
+**Situação: os sete cumpridos e cobertos por teste automatizado.**
+
+| # | Onde está o teste |
+|---|---|
+| 1, 2, 4, 5, 7 | `packages/db/src/isolamento.test.ts` |
+| 3, 6 | `apps/api/src/auth/auth.e2e.test.ts` |
+
+Mais a conferência de ambiente em `npm run db:verificar`, que prova o mesmo
+contra o banco real, sem passar pela aplicação.
+
+### Nuance do critério 3, descoberta ao testar
+
+A recusa de `tenantId` forjado acontece no guard de autenticação, que só roda
+em **rota protegida**. Em rota pública — `/auth/login` e `/auth/refresh` — não
+existe token, logo não existe tenant de referência com que comparar.
+
+Isso não é brecha. `/auth/refresh` é pública de propósito (o token de acesso
+pode estar expirado, que é o motivo de renovar) e se protege por outro meio: o
+refresh token carrega o tenant e seu hash precisa bater com uma sessão viva e
+não revogada. Um `tenantId` enviado no corpo dessa rota é simplesmente
+ignorado.
+
+A primeira versão do teste supôs o contrário e falhou. Ficou registrado como
+teste explícito, para ninguém "corrigir" isso depois.
+
+### Os sete
+
 O isolamento só é considerado implementado quando estes testes passarem:
 
 1. Usuário do tenant A recebe **404** ao buscar recurso do tenant B por ID.

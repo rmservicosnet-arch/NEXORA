@@ -28,7 +28,14 @@ export const esquemaAmbiente = z.object({
   JWT_CLIENTE_SECRET: z
     .string()
     .min(SEGREDO_MINIMO, `JWT_CLIENTE_SECRET precisa de ao menos ${SEGREDO_MINIMO} caracteres`),
-  JWT_ACCESS_TTL: z.string().default('15m'),
+  /**
+   * Em segundos, não em texto como "15m".
+   *
+   * `expiresIn` do jsonwebtoken aceita texto, mas com um tipo literal
+   * estreito que uma string vinda do ambiente não satisfaz. Número de
+   * segundos é aceito direto, e é menos ambíguo para quem edita o .env.
+   */
+  JWT_ACCESS_TTL_SEGUNDOS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DIAS: z.coerce.number().int().positive().default(30),
 
   API_PORT: z.coerce.number().int().positive().default(3333),

@@ -1,6 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import type { PrismaClient } from '@estoque/db';
 
+import { Publico } from '../comum/decoradores';
 import { PRISMA } from '../infra/prisma/prisma.module';
 
 interface RespostaSaude {
@@ -20,6 +21,7 @@ interface RespostaSaude {
 export class SaudeController {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
+  @Publico()
   @Get()
   async verificar(): Promise<RespostaSaude> {
     let banco: RespostaSaude['banco'] = 'ok';
