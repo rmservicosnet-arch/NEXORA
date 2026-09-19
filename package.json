@@ -27,6 +27,10 @@
     "db:seed": "npm run seed -w @estoque/db",
     "db:reset": "npm run reset -w @estoque/db",
     "db:setup": "dotenv -e .env -- tsx scripts/setup-database.ts",
+    "db:setup:ci": "tsx scripts/setup-database.ts",
+    "db:deploy:ci": "npm run deploy:ci -w @estoque/db",
+    "db:seed:ci": "npm run seed:ci -w @estoque/db",
+    "db:generate:ci": "npm run generate:ci -w @estoque/db",
     "db:verificar": "dotenv -e .env -- tsx scripts/verificar-banco.ts"
   },
   "devDependencies": {

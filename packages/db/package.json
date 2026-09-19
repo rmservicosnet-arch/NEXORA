@@ -7,6 +7,9 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "generate": "dotenv -e ../../.env -- prisma generate",
+    "generate:ci": "prisma generate",
+    "deploy:ci": "prisma migrate deploy",
+    "seed:ci": "tsx prisma/seed.ts",
     "migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "studio": "dotenv -e ../../.env -- prisma studio",

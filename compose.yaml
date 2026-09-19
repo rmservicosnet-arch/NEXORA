@@ -1,0 +1,145 @@
+﻿# Pilha completa: banco, migração, API e web.
+#
+#   cp .env.docker.example .env.docker
+#   # edite .env.docker
+#   docker compose --env-file .env.docker up -d --build
+#
+# O `--env-file` NÃO é opcional. Sem ele o Compose lê o `.env` da raiz, que é o
+# do desenvolvimento local — com URLs apontando para `localhost`, que dentro de
+# um contêiner é o próprio contêiner. A aplicação subiria tentando falar com um
+# banco que não existe ali.
+
+name: estoque
+
+services:
+  # ---------------------------------------------------------------------------
+  postgres:
+    # PostgreSQL 18: as chaves primárias usam `uuidv7()` NATIVO, que só existe
+    # a partir dessa versão. Em 17 a criação das tabelas falha na hora.
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: '${PG_SENHA_SUPER:?defina PG_SENHA_SUPER em .env.docker}'
+      POSTGRES_DB: postgres
+      # Sem isto o Postgres usa a localidade da imagem e a ordenação de texto
+      # ignora acentos de forma inconsistente entre ambientes.
+      LANG: pt_BR.UTF-8
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=pt-BR'
+    volumes:
+      - postgres-dados:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` sozinho responde antes de o banco aceitar conexão de
+      # verdade durante a primeira inicialização. A consulta fecha essa janela.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d postgres && psql -U postgres -d postgres -c "select 1" > /dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    # Não exposto para fora por padrão. Para inspecionar com um cliente local,
+    # descomente — sabendo que isso publica o banco na rede da máquina.
+    # ports:
+    #   - '5432:5432'
+
+  # ---------------------------------------------------------------------------
+  # Cria os papéis e aplica as migrações. Roda até o fim e termina.
+  #
+  # É a MESMA imagem da API de propósito: duas imagens diferentes para código e
+  # migração permitem aplicar uma migração que o código ainda não conhece.
+  migracao:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: estoque-api:${TAG:-local}
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_SUPERUSER_URL: 'postgresql://postgres:${PG_SENHA_SUPER}@postgres:5432/postgres'
+      DATABASE_URL: 'postgresql://estoque_app:${PG_SENHA_APP:?defina PG_SENHA_APP}@postgres:5432/estoque?schema=public'
+      DIRECT_URL: 'postgresql://estoque_migrator:${PG_SENHA_MIGRATOR:?defina PG_SENHA_MIGRATOR}@postgres:5432/estoque?schema=public'
+    # `db:setup` é idempotente e NUNCA apaga banco, tabela ou usuário — está
+    # escrito assim em scripts/setup-database.ts. Por isso pode rodar a cada
+    # subida sem cerimônia.
+    command: >
+      sh -c "node_modules/.bin/tsx scripts/setup-database.ts &&
+             cd packages/db && ../../node_modules/.bin/prisma migrate deploy"
+
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: estoque-api:${TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migracao:
+        condition: service_completed_successfully
+    environment:
+      # `production` por padrão. A combinação `production` + `COOKIE_SECURE=false`
+      # é RECUSADA na inicialização, de propósito: para experimentar em http é
+      # preciso baixar os dois juntos, e isso não acontece por descuido.
+      NODE_ENV: '${NODE_ENV:-production}'
+
+      DATABASE_URL: 'postgresql://estoque_app:${PG_SENHA_APP}@postgres:5432/estoque?schema=public'
+      DIRECT_URL: 'postgresql://estoque_migrator:${PG_SENHA_MIGRATOR}@postgres:5432/estoque?schema=public'
+      DATABASE_POOL_MAX: '${DATABASE_POOL_MAX:-10}'
+
+      JWT_FUNCIONARIO_SECRET: '${JWT_FUNCIONARIO_SECRET:?defina JWT_FUNCIONARIO_SECRET com 32+ caracteres}'
+      JWT_CLIENTE_SECRET: '${JWT_CLIENTE_SECRET:?defina JWT_CLIENTE_SECRET com 32+ caracteres}'
+
+      API_PORT: 3333
+      API_PREFIX: api
+      LOG_LEVEL: '${LOG_LEVEL:-info}'
+
+      # A web e a API saem pela MESMA origem (o nginx encaminha /api), então
+      # esta é a origem pública do site.
+      WEB_ORIGIN: '${WEB_ORIGIN:?defina WEB_ORIGIN, ex.: https://estoque.suaempresa.com.br}'
+
+      # Ligado por padrão, e a aplicação SE RECUSA A SUBIR com NODE_ENV=production
+      # e este valor desligado. Sem HTTPS o cookie de refresh trafega em claro.
+      # Para experimentar em http, veja docs/DEPLOY.md §4.
+      COOKIE_SECURE: '${COOKIE_SECURE:-true}'
+      COOKIE_DOMAIN: '${COOKIE_DOMAIN:-localhost}'
+
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_PATH: '/dados/midia'
+    volumes:
+      # As fotos vivem aqui. SEM este volume elas somem a cada reinício do
+      # contêiner — e o catálogo fica com produtos publicados sem imagem.
+      # Ver a limitação em docs/DEPLOY.md §5: com mais de uma réplica da API,
+      # isto deixa de funcionar e o driver S3 passa a ser obrigatório.
+      - midia:/dados/midia
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3333/api/saude').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Caminho relativo: o nginx encaminha /api para a API. Ver nginx.conf.
+        VITE_API_URL: /api
+    image: estoque-web:${TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${PORTA_PUBLICA:-8080}:8080'
+
+volumes:
+  postgres-dados:
+  midia:

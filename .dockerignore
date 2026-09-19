@@ -1,0 +1,37 @@
+# Tudo o que não pode entrar na imagem, por peso ou por segurança.
+
+node_modules
+**/node_modules
+
+# Segredos. Nunca, em nenhuma hipótese, dentro de uma imagem.
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Artefatos de build: são refeitos dentro da imagem. Copiar os daqui traria
+# o binário compilado na máquina de quem construiu — e com ele, a diferença
+# entre "funciona aqui" e "funciona lá".
+dist
+build
+**/dist
+**/dist-types
+packages/db/generated
+*.tsbuildinfo
+
+# Uploads locais de desenvolvimento.
+.storage
+
+.git
+.github
+.vscode
+.idea
+coverage
+*.log
+npm-debug.log*
+.tmp
+Dockerfile
+**/Dockerfile
+.dockerignore
+compose.yaml
+docker-compose.yml
