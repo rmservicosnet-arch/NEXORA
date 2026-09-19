@@ -66,9 +66,15 @@ export class ArmazenamentoLocal extends Armazenamento {
       .update('armazenamento-local')
       .digest('hex');
 
+    // `API_PUBLIC_URL` é o endereço pelo qual o CLIENTE alcança a API, e
+    // aceita caminho relativo (`/api`) quando a web e a API saem pela mesma
+    // origem. O fallback com `localhost` só serve para desenvolvimento: em
+    // contêiner, `localhost` é o próprio contêiner e o navegador não chega.
+    const publico = config.get<string>('API_PUBLIC_URL');
     const porta = config.get<string>('API_PORT') ?? '3333';
     const prefixo = config.get<string>('API_PREFIX') ?? 'api';
-    this.baseUrl = `http://localhost:${porta}/${prefixo}`;
+
+    this.baseUrl = (publico ?? `http://localhost:${porta}/${prefixo}`).replace(/\/+$/, '');
 
     this.log.log(`Armazenamento local em ${this.raiz}`);
   }

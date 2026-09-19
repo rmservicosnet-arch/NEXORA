@@ -1,9 +1,9 @@
 # Subir em servidor
 
-> **Não testado em execução.** Os arquivos desta pasta foram escritos com
-> cuidado, mas a máquina onde o projeto foi desenvolvido não tem Docker
-> instalado — nenhuma imagem chegou a ser construída. Conte com ajustes na
-> primeira execução e veja §7, que lista exatamente o que eu não pude verificar.
+> **Construído e executado.** A pilha inteira foi levantada com
+> `docker compose` numa máquina real: banco zerado, sete migrações aplicadas,
+> seed, login, venda e envio de foto. O que foi corrigido nesse primeiro
+> levantamento está em §7.
 
 ## 1. O que sobe
 
@@ -96,42 +96,41 @@ real seria em produção.
 
 Enxugar é tarefa em aberto, não esquecimento.
 
-## 7. O que eu não pude verificar
+## 7. O que o primeiro levantamento corrigiu
 
-Sem Docker na máquina de desenvolvimento, nenhuma imagem foi construída.
+Escrever isto sem Docker na máquina produziu quatro defeitos. Nenhum apareceria
+em revisão de código; todos apareceram no primeiro `docker compose up`.
 
-**O que deu para verificar sem Docker, e está verificado:**
+**1. Volume do PostgreSQL no caminho errado.** A imagem 18 passou a guardar os
+dados em subdiretório por versão (`/var/lib/postgresql/18/docker`), para que
+`pg_upgrade --link` não cruze fronteira de montagem. Montar em
+`/var/lib/postgresql/data`, como se fazia até a 17, faz o contêiner **recusar a
+subir** com uma mensagem sobre "unused mount/volume" que não diz o que fazer.
 
-- `compose.yaml` foi validado por um parser de YAML de verdade — e o parser
-  pegou um erro real: `ex.: https://…` dentro de um escalar sem aspas vira um
-  mapa aninhado, e o arquivo não carregava.
-- `prisma generate` com `DIRECT_URL` falsa: roda, porque gerar não conecta.
-- Todos os caminhos copiados nos Dockerfiles existem no repositório.
-- Os binários que o Compose invoca (`tsx`, `prisma`) estão em
-  `node_modules/.bin`.
-- `npm run db:generate:ci` funciona sem `.env`.
+**2. Localidade inexistente na imagem.** `LANG=pt_BR.UTF-8` não está gerada no
+`postgres:18-bookworm`: o `initdb` falha com "invalid locale settings" e o
+contêiner entra em laço de reinício. A ordenação em português vem do **ICU**
+(`--icu-locale=pt-BR`), que é embutido; o `LANG` fica em `C.UTF-8`.
 
-**O que só a primeira execução mostra:**
+**3. Seed sem as fontes de que depende.** `seed.ts` é rodado por `tsx` e importa
+`../src/client` — a fonte, não o `dist`. A imagem de execução não levava
+`packages/db/src`, então o primeiro ambiente novo subiria com o banco vazio.
 
-1. **Se o `npm ci` completa dentro da imagem.** O projeto usa
-   `engine-strict=true`; `node:24` satisfaz `>=24.0.0`, mas não foi comprovado
-   na prática.
-2. **Se `@node-rs/argon2` carrega.** Escolhi `bookworm-slim` (glibc) em vez de
-   Alpine justamente por causa dos binários pré-compilados, mas a carga só se
-   confirma na primeira tentativa de login.
-3. **Se o `pg_isready` do healthcheck cobre a primeira inicialização.**
-4. **Se o ICU `pt-BR` existe na imagem do Postgres 18** para
-   `POSTGRES_INITDB_ARGS`. Se não existir, o banco não inicializa e a saída do
-   contêiner diz qual localidade usar. É o ajuste mais provável de ser
-   necessário.
-5. **Se o encaminhamento `/api` do nginx preserva o cookie de refresh** no
-   caminho de renovação.
-6. **Se o volume `midia` fica gravável.** O `chown` no Dockerfile existe
-   justamente para isso — volume nomeado nasce de root e o processo roda como
-   `node` —, mas o comportamento de cópia de dono só se confirma rodando.
+**4. URL de envio de imagem com `localhost` fixo.** O driver local montava
+`http://localhost:3333/api/midia/enviar`, que dentro de um contêiner é o
+próprio contêiner. **O envio de foto estava quebrado em qualquer implantação em
+contêiner**, e só quem tentasse enviar uma foto descobriria. Existe agora
+`API_PUBLIC_URL`, que aceita caminho relativo (`/api`) — o navegador resolve
+contra a origem da página e passa pelo nginx.
 
-O primeiro `docker compose up --build` é o teste. Rode-o antes de apontar
-qualquer domínio para isto.
+### O que ficou comprovado rodando
+
+- `npm ci` completa na imagem; `@node-rs/argon2` carrega — o login funciona.
+- As sete migrações aplicam num banco zerado, com as políticas de RLS.
+- O seed popula a empresa de demonstração.
+- Login **e renovação por cookie** atravessam o proxy do nginx.
+- O ciclo de foto inteiro — autorizar, enviar, confirmar, servir — funciona, e
+  o volume de mídia é gravável pelo usuário `node`.
 
 ## 8. O que ainda falta para chamar de produção
 

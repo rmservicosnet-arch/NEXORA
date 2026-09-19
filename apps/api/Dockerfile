@@ -85,6 +85,11 @@ COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 # aplicar uma migração que o código ainda não conhece.
 COPY --from=build /app/packages/db/prisma       ./packages/db/prisma
 COPY --from=build /app/packages/db/prisma.config.ts ./packages/db/prisma.config.ts
+# O `seed.ts` é rodado por `tsx` e importa `../src/client`, `../src/senha` e
+# `../src/escopo` — a FONTE, não o `dist`. Sem estes arquivos o seed morre com
+# `Cannot find module '../src/client'`, e o primeiro ambiente novo sobe com o
+# banco vazio. São alguns poucos arquivos .ts.
+COPY --from=build /app/packages/db/src          ./packages/db/src
 
 COPY --from=build /app/apps/api/dist            ./apps/api/dist
 COPY --from=build /app/apps/api/package.json    ./apps/api/package.json

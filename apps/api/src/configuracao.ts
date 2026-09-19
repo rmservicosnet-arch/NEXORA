@@ -49,6 +49,21 @@ export const esquemaAmbiente = z.object({
 
   API_PORT: z.coerce.number().int().positive().default(3333),
   API_PREFIX: z.string().default('api'),
+  /**
+   * Por onde o CLIENTE alcança a API.
+   *
+   * Diferente de `API_PORT`: aquela é onde o processo escuta, esta é o
+   * endereço que vai dentro de uma URL entregue ao navegador — hoje, a URL de
+   * envio de imagem.
+   *
+   * Sem ela, o driver local montava `http://localhost:3333/api`, que dentro de
+   * um contêiner é o próprio contêiner. O envio de foto quebrava em QUALQUER
+   * implantação em contêiner, e só quem tentasse enviar uma foto descobriria.
+   *
+   * Aceita caminho relativo (`/api`), que é o certo quando a web e a API saem
+   * pela mesma origem. Ausente, mantém o comportamento de desenvolvimento.
+   */
+  API_PUBLIC_URL: z.string().optional(),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 

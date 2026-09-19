@@ -115,6 +115,10 @@ o runtime.
 | Ler saldo, calcular e gravar sem travar a linha | `SELECT … FOR UPDATE` antes de todo cálculo de estoque; senão o razão deixa de encadear e nenhuma tela mostra |
 | Travar duas linhas em ordem variável | Sempre na mesma ordem de id. Transferências cruzadas viram deadlock |
 | Guardar o item buscado e reusar a foto dele | Saldo congelado no momento da busca faz o operador decidir pela quantidade errada; releia do servidor |
+| Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
+| URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
+| Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |
+| `LANG=pt_BR.UTF-8` em imagem Debian | Não existe gerada. Ordenação vem do ICU; `LANG` fica `C.UTF-8` |
 
 ## Testes
 

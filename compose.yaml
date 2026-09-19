@@ -22,12 +22,24 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: '${PG_SENHA_SUPER:?defina PG_SENHA_SUPER em .env.docker}'
       POSTGRES_DB: postgres
-      # Sem isto o Postgres usa a localidade da imagem e a ordenação de texto
-      # ignora acentos de forma inconsistente entre ambientes.
-      LANG: pt_BR.UTF-8
-      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=pt-BR'
+      # A ordenação de texto em português vem do ICU (`--icu-locale=pt-BR`),
+      # que é embutido e não depende de localidade instalada no sistema.
+      #
+      # `LANG` fica em `C.UTF-8` porque a imagem NÃO tem `pt_BR.UTF-8` gerada:
+      # com ela, o `initdb` falha com "invalid locale settings" e o contêiner
+      # entra em laço de reinício. `--locale=C.UTF-8` é o fallback do libc
+      # para o que o ICU não cobre; quem ordena nomes com acento é o ICU.
+      LANG: C.UTF-8
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=pt-BR --locale=C.UTF-8'
     volumes:
-      - postgres-dados:/var/lib/postgresql/data
+      # `/var/lib/postgresql`, NÃO `/var/lib/postgresql/data`.
+      #
+      # A imagem do PostgreSQL 18 passou a guardar os dados em subdiretório
+      # por versão (`/var/lib/postgresql/18/docker`), para que `pg_upgrade
+      # --link` funcione sem cruzar fronteira de montagem. Montar em `/data`
+      # como se fazia até a 17 faz o contêiner RECUSAR a subir, com uma
+      # mensagem sobre "unused mount/volume" que não diz o que fazer.
+      - postgres-dados:/var/lib/postgresql
     healthcheck:
       # `pg_isready` sozinho responde antes de o banco aceitar conexão de
       # verdade durante a primeira inicialização. A consulta fecha essa janela.
@@ -93,6 +105,11 @@ services:
 
       API_PORT: 3333
       API_PREFIX: api
+      # Caminho RELATIVO: a URL de envio de imagem é entregue ao navegador, e
+      # ele a resolve contra a origem da página — passando pelo nginx. Com o
+      # padrão (`http://localhost:3333/api`), o navegador tentaria falar com a
+      # própria máquina do usuário e o envio de foto falharia.
+      API_PUBLIC_URL: /api
       LOG_LEVEL: '${LOG_LEVEL:-info}'
 
       # A web e a API saem pela MESMA origem (o nginx encaminha /api), então
