@@ -115,6 +115,11 @@ o runtime.
 | Ler saldo, calcular e gravar sem travar a linha | `SELECT … FOR UPDATE` antes de todo cálculo de estoque; senão o razão deixa de encadear e nenhuma tela mostra |
 | Travar duas linhas em ordem variável | Sempre na mesma ordem de id. Transferências cruzadas viram deadlock |
 | Guardar o item buscado e reusar a foto dele | Saldo congelado no momento da busca faz o operador decidir pela quantidade errada; releia do servidor |
+| Pré-preencher formulário cortando pelo disponível | Disponível é aviso, não teto. Cortar faz a falta de estoque devolver o item ao cliente sozinha — o oposto de "nunca silencioso". Sugira o que foi pedido e grite a falta |
+| Avisar só por `title` | No celular não há hover, e é no celular que a equipe aprova. Aviso é elemento visível |
+| Largura fixa numa tela de uso móvel | 240px de menu num telefone de 375px não é acabamento: é a funcionalidade não existir. Empilhe abaixo do ponto de corte e devolva as colunas com `sm:contents` |
+| Renovar o refresh duas vezes com o mesmo cookie | A revogação por reuso derruba a família inteira — a sessão boa junto. Uma promessa compartilhada por aba **e** `navigator.locks` entre abas. O caminho de boot também conta |
+| Reusar o erro de login na renovação | Sessão expirada não é senha errada; manda a pessoa trocar uma senha certa. `SESSAO_ENCERRADA` à parte, ainda sem distinguir o motivo |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

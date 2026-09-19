@@ -103,7 +103,7 @@ export class PedidosService {
       if (!tabelaPrecoId) {
         throw new ConflictException({
           codigo: 'SEM_TABELA_DE_PRECO',
-          mensagem: 'Nao ha tabela de preco para este cadastro. Fale com a loja.',
+          mensagem: 'Não há tabela de preço para este cadastro. Fale com a loja.',
         });
       }
 
@@ -291,7 +291,7 @@ export class PedidosService {
       tipo: 'PEDIDO',
       pedido,
       vendaNumero: null,
-      mensagem: `Pedido ${String(pedido.numero)} enviado. A equipe vai confirmar os itens disponiveis.`,
+      mensagem: `Pedido ${String(pedido.numero)} enviado. A equipe vai confirmar os itens disponíveis.`,
     };
   }
 
@@ -320,7 +320,7 @@ export class PedidosService {
           throw new ConflictException({
             codigo: 'SEM_CARTEIRA_PARA_PAGAMENTO_IMEDIATO',
             mensagem:
-              'Esta loja cobra no ato, e este cadastro nao tem conta corrente. Fale com a loja.',
+              'Esta loja cobra no ato, e este cadastro não tem conta corrente. Fale com a loja.',
           });
         }
 
@@ -359,7 +359,7 @@ export class PedidosService {
       tipo: 'VENDA',
       pedido: null,
       vendaNumero: venda.numero,
-      mensagem: `Compra ${String(venda.numero)} concluida. R$ ${venda.total} debitados na sua conta.`,
+      mensagem: `Compra ${String(venda.numero)} concluída. R$ ${venda.total} debitados na sua conta.`,
     };
   }
 
@@ -378,7 +378,7 @@ export class PedidosService {
       if (pedido.status !== 'AGUARDANDO_ACEITE_CLIENTE') {
         throw new ConflictException({
           codigo: 'PEDIDO_NAO_AGUARDA_ACEITE',
-          mensagem: 'Este pedido nao esta esperando o seu aceite.',
+          mensagem: 'Este pedido não está esperando o seu aceite.',
         });
       }
 
@@ -491,14 +491,14 @@ export class PedidosService {
       if (!item) {
         throw new NotFoundException({
           codigo: 'ITEM_NAO_ENCONTRADO',
-          mensagem: 'Item nao encontrado neste pedido.',
+          mensagem: 'Item não encontrado neste pedido.',
         });
       }
 
       if (item.status === 'REMOVIDO') {
         throw new ConflictException({
           codigo: 'ITEM_JA_REMOVIDO',
-          mensagem: 'Este item ja foi removido.',
+          mensagem: 'Este item já foi removido.',
         });
       }
 
@@ -558,7 +558,7 @@ export class PedidosService {
         if (pedido.status !== 'AGUARDANDO_CONFIRMACAO') {
           throw new ConflictException({
             codigo: 'PEDIDO_NAO_AGUARDA_CONFIRMACAO',
-            mensagem: 'So um pedido aguardando confirmacao pode ser confirmado.',
+            mensagem: 'Só um pedido aguardando confirmação pode ser confirmado.',
           });
         }
 
@@ -584,7 +584,7 @@ export class PedidosService {
           if (!item) {
             throw new NotFoundException({
               codigo: 'ITEM_NAO_ENCONTRADO',
-              mensagem: 'Item nao encontrado neste pedido.',
+              mensagem: 'Item não encontrado neste pedido.',
             });
           }
 
@@ -602,7 +602,7 @@ export class PedidosService {
           if (confirmada.greaterThan(desejada)) {
             throw new BadRequestException({
               codigo: 'CONFIRMOU_MAIS_QUE_O_PEDIDO',
-              mensagem: `${item.variacao.sku}: nao da para confirmar mais do que foi pedido.`,
+              mensagem: `${item.variacao.sku}: não dá para confirmar mais do que foi pedido.`,
             });
           }
 
@@ -633,15 +633,15 @@ export class PedidosService {
               throw new ConflictException({
                 codigo: 'SEM_SALDO_DISPONIVEL',
                 mensagem:
-                  `${item.variacao.sku}: disponivel ${disponivel.toFixed(0)}, ` +
-                  `confirmando ${confirmada.toFixed(0)}. Voce nao tem permissao para confirmar sem saldo.`,
+                  `${item.variacao.sku}: disponível ${disponivel.toFixed(0)}, ` +
+                  `confirmando ${confirmada.toFixed(0)}. Você não tem permissão para confirmar sem saldo.`,
               });
             }
 
             if ((dados.justificativaSemSaldo?.trim().length ?? 0) < 5) {
               throw new ConflictException({
                 codigo: 'JUSTIFICATIVA_OBRIGATORIA',
-                mensagem: 'Confirmar acima do disponivel exige justificativa.',
+                mensagem: 'Confirmar acima do disponível exige justificativa.',
               });
             }
 
@@ -688,7 +688,7 @@ export class PedidosService {
         if (algumDevolvido && !principal.permissoes.has(PERM.pedido.confirmarParcial)) {
           throw new ForbiddenException({
             codigo: 'SEM_PERMISSAO_PARCIAL',
-            mensagem: 'Voce nao tem permissao para confirmar apenas parte do pedido.',
+            mensagem: 'Você não tem permissão para confirmar apenas parte do pedido.',
           });
         }
 
@@ -787,7 +787,7 @@ export class PedidosService {
         if (pedido.status !== 'CONFIRMADO' && pedido.status !== 'CONFIRMADO_PARCIALMENTE') {
           throw new ConflictException({
             codigo: 'PEDIDO_NAO_CONFIRMADO',
-            mensagem: 'So um pedido confirmado pode ser faturado.',
+            mensagem: 'Só um pedido confirmado pode ser faturado.',
           });
         }
 
@@ -800,7 +800,7 @@ export class PedidosService {
         if (itens.length === 0) {
           throw new ConflictException({
             codigo: 'NADA_A_FATURAR',
-            mensagem: 'Este pedido nao tem item confirmado.',
+            mensagem: 'Este pedido não tem item confirmado.',
           });
         }
 
@@ -917,7 +917,7 @@ export class PedidosService {
         // cliente, e para a equipe o pedido de outra empresa nao existe.
         throw new NotFoundException({
           codigo: 'PEDIDO_NAO_ENCONTRADO',
-          mensagem: 'Pedido nao encontrado.',
+          mensagem: 'Pedido não encontrado.',
         });
       }
 
@@ -971,7 +971,7 @@ export class PedidosService {
     if (!clienteId) {
       throw new ForbiddenException({
         codigo: 'SEM_CLIENTE_NO_TOKEN',
-        mensagem: 'Esta rota e do portal do cliente.',
+        mensagem: 'Esta rota é do portal do cliente.',
       });
     }
 
@@ -983,12 +983,12 @@ export class PedidosService {
     if (!cliente) {
       throw new NotFoundException({
         codigo: 'CLIENTE_NAO_ENCONTRADO',
-        mensagem: 'Cadastro nao encontrado.',
+        mensagem: 'Cadastro não encontrado.',
       });
     }
 
     // O cliente nao escolhe loja: o pedido cai na primeira loja ativa que
-    // tenha local padrao de venda. Direcionamento por regiao ou por cadastro
+    // tenha local padrão de venda. Direcionamento por regiao ou por cadastro
     // e uma decisao comercial que ainda nao foi tomada — registrada em
     // docs/ORDERS.md.
     const local = await tx.localEstoque.findFirst({
@@ -1000,7 +1000,7 @@ export class PedidosService {
     if (!local) {
       throw new ConflictException({
         codigo: 'SEM_LOJA_PARA_ATENDER',
-        mensagem: 'Nenhuma loja ativa com local padrao de venda.',
+        mensagem: 'Nenhuma loja ativa com local padrão de venda.',
       });
     }
 
@@ -1029,7 +1029,7 @@ export class PedidosService {
     if (!tabelaPrecoId) {
       throw new ConflictException({
         codigo: 'SEM_TABELA_DE_PRECO',
-        mensagem: 'Nao ha tabela de preco para este cadastro.',
+        mensagem: 'Não há tabela de preço para este cadastro.',
       });
     }
 
@@ -1046,7 +1046,7 @@ export class PedidosService {
 
       throw new ConflictException({
         codigo: 'ITEM_SEM_PRECO',
-        mensagem: `${variacao?.sku ?? 'O item'} nao tem preco na sua tabela.`,
+        mensagem: `${variacao?.sku ?? 'O item'} não tem preço na sua tabela.`,
       });
     }
 
@@ -1060,7 +1060,7 @@ export class PedidosService {
     if (!permitidas.includes(para)) {
       throw new ConflictException({
         codigo: 'TRANSICAO_INVALIDA',
-        mensagem: `Um pedido em ${de} nao pode ir para ${para}.`,
+        mensagem: `Um pedido em ${de} não pode ir para ${para}.`,
       });
     }
   }
@@ -1093,7 +1093,7 @@ export class PedidosService {
     if (!pedido) {
       throw new NotFoundException({
         codigo: 'PEDIDO_NAO_ENCONTRADO',
-        mensagem: 'Pedido nao encontrado.',
+        mensagem: 'Pedido não encontrado.',
       });
     }
 
@@ -1112,7 +1112,7 @@ export class PedidosService {
     if (pedido.status !== 'AGUARDANDO_CONFIRMACAO') {
       throw new ConflictException({
         codigo: 'PEDIDO_NAO_EDITAVEL',
-        mensagem: 'So um pedido aguardando confirmacao pode ter os itens alterados.',
+        mensagem: 'Só um pedido aguardando confirmação pode ter os itens alterados.',
       });
     }
 

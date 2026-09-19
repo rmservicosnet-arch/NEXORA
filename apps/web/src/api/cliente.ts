@@ -80,6 +80,29 @@ async function bruto(caminho: string, opcoes: Opcoes = {}): Promise<Response> {
  */
 let renovacaoEmAndamento: Promise<boolean> | null = null;
 
+/** Restauração de boot em andamento. Ver o comentário em `restaurar`. */
+let restauracaoEmAndamento: Promise<Sessao | null> | null = null;
+
+/**
+ * Serializa uma tarefa entre as abas da mesma origem.
+ *
+ * A promessa compartilhada resolve a corrida dentro de UMA aba. Duas abas são
+ * dois contextos de JavaScript e não se enxergam: abertas juntas, as duas
+ * restauram com o mesmo cookie e a segunda derruba a família. O cookie, ao
+ * contrário da memória, é compartilhado — então basta esperar a vez: quando a
+ * segunda aba for, o cookie já é o rotacionado, e ela renova normalmente.
+ *
+ * Sem `navigator.locks` a tarefa roda direto. É pior que travar, e melhor que
+ * não restaurar.
+ */
+async function emFila<T>(nome: string, tarefa: () => Promise<T>): Promise<T> {
+  const travas = globalThis.navigator?.locks;
+  if (!travas) {
+    return tarefa();
+  }
+  return travas.request(nome, tarefa) as Promise<T>;
+}
+
 async function renovar(): Promise<boolean> {
   renovacaoEmAndamento ??= (async () => {
     try {
@@ -182,15 +205,33 @@ export const api = {
     }),
 
   restaurar: async (): Promise<Sessao | null> => {
-    try {
-      return await pedir<Sessao>('/auth/refresh', {
-        method: 'POST',
-        body: { canal: 'web' },
-        semRenovar: true,
-      });
-    } catch {
-      return null;
-    }
+    // Mesma proteção de `renovacaoEmAndamento`, num caminho que escapara dela.
+    //
+    // O `StrictMode` monta o provedor duas vezes em desenvolvimento, e as duas
+    // montagens chamam `restaurar`. O sinal de cancelamento descarta o segundo
+    // *resultado*, mas as duas requisições já saíram — com o mesmo cookie. A
+    // segunda apresenta um token recém-rotacionado, o servidor lê reuso e
+    // revoga a família inteira. Não é o boot que falha: é a sessão boa que
+    // morre junto, e o próximo carregamento cai no login.
+    restauracaoEmAndamento ??= (async () => {
+      try {
+        return await emFila('estoque:restaurar-sessao', () =>
+          pedir<Sessao>('/auth/refresh', {
+            method: 'POST',
+            body: { canal: 'web' },
+            semRenovar: true,
+          }),
+        );
+      } catch {
+        return null;
+      } finally {
+        queueMicrotask(() => {
+          restauracaoEmAndamento = null;
+        });
+      }
+    })();
+
+    return restauracaoEmAndamento;
   },
 
   sair: async (): Promise<void> => {

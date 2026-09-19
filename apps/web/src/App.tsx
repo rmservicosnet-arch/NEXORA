@@ -12,6 +12,8 @@ import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
 import { NovoProduto } from './paginas/NovoProduto';
 import { Pdv } from './paginas/Pdv';
+import { PedidoDetalhe } from './paginas/PedidoDetalhe';
+import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { EstadoVazio } from './ui/Estados';
@@ -49,6 +51,8 @@ export function App() {
               <Route path="pdv" element={<Pdv />} />
               <Route path="caixa" element={<Caixa />} />
               <Route path="carteiras" element={<Carteiras />} />
+              <Route path="pedidos" element={<Pedidos />} />
+              <Route path="pedidos/:pedidoId" element={<PedidoDetalhe />} />
               <Route
                 path="*"
                 element={

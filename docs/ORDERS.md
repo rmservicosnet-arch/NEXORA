@@ -458,6 +458,44 @@ filtrava certo; o ponto do RLS é valer quando ela esquece. Corrigido, com
 `estoque_reserva` fechada por completo para o portal: reserva revela
 quantidade.
 
+### 10.1 As telas da equipe
+
+Existem duas: `/pedidos` (a fila) e `/pedidos/:id` (o trabalho).
+
+A fila mostra, em cada linha, **a diferença contra o que o cliente enviou**.
+Só o total esconderia o que decide se o pedido pode seguir sozinho: um pedido
+que subiu de valor precisa de aceite, um que desceu não.
+
+Na tela de trabalho, a confirmação nasce preenchida com **o que o cliente
+pediu — inclusive quando falta saldo**.
+
+Isso é deliberado e custou uma correção. A primeira versão sugeria
+`min(pedido, disponível)`, o que parece prudente e não é: disponível aqui é
+**aviso, não teto**. A API deixa confirmar acima dele com
+`pedido.confirmar_sem_saldo` e justificativa, e marca o item
+`confirmadoSemSaldo`. Cortar pelo disponível fazia a falta de estoque
+**devolver o item ao cliente sozinha**, no meio de um pedido que o operador
+confirmaria sem olhar a linha — exatamente o "negativo é permitido, nunca
+silencioso" ao contrário. Num pedido em que tudo faltava, a tela chegava a
+propor uma ação que só podia dar erro (`NENHUM_ITEM_CONFIRMADO`).
+
+Devolver passou a ser ato: digita-se zero. A falta aparece como selo
+**"faltam N"** na linha — texto visível, não `title`, porque no celular não há
+hover e é no celular que a equipe confirma.
+
+### 10.2 Mobile não era adaptação, era requisito
+
+As duas telas e o `Shell` nasceram com larguras fixas de desktop. Num telefone
+de 375px a coluna de navegação de 240px comia dois terços da tela, a linha da
+fila escondia o nome do cliente, e na tela de trabalho o campo de confirmar e
+os botões ficavam fora da área visível. A equipe aprova pelo celular — então
+isso não era um detalhe de acabamento, era a funcionalidade não existir.
+
+Abaixo de `md` a navegação virou gaveta; abaixo de `sm` a linha da fila e a
+linha do item empilham. Os invólucros com `sm:contents` somem no desktop e as
+células voltam para as colunas originais, na ordem — o layout de desktop não
+foi tocado.
+
 ### O que ainda não existe
 
 - **Notificação** de pedido novo, alterado ou aguardando aceite. O modelo está
@@ -469,5 +507,6 @@ quantidade.
   faturamento.
 - **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
   ainda não é conferido.
-- **Telas.** A API está pronta; a fila da equipe e o aplicativo do cliente
-  ainda não foram construídos.
+- **O portal do cliente.** A API está pronta e as telas da equipe existem
+  (§10.1); o catálogo, o carrinho, "meus pedidos" e a tela de aceite ainda
+  não foram construídos.

@@ -73,6 +73,24 @@ export class AuthService {
     });
   }
 
+  /**
+   * Erro único para as falhas de RENOVAÇÃO.
+   *
+   * Separado de `recusar` porque o motivo de lá não vale aqui: quem renova já
+   * se autenticou, e um cookie não permite enumerar e-mail nem senha. Dizer
+   * "e-mail ou senha incorretos" para uma sessão que apenas expirou manda a
+   * pessoa trocar uma senha que está certa.
+   *
+   * Continua sem distinguir expirada, revogada e reuso — ISSO sim interessaria
+   * a quem está com um token roubado na mão.
+   */
+  private recusarSessao(): never {
+    throw new UnauthorizedException({
+      codigo: 'SESSAO_ENCERRADA',
+      mensagem: 'Sua sessão terminou. Entre novamente.',
+    });
+  }
+
   private async resolverEmpresa(
     dominio: Dominio,
     email: string,
@@ -316,7 +334,7 @@ export class AuthService {
   async renovar(tokenApresentado: string, dominio: Dominio, dados: Pick<DadosEntrada, 'ip' | 'userAgent'>): Promise<Sessao> {
     const separador = tokenApresentado.indexOf('.');
     if (separador <= 0) {
-      this.recusar();
+      this.recusarSessao();
     }
 
     const tenantId = tokenApresentado.slice(0, separador);
@@ -331,7 +349,7 @@ export class AuthService {
     ).catch(() => null);
 
     if (!sessao) {
-      this.recusar();
+      this.recusarSessao();
     }
 
     if (sessao.revogadoEm) {
@@ -344,16 +362,16 @@ export class AuthService {
           data: { revogadoEm: new Date(), motivoRevogacao: 'REUSO_DETECTADO' },
         }),
       );
-      this.recusar();
+      this.recusarSessao();
     }
 
     if (sessao.expiraEm.getTime() < Date.now()) {
-      this.recusar();
+      this.recusarSessao();
     }
 
     const principalId = sessao.usuarioId ?? sessao.clienteAcessoId;
     if (!principalId) {
-      this.recusar();
+      this.recusarSessao();
     }
 
     const principal = await this.carregarPrincipal({

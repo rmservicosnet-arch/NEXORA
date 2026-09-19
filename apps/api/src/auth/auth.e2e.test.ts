@@ -172,6 +172,39 @@ describe.runIf(temBanco)('refresh rotativo', () => {
       .send({ refreshToken: renovada.body.tokenRefresh, canal: 'app' })
       .expect(401);
   });
+
+  /**
+   * Falha de renovação não é falha de login.
+   *
+   * Quem renova já se autenticou; um cookie não permite enumerar e-mail nem
+   * senha. Responder `CREDENCIAIS_INVALIDAS` mandava a pessoa trocar uma
+   * senha que estava certa. O motivo real — expirada, revogada ou reuso —
+   * continua indistinguível, porque ESSE detalhe interessa a quem roubou o
+   * token.
+   */
+  it('sessão encerrada não se disfarça de senha errada', async () => {
+    const sessao = await entrar('/api/auth/login', ADMIN);
+
+    await http
+      .post('/api/auth/refresh')
+      .send({ refreshToken: sessao.tokenRefresh, canal: 'app' })
+      .expect(200);
+
+    const expirada = await http
+      .post('/api/auth/refresh')
+      .send({ refreshToken: sessao.tokenRefresh, canal: 'app' })
+      .expect(401);
+
+    const inexistente = await http
+      .post('/api/auth/refresh')
+      .send({ refreshToken: 'nao.existe', canal: 'app' })
+      .expect(401);
+
+    expect(expirada.body.codigo).toBe('SESSAO_ENCERRADA');
+    expect(inexistente.body.codigo).toBe('SESSAO_ENCERRADA');
+    // Os dois casos respondem igual: o motivo não vaza.
+    expect(inexistente.body.mensagem).toBe(expirada.body.mensagem);
+  });
 });
 
 describe.runIf(temBanco)('critério 3 — tenantId forjado', () => {

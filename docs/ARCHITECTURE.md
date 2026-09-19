@@ -93,6 +93,43 @@ Interceptor de auditoria envolve o conjunto e grava toda mutação.
 O access token carrega `tenantId` porque ele é assinado pelo servidor. É a
 única origem confiável de tenant. Ver `TENANCY.md`.
 
+### 6.1 A proteção do servidor vira bug do cliente se ele duplicar a renovação
+
+A revogação por reuso é correta e não se negocia. Mas ela torna **toda
+renovação duplicada um incidente**: duas requisições com o mesmo cookie, a
+segunda apresenta um token recém-rotacionado, e a família inteira morre — o
+usuário legítimo junto.
+
+O cliente web precisa, então, de três coisas:
+
+1. **Uma só renovação em voo por aba.** `renovacaoEmAndamento` já fazia isso
+   para o caminho disparado por 401.
+2. **Uma só restauração de boot por aba.** Este caminho tinha escapado. Ele
+   roda em *todo carregamento de página*, e o `StrictMode` monta o provedor
+   duas vezes: as duas montagens chamavam `restaurar`. O sinal de
+   cancelamento descartava o segundo *resultado*, mas as duas requisições já
+   tinham saído. Quem recarregava a página era deslogado — e não por um 401
+   isolado: a sessão boa morria junto, como a terceira chamada de um teste com
+   `curl` mostrou (o cookie **válido**, já rotacionado, também recebia 401).
+3. **Uma só restauração entre abas.** A promessa compartilhada só enxerga o
+   próprio contexto de JavaScript; duas abas abertas juntas reproduzem o mesmo
+   incidente em produção, sem `StrictMode` nenhum. A serialização usa
+   `navigator.locks`: o cookie é compartilhado pela origem, então a aba que
+   espera encontra o token já rotacionado e renova normalmente.
+
+### 6.2 Falhar ao renovar não é falhar ao entrar
+
+O login responde um erro único — `CREDENCIAIS_INVALIDAS`, "E-mail ou senha
+incorretos" — para e-mail inexistente, senha errada e usuário inativo.
+Distinguir ajudaria o usuário legítimo um pouco e o atacante muito mais.
+
+A renovação reaproveitava esse erro, e ali o motivo não vale: quem renova já
+se autenticou, e um cookie não permite enumerar e-mail nem senha. O efeito era
+só diagnóstico errado — uma sessão expirada mandava a pessoa trocar uma senha
+que estava certa. A renovação tem o seu próprio código, `SESSAO_ENCERRADA`,
+que **continua** sem distinguir expirada, revogada e reuso: *esse* detalhe
+interessa a quem está com um token roubado na mão.
+
 ## 7. Dinheiro e quantidade
 
 **Nunca `float`. Nunca `number` para valor monetário.**

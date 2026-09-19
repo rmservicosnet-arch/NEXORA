@@ -1,5 +1,5 @@
 ﻿import { PERM } from '@estoque/contracts';
-import type { ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
 import { useSessao } from '../auth/sessao';
@@ -59,6 +59,14 @@ const ICONE = {
       <path d="M8 15h5" />
     </>
   ),
+  pedido: (
+    <>
+      <path d="M8 4h9l3 3v13H8z" />
+      <path d="M4 8v12h10" />
+      <path d="M11 11h5" />
+      <path d="M11 15h3" />
+    </>
+  ),
   movimento: (
     <>
       <path d="M4 8h13" />
@@ -107,6 +115,13 @@ const MENU: readonly ItemMenu[] = [
     icone: ICONE.gaveta,
   },
   {
+    rotulo: 'Pedidos',
+    para: '/pedidos',
+    grupo: 'Operação',
+    permissoes: [PERM.pedido.visualizarFila],
+    icone: ICONE.pedido,
+  },
+  {
     rotulo: 'Estoque',
     para: '/estoque',
     grupo: 'Operação',
@@ -139,6 +154,22 @@ const MENU: readonly ItemMenu[] = [
 export function Shell() {
   const { usuario, restaurando, sair, pode } = useSessao();
   const local = useLocation();
+  const [menuAberto, setMenuAberto] = useState(false);
+
+  // Fechar ao navegar. No celular o menu cobre a tela inteira; deixá-lo aberto
+  // sobre a página recém-aberta esconde exatamente o que a pessoa foi ver.
+  useEffect(() => {
+    setMenuAberto(false);
+  }, [local.pathname]);
+
+  useEffect(() => {
+    if (!menuAberto) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuAberto(false);
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [menuAberto]);
 
   if (restaurando) {
     return <div className="min-h-dvh bg-neutral-25" />;
@@ -164,9 +195,22 @@ export function Shell() {
 
   return (
     <div className="flex min-h-dvh">
+      {menuAberto ? (
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setMenuAberto(false)}
+          className="fixed inset-0 z-30 bg-neutral-900/50 md:hidden"
+        />
+      ) : null}
+
       <nav
         aria-label="Navegação principal"
-        className="flex w-60 shrink-0 flex-col bg-primary-800"
+        className={juntar(
+          'fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col bg-primary-800',
+          'transition-transform duration-200 md:static md:translate-x-0',
+          menuAberto ? 'translate-x-0' : '-translate-x-full',
+        )}
       >
         <div className="flex h-[60px] items-center border-b border-primary-700 px-4">
           <Marca claro compacto />
@@ -249,6 +293,33 @@ export function Shell() {
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* A equipe confirma pedido pelo celular — é requisito, não adaptação.
+            Acima de `md` esta barra some e a navegação volta a ser a coluna. */}
+        <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-neutral-100 bg-white px-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMenuAberto(true)}
+            aria-label="Abrir menu"
+            aria-expanded={menuAberto}
+            className="flex size-9 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-50"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M4 7h16" />
+              <path d="M4 12h16" />
+              <path d="M4 17h16" />
+            </svg>
+          </button>
+          <Marca compacto />
+        </div>
         <Outlet />
       </div>
     </div>
