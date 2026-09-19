@@ -31,8 +31,7 @@ export class EscopoLojaGuard implements CanActivate {
 
     const requisicao = contexto.switchToHttp().getRequest<Request>();
     const principal = (requisicao as unknown as Record<string, unknown>)[CHAVE_PRINCIPAL] as
-      | Principal
-      | undefined;
+      Principal | undefined;
 
     if (!principal || principal.dominio !== DOMINIO_FUNCIONARIO) {
       throw new ForbiddenException({
@@ -47,7 +46,9 @@ export class EscopoLojaGuard implements CanActivate {
 
     const bruto =
       params[nomeDoParametro] ??
-      (typeof query[nomeDoParametro] === 'string' ? (query[nomeDoParametro] as string) : undefined) ??
+      (typeof query[nomeDoParametro] === 'string'
+        ? (query[nomeDoParametro] as string)
+        : undefined) ??
       (typeof body[nomeDoParametro] === 'string' ? (body[nomeDoParametro] as string) : undefined);
 
     if (!bruto) {

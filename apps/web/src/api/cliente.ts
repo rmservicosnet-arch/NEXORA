@@ -10,14 +10,33 @@ const BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:3333/api';
  * refresh em cookie httpOnly entra, restaurando a sessão sem nunca ter
  * ficado exposto ao JavaScript.
  */
-let tokenAcesso: string | null = null;
+/**
+ * Equipe e cliente são domínios de autenticação DIFERENTES (ADR-009): tabelas,
+ * rotas, segredos e cookies separados. Um token só serviria para um deles, e
+ * guardar os dois no mesmo lugar faria entrar no portal derrubar o token da
+ * equipe — no mesmo navegador, na mesma aba.
+ */
+export type Dominio = 'equipe' | 'portal';
 
-export function definirToken(token: string | null): void {
-  tokenAcesso = token;
+const tokensAcesso: Record<Dominio, string | null> = { equipe: null, portal: null };
+
+/**
+ * O domínio sai do CAMINHO, não de um parâmetro em cada chamada.
+ *
+ * Tudo sob `/portal` é do cliente; o resto é da equipe. Um parâmetro a mais
+ * em cada `pedir` seria uma chance a mais de esquecê-lo — e esquecê-lo
+ * mandaria o token errado.
+ */
+function dominioDe(caminho: string): Dominio {
+  return caminho.startsWith('/portal/') ? 'portal' : 'equipe';
 }
 
-export function tokenAtual(): string | null {
-  return tokenAcesso;
+export function definirToken(token: string | null, dominio: Dominio = 'equipe'): void {
+  tokensAcesso[dominio] = token;
+}
+
+export function tokenAtual(dominio: Dominio = 'equipe'): string | null {
+  return tokensAcesso[dominio];
 }
 
 export class ErroRequisicao extends Error {
@@ -56,6 +75,7 @@ interface Opcoes extends Omit<RequestInit, 'body'> {
 
 async function bruto(caminho: string, opcoes: Opcoes = {}): Promise<Response> {
   const { body, semRenovar: _semRenovar, headers, ...resto } = opcoes;
+  const tokenAcesso = tokensAcesso[dominioDe(caminho)];
 
   return fetch(`${BASE}${caminho}`, {
     ...resto,
@@ -78,10 +98,22 @@ async function bruto(caminho: string, opcoes: Opcoes = {}): Promise<Response> {
  * um token já rotacionado. O servidor trataria como reuso e derrubaria a
  * sessão inteira. A própria proteção do servidor viraria um bug do cliente.
  */
-let renovacaoEmAndamento: Promise<boolean> | null = null;
+const renovacaoEmAndamento: Record<Dominio, Promise<boolean> | null> = {
+  equipe: null,
+  portal: null,
+};
 
-/** Restauração de boot em andamento. Ver o comentário em `restaurar`. */
-let restauracaoEmAndamento: Promise<Sessao | null> | null = null;
+/** Restauração de boot em andamento, por domínio. Ver o comentário em `restaurar`. */
+const restauracaoEmAndamento: Record<Dominio, Promise<Sessao | null> | null> = {
+  equipe: null,
+  portal: null,
+};
+
+/** A raiz das rotas de autenticação de cada domínio. */
+const RAIZ_AUTH: Record<Dominio, string> = {
+  equipe: '/auth',
+  portal: '/portal/auth',
+};
 
 /**
  * Serializa uma tarefa entre as abas da mesma origem.
@@ -103,43 +135,43 @@ async function emFila<T>(nome: string, tarefa: () => Promise<T>): Promise<T> {
   return travas.request(nome, tarefa) as Promise<T>;
 }
 
-async function renovar(): Promise<boolean> {
-  renovacaoEmAndamento ??= (async () => {
+async function renovar(dominio: Dominio): Promise<boolean> {
+  renovacaoEmAndamento[dominio] ??= (async () => {
     try {
-      const resposta = await bruto('/auth/refresh', {
+      const resposta = await bruto(`${RAIZ_AUTH[dominio]}/refresh`, {
         method: 'POST',
         body: { canal: 'web' },
         semRenovar: true,
       });
 
       if (!resposta.ok) {
-        definirToken(null);
+        definirToken(null, dominio);
         return false;
       }
 
       const sessao = (await resposta.json()) as Sessao;
-      definirToken(sessao.tokenAcesso);
+      definirToken(sessao.tokenAcesso, dominio);
       return true;
     } catch {
-      definirToken(null);
+      definirToken(null, dominio);
       return false;
     } finally {
       // Libera na próxima volta do laço de eventos, para que chamadas
       // simultâneas ainda peguem esta mesma promessa.
       queueMicrotask(() => {
-        renovacaoEmAndamento = null;
+        renovacaoEmAndamento[dominio] = null;
       });
     }
   })();
 
-  return renovacaoEmAndamento;
+  return renovacaoEmAndamento[dominio];
 }
 
 export async function pedir<T>(caminho: string, opcoes: Opcoes = {}): Promise<T> {
   let resposta = await bruto(caminho, opcoes);
 
   if (resposta.status === 401 && !opcoes.semRenovar) {
-    const renovou = await renovar();
+    const renovou = await renovar(dominioDe(caminho));
     if (renovou) {
       resposta = await bruto(caminho, { ...opcoes, semRenovar: true });
     }
@@ -167,7 +199,7 @@ export async function pedirBlob(caminho: string): Promise<Blob> {
   let resposta = await bruto(caminho);
 
   if (resposta.status === 401) {
-    const renovou = await renovar();
+    const renovou = await renovar(dominioDe(caminho));
     if (renovou) {
       resposta = await bruto(caminho, { semRenovar: true });
     }
@@ -196,49 +228,70 @@ export async function enviarArquivo(
   }
 }
 
-export const api = {
-  entrar: (email: string, senha: string): Promise<Sessao> =>
-    pedir<Sessao>('/auth/login', {
-      method: 'POST',
-      body: { email, senha, canal: 'web' },
-      semRenovar: true,
-    }),
+/**
+ * Entrar, restaurar e sair — a mecânica é a mesma nos dois domínios; muda a
+ * raiz da rota e o cofre do token. Duplicar isso significaria corrigir a
+ * corrida de restauração duas vezes, e esquecer uma.
+ */
+function autenticacao(dominio: Dominio) {
+  const raiz = RAIZ_AUTH[dominio];
 
-  restaurar: async (): Promise<Sessao | null> => {
-    // Mesma proteção de `renovacaoEmAndamento`, num caminho que escapara dela.
-    //
-    // O `StrictMode` monta o provedor duas vezes em desenvolvimento, e as duas
-    // montagens chamam `restaurar`. O sinal de cancelamento descarta o segundo
-    // *resultado*, mas as duas requisições já saíram — com o mesmo cookie. A
-    // segunda apresenta um token recém-rotacionado, o servidor lê reuso e
-    // revoga a família inteira. Não é o boot que falha: é a sessão boa que
-    // morre junto, e o próximo carregamento cai no login.
-    restauracaoEmAndamento ??= (async () => {
+  return {
+    entrar: async (email: string, senha: string): Promise<Sessao> => {
+      const sessao = await pedir<Sessao>(`${raiz}/login`, {
+        method: 'POST',
+        body: { email, senha, canal: 'web' },
+        semRenovar: true,
+      });
+      definirToken(sessao.tokenAcesso, dominio);
+      return sessao;
+    },
+
+    restaurar: async (): Promise<Sessao | null> => {
+      // Mesma proteção de `renovacaoEmAndamento`, num caminho que escapara
+      // dela.
+      //
+      // O `StrictMode` monta o provedor duas vezes em desenvolvimento, e as
+      // duas montagens chamam `restaurar`. O sinal de cancelamento descarta o
+      // segundo *resultado*, mas as duas requisições já saíram — com o mesmo
+      // cookie. A segunda apresenta um token recém-rotacionado, o servidor lê
+      // reuso e revoga a família inteira. Não é o boot que falha: é a sessão
+      // boa que morre junto, e o próximo carregamento cai no login.
+      restauracaoEmAndamento[dominio] ??= (async () => {
+        try {
+          const sessao = await emFila(`estoque:restaurar-${dominio}`, () =>
+            pedir<Sessao>(`${raiz}/refresh`, {
+              method: 'POST',
+              body: { canal: 'web' },
+              semRenovar: true,
+            }),
+          );
+          definirToken(sessao.tokenAcesso, dominio);
+          return sessao;
+        } catch {
+          return null;
+        } finally {
+          queueMicrotask(() => {
+            restauracaoEmAndamento[dominio] = null;
+          });
+        }
+      })();
+
+      return restauracaoEmAndamento[dominio];
+    },
+
+    sair: async (): Promise<void> => {
       try {
-        return await emFila('estoque:restaurar-sessao', () =>
-          pedir<Sessao>('/auth/refresh', {
-            method: 'POST',
-            body: { canal: 'web' },
-            semRenovar: true,
-          }),
-        );
-      } catch {
-        return null;
+        await pedir<void>(`${raiz}/logout`, { method: 'POST', semRenovar: true });
       } finally {
-        queueMicrotask(() => {
-          restauracaoEmAndamento = null;
-        });
+        definirToken(null, dominio);
       }
-    })();
+    },
+  };
+}
 
-    return restauracaoEmAndamento;
-  },
-
-  sair: async (): Promise<void> => {
-    try {
-      await pedir<void>('/auth/logout', { method: 'POST', semRenovar: true });
-    } finally {
-      definirToken(null);
-    }
-  },
+export const api = {
+  ...autenticacao('equipe'),
+  /** O portal do cliente. Sessão própria, cookie próprio, token próprio. */
+  portal: autenticacao('portal'),
 };

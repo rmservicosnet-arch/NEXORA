@@ -170,9 +170,7 @@ async function itemPublicado(preco: string, quantidade: string): Promise<string>
   return variacaoId;
 }
 
-async function enviarPedido(
-  itens: { variacaoId: string; quantidade: string }[],
-): Promise<Pedido> {
+async function enviarPedido(itens: { variacaoId: string; quantidade: string }[]): Promise<Pedido> {
   const resposta = await http
     .post('/api/portal/pedidos')
     .set('Authorization', `Bearer ${tokenCliente}`)
@@ -269,10 +267,7 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
     // autenticacao, porque a claim `aud` nao confere e a verificacao usa o
     // segredo do outro dominio. E o "estruturalmente incapaz" do ADR-009: nao
     // depende de ninguem lembrar de filtrar por tipo.
-    await http
-      .get('/api/portal/pedidos')
-      .set('Authorization', `Bearer ${tokenAdmin}`)
-      .expect(401);
+    await http.get('/api/portal/pedidos').set('Authorization', `Bearer ${tokenAdmin}`).expect(401);
 
     await http.get('/api/pedidos').set('Authorization', `Bearer ${tokenCliente}`).expect(401);
   });
@@ -679,7 +674,9 @@ describe.runIf(temBanco)('faturamento', () => {
         .get('/api/vendas?limite=5')
         .set('Authorization', `Bearer ${tokenAdmin}`)
         .expect(200)
-    ).body as { itens: { numero: number; itens: { precoUnitario: string; precoOrigem: string }[] }[] };
+    ).body as {
+      itens: { numero: number; itens: { precoUnitario: string; precoOrigem: string }[] }[];
+    };
 
     const venda = vendas.itens.find((v) => v.numero === faturado.vendaNumero)!;
 

@@ -9,7 +9,12 @@ import type {
   ProdutoLista,
 } from '@estoque/contracts';
 import { dec, type Dec } from '@estoque/core';
-import { comEscopoAtual, exigirContexto, type ClienteEmTransacao, type PrismaClient } from '@estoque/db';
+import {
+  comEscopoAtual,
+  exigirContexto,
+  type ClienteEmTransacao,
+  type PrismaClient,
+} from '@estoque/db';
 
 import { AuditoriaService } from '../comum/auditoria.service';
 import type { Principal } from '../auth/dominios';

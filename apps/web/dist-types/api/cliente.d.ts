@@ -1,6 +1,21 @@
 import type { ErroApi, Sessao } from '@estoque/contracts';
-export declare function definirToken(token: string | null): void;
-export declare function tokenAtual(): string | null;
+/**
+ * O token de acesso vive em memória, não em `localStorage`.
+ *
+ * `localStorage` é legível por qualquer script da página: um XSS entrega a
+ * sessão inteira. Em memória, o token morre ao recarregar — e é aí que o
+ * refresh em cookie httpOnly entra, restaurando a sessão sem nunca ter
+ * ficado exposto ao JavaScript.
+ */
+/**
+ * Equipe e cliente são domínios de autenticação DIFERENTES (ADR-009): tabelas,
+ * rotas, segredos e cookies separados. Um token só serviria para um deles, e
+ * guardar os dois no mesmo lugar faria entrar no portal derrubar o token da
+ * equipe — no mesmo navegador, na mesma aba.
+ */
+export type Dominio = 'equipe' | 'portal';
+export declare function definirToken(token: string | null, dominio?: Dominio): void;
+export declare function tokenAtual(dominio?: Dominio): string | null;
 export declare class ErroRequisicao extends Error {
     readonly status: number;
     readonly corpo: ErroApi;
@@ -28,6 +43,12 @@ export declare function enviarArquivo(destino: {
     cabecalhos: Record<string, string>;
 }, arquivo: File): Promise<void>;
 export declare const api: {
+    /** O portal do cliente. Sessão própria, cookie próprio, token próprio. */
+    portal: {
+        entrar: (email: string, senha: string) => Promise<Sessao>;
+        restaurar: () => Promise<Sessao | null>;
+        sair: () => Promise<void>;
+    };
     entrar: (email: string, senha: string) => Promise<Sessao>;
     restaurar: () => Promise<Sessao | null>;
     sair: () => Promise<void>;

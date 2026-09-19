@@ -68,11 +68,11 @@ export function Produtos() {
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-6">
         <div>
-          <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">Produtos</h1>
+          <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
+            Produtos
+          </h1>
           <p className="mt-1 text-[13.5px] text-neutral-500">
-            {consulta.data
-              ? `${consulta.data.total} produtos no filtro atual`
-              : 'Carregando…'}
+            {consulta.data ? `${consulta.data.total} produtos no filtro atual` : 'Carregando…'}
           </p>
         </div>
 
@@ -187,8 +187,9 @@ export function Produtos() {
                 )}
               >
                 <span>
-                  Exibindo <strong className="font-semibold text-neutral-900">{itens.length}</strong>{' '}
-                  de <strong className="font-semibold text-neutral-900">{consulta.data?.total}</strong>
+                  Exibindo{' '}
+                  <strong className="font-semibold text-neutral-900">{itens.length}</strong> de{' '}
+                  <strong className="font-semibold text-neutral-900">{consulta.data?.total}</strong>
                 </span>
                 {consulta.data?.proximoCursor ? (
                   <span className="text-[12.5px]">Há mais páginas — paginação por cursor</span>

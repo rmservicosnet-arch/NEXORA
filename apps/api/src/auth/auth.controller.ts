@@ -18,12 +18,7 @@ import { ZodPipe } from '../comum/zod.pipe';
 import type { Ambiente } from '../configuracao';
 import { AuthService, type Sessao } from './auth.service';
 import { esquemaEntrada, esquemaRenovacao, type EntradaDto, type RenovacaoDto } from './auth.dto';
-import {
-  DOMINIO_CLIENTE,
-  DOMINIO_FUNCIONARIO,
-  type Dominio,
-  type Principal,
-} from './dominios';
+import { DOMINIO_CLIENTE, DOMINIO_FUNCIONARIO, type Dominio, type Principal } from './dominios';
 
 interface RespostaSessao {
   readonly tokenAcesso: string;

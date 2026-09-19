@@ -331,7 +331,11 @@ export class AuthService {
    * usuário legítimo. Derrubar os dois é o comportamento correto: é melhor
    * pedir login de novo do que manter uma sessão possivelmente roubada.
    */
-  async renovar(tokenApresentado: string, dominio: Dominio, dados: Pick<DadosEntrada, 'ip' | 'userAgent'>): Promise<Sessao> {
+  async renovar(
+    tokenApresentado: string,
+    dominio: Dominio,
+    dados: Pick<DadosEntrada, 'ip' | 'userAgent'>,
+  ): Promise<Sessao> {
     const separador = tokenApresentado.indexOf('.');
     if (separador <= 0) {
       this.recusarSessao();

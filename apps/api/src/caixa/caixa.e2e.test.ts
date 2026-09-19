@@ -173,7 +173,7 @@ beforeAll(async () => {
 
   const contexto = (
     await http.get('/api/vendas/contexto').set('Authorization', `Bearer ${tokenAdmin}`).expect(200)
-  ).body as { lojas: typeof loja[] };
+  ).body as { lojas: (typeof loja)[] };
 
   const comLocal = contexto.lojas.filter((l) => l.localPadraoId !== null);
   loja = comLocal[comLocal.length - 1]!;

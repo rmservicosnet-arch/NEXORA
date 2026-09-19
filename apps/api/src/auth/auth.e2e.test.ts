@@ -127,10 +127,7 @@ describe.runIf(temBanco)('os dois domínios não se misturam — ADR-009', () =>
   it('token de cliente é recusado em rota de funcionário', async () => {
     const sessao = await entrar('/api/portal/auth/login', CLIENTE);
 
-    await http
-      .get('/api/auth/eu')
-      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
-      .expect(401);
+    await http.get('/api/auth/eu').set('Authorization', `Bearer ${sessao.tokenAcesso}`).expect(401);
   });
 
   it('cliente do portal tem exatamente uma permissão', async () => {

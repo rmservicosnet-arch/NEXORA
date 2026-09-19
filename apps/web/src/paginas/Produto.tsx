@@ -100,7 +100,9 @@ export function Produto() {
       ]);
     },
     onError: (erro) => {
-      setErrosEnvio([erro instanceof ErroRequisicao ? erro.corpo.mensagem : 'Falha ao remover a imagem.']);
+      setErrosEnvio([
+        erro instanceof ErroRequisicao ? erro.corpo.mensagem : 'Falha ao remover a imagem.',
+      ]);
     },
   });
 
@@ -115,7 +117,9 @@ export function Produto() {
       await fila.invalidateQueries({ queryKey: ['produtos'] });
     },
     onError: (erro) => {
-      setErrosEnvio([erro instanceof ErroRequisicao ? erro.corpo.mensagem : 'Falha ao alterar o catálogo.']);
+      setErrosEnvio([
+        erro instanceof ErroRequisicao ? erro.corpo.mensagem : 'Falha ao alterar o catálogo.',
+      ]);
     },
   });
 
@@ -152,7 +156,10 @@ export function Produto() {
   return (
     <>
       <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-6">
-        <Link to="/produtos" className="text-[13.5px] text-neutral-500 no-underline hover:underline">
+        <Link
+          to="/produtos"
+          className="text-[13.5px] text-neutral-500 no-underline hover:underline"
+        >
           Produtos
         </Link>
         <span className="text-neutral-300">/</span>
@@ -188,9 +195,7 @@ export function Produto() {
                   saldo {p.saldoTotal}
                 </span>
                 {p.valorEstoque !== undefined ? (
-                  <span className="font-mono text-[12.5px]">
-                    estoque R$ {p.valorEstoque}
-                  </span>
+                  <span className="font-mono text-[12.5px]">estoque R$ {p.valorEstoque}</span>
                 ) : null}
               </p>
             </div>
@@ -230,19 +235,24 @@ export function Produto() {
             <div className="overflow-x-auto">
               <div className="min-w-[680px]">
                 <div className="grid grid-cols-[150px_minmax(0,1fr)_130px_100px_90px_110px] gap-2.5 border-b border-neutral-100 pb-1.5">
-                  {['SKU', 'Descrição', 'Cód. barras', 'Preço', 'Saldo', mostrarCusto ? 'Custo méd.' : ''].map(
-                    (t, i) => (
-                      <span
-                        key={t || `vazio-${String(i)}`}
-                        className={juntar(
-                          'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
-                          i >= 3 && 'text-right',
-                        )}
-                      >
-                        {t}
-                      </span>
-                    ),
-                  )}
+                  {[
+                    'SKU',
+                    'Descrição',
+                    'Cód. barras',
+                    'Preço',
+                    'Saldo',
+                    mostrarCusto ? 'Custo méd.' : '',
+                  ].map((t, i) => (
+                    <span
+                      key={t || `vazio-${String(i)}`}
+                      className={juntar(
+                        'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
+                        i >= 3 && 'text-right',
+                      )}
+                    >
+                      {t}
+                    </span>
+                  ))}
                 </div>
 
                 {p.variacoes.map((v) => (
@@ -357,8 +367,8 @@ export function Produto() {
 
             {!p.publicadoNoCatalogo && doProduto.length > 0 && podePublicar ? (
               <Aviso tom="atencao">
-                Este produto tem foto mas não está no catálogo. Publique para que ele apareça
-                para os clientes.
+                Este produto tem foto mas não está no catálogo. Publique para que ele apareça para
+                os clientes.
               </Aviso>
             ) : null}
           </section>
@@ -408,7 +418,9 @@ function LinhaVariacao({
                 ? 'text-[--color-atencao]'
                 : 'text-neutral-900',
           )}
-          title={variacao.abaixoDoMinimo ? `Abaixo do mínimo (${variacao.estoqueMinimo})` : undefined}
+          title={
+            variacao.abaixoDoMinimo ? `Abaixo do mínimo (${variacao.estoqueMinimo})` : undefined
+          }
         >
           {variacao.saldo}
         </span>
@@ -441,9 +453,7 @@ function LinhaVariacao({
           ))}
         </div>
       ) : (
-        <p className="mt-1 pl-[152px] text-[11.5px] text-neutral-400">
-          Sem saldo em nenhum local
-        </p>
+        <p className="mt-1 pl-[152px] text-[11.5px] text-neutral-400">Sem saldo em nenhum local</p>
       )}
     </div>
   );
@@ -482,7 +492,11 @@ function Cartao({
             <span className="text-[10.5px] text-[#8c1a21]">Remova e tente de novo</span>
           </div>
         ) : (
-          <Foto imagemId={foto.id} alt={foto.textoAlternativo || nomeDoProduto} className="size-full" />
+          <Foto
+            imagemId={foto.id}
+            alt={foto.textoAlternativo || nomeDoProduto}
+            className="size-full"
+          />
         )}
 
         {foto.principal ? (
@@ -505,7 +519,9 @@ function Cartao({
         <span
           className={juntar(
             'truncate text-[10.5px]',
-            foto.status === 'PRONTA' ? 'font-mono text-neutral-400' : 'font-medium text-[--color-atencao]',
+            foto.status === 'PRONTA'
+              ? 'font-mono text-neutral-400'
+              : 'font-medium text-[--color-atencao]',
           )}
         >
           {/* Sem dimensão não é "—": é uma foto que não terminou o envio, e

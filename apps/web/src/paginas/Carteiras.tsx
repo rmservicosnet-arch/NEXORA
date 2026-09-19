@@ -117,10 +117,10 @@ export function Carteiras() {
 
   const estornar = useMutation({
     mutationFn: (movimentoId: string) =>
-      pedir<ExtratoCarteira>(
-        `/carteira/${selecionado ?? ''}/lancamentos/${movimentoId}/estornar`,
-        { method: 'POST', body: { justificativa: 'Estorno lançado pela tela de carteiras' } },
-      ),
+      pedir<ExtratoCarteira>(`/carteira/${selecionado ?? ''}/lancamentos/${movimentoId}/estornar`, {
+        method: 'POST',
+        body: { justificativa: 'Estorno lançado pela tela de carteiras' },
+      }),
     onSuccess: async () => {
       setErro(null);
       await fila.invalidateQueries({ queryKey: ['carteiras'] });

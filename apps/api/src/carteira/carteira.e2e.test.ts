@@ -61,6 +61,7 @@ interface Extrato {
     bloqueadaParaCompra: boolean;
   };
   movimentos: Movimento[];
+  proximoCursor: string | null;
   totalCreditos: string;
   totalDebitos: string;
 }
@@ -73,9 +74,9 @@ async function entrar(dados: { email: string; senha: string }): Promise<string> 
   return (resposta.body as { tokenAcesso: string }).tokenAcesso;
 }
 
-async function extrato(token = tokenAdmin): Promise<Extrato> {
+async function extrato(token = tokenAdmin, cursor: string | null = null): Promise<Extrato> {
   const resposta = await http
-    .get(`/api/carteira/${clienteId}/extrato?limite=200`)
+    .get(`/api/carteira/${clienteId}/extrato?limite=200${cursor ? `&cursor=${cursor}` : ''}`)
     .set('Authorization', `Bearer ${token}`)
     .expect(200);
   return resposta.body as Extrato;
@@ -149,7 +150,10 @@ beforeAll(async () => {
   tokenAdmin = await entrar(ADMIN);
 
   const pagina = (
-    await http.get('/api/carteira?limite=10').set('Authorization', `Bearer ${tokenAdmin}`).expect(200)
+    await http
+      .get('/api/carteira?limite=10')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200)
   ).body as { itens: { clienteId: string }[] };
 
   clienteId = pagina.itens[0]!.clienteId;
@@ -234,16 +238,32 @@ describe.runIf(temBanco)('a convencao de sinal', () => {
 
 describe.runIf(temBanco)('o razao e a verdade', () => {
   it('o saldo e exatamente a soma dos movimentos', async () => {
-    const e = await extrato();
+    // O razao INTEIRO, seguindo o cursor.
+    //
+    // Somar so a primeira pagina e comparar com o saldo total e um teste que
+    // passa enquanto o cadastro e novo e quebra quando ele cresce — o que de
+    // fato aconteceu, passados os 200 movimentos. A divergencia acusada nao
+    // era do razao: era da leitura.
+    let soma = 0;
+    let cursor: string | null = null;
+    let saldo: string;
+    let paginas = 0;
+
+    do {
+      const pagina: Extrato = await extrato(tokenAdmin, cursor);
+      saldo = pagina.carteira.saldo;
+      for (const m of pagina.movimentos) {
+        soma += m.sentido === 'CREDITO' ? Number(m.valor) : -Number(m.valor);
+      }
+      cursor = pagina.proximoCursor;
+      paginas += 1;
+    } while (cursor && paginas < 50);
+
+    expect(cursor).toBeNull();
 
     // `carteira.saldo` e cache. Se ele divergir da soma do razao, e BUG —
     // nao arredondamento. Ver docs/WALLET.md §3.
-    let soma = 0;
-    for (const m of e.movimentos) {
-      soma += m.sentido === 'CREDITO' ? Number(m.valor) : -Number(m.valor);
-    }
-
-    expect(soma).toBeCloseTo(Number(e.carteira.saldo), 2);
+    expect(soma).toBeCloseTo(Number(saldo), 2);
   });
 
   it('o extrato encadeia: o posterior de um e o anterior do seguinte', async () => {
@@ -440,9 +460,8 @@ describe.runIf(temBanco)('estorno', () => {
   });
 
   it('nao estorna duas vezes', async () => {
-    const depois = (
-      await lancar(tokenAdmin, { tipo: 'DEPOSITO', valor: '15.00' }).expect(201)
-    ).body as Extrato;
+    const depois = (await lancar(tokenAdmin, { tipo: 'DEPOSITO', valor: '15.00' }).expect(201))
+      .body as Extrato;
 
     const id = depois.movimentos[0]!.id;
 
@@ -462,9 +481,8 @@ describe.runIf(temBanco)('estorno', () => {
   });
 
   it('nao estorna um estorno', async () => {
-    const depois = (
-      await lancar(tokenAdmin, { tipo: 'DEPOSITO', valor: '20.00' }).expect(201)
-    ).body as Extrato;
+    const depois = (await lancar(tokenAdmin, { tipo: 'DEPOSITO', valor: '20.00' }).expect(201))
+      .body as Extrato;
 
     const estornado = (
       await http

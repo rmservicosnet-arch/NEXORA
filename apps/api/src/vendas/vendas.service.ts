@@ -39,7 +39,15 @@ interface Aviso {
 }
 
 /** Formas que não podem passar do total. Dinheiro pode — vira troco. */
-const SEM_TROCO = new Set(['PIX', 'DEBITO', 'CREDITO', 'TRANSFERENCIA', 'BOLETO', 'PRAZO', 'CARTEIRA']);
+const SEM_TROCO = new Set([
+  'PIX',
+  'DEBITO',
+  'CREDITO',
+  'TRANSFERENCIA',
+  'BOLETO',
+  'PRAZO',
+  'CARTEIRA',
+]);
 
 @Injectable()
 export class VendasService {
@@ -126,182 +134,182 @@ export class VendasService {
     const contexto = exigirContexto();
 
     {
-        const local = dados.localId
-          ? await this.estoque.resolverLocalDaLoja(tx, dados.localId, dados.lojaId)
-          : await this.estoque.localPadraoDaLoja(tx, dados.lojaId);
+      const local = dados.localId
+        ? await this.estoque.resolverLocalDaLoja(tx, dados.localId, dados.lojaId)
+        : await this.estoque.localPadraoDaLoja(tx, dados.lojaId);
 
-        const { tabelaPrecoId, clienteId } = await this.resolverTabela(tx, dados);
+      const { tabelaPrecoId, clienteId } = await this.resolverTabela(tx, dados);
 
-        // Dinheiro exige caixa aberto; cartão e PIX, não — vão para a
-        // adquirente, não para a gaveta. A recusa vem ANTES de qualquer
-        // escrita: nada pior do que baixar estoque e descobrir no fim que a
-        // venda não podia ser registrada. Ver docs/CASHBOX.md §3.
-        const temDinheiro = dados.pagamentos.some((p) => p.forma === 'DINHEIRO');
-        const caixaId = await this.caixa.caixaParaVenda(tx, dados.lojaId, temDinheiro, principal);
+      // Dinheiro exige caixa aberto; cartão e PIX, não — vão para a
+      // adquirente, não para a gaveta. A recusa vem ANTES de qualquer
+      // escrita: nada pior do que baixar estoque e descobrir no fim que a
+      // venda não podia ser registrada. Ver docs/CASHBOX.md §3.
+      const temDinheiro = dados.pagamentos.some((p) => p.forma === 'DINHEIRO');
+      const caixaId = await this.caixa.caixaParaVenda(tx, dados.lojaId, temDinheiro, principal);
 
-        // Numeração serializada por empresa. Duas vendas simultâneas pegariam
-        // o mesmo `max(numero) + 1` e uma delas morreria no índice único —
-        // no balcão, com o cliente esperando. O lock de transação resolve sem
-        // custo perceptível: ele vale só até o commit.
-        const numero = await this.proximoNumero(tx, contexto.tenantId);
+      // Numeração serializada por empresa. Duas vendas simultâneas pegariam
+      // o mesmo `max(numero) + 1` e uma delas morreria no índice único —
+      // no balcão, com o cliente esperando. O lock de transação resolve sem
+      // custo perceptível: ele vale só até o commit.
+      const numero = await this.proximoNumero(tx, contexto.tenantId);
 
-        const venda = await tx.venda.create({
+      const venda = await tx.venda.create({
+        data: {
+          tenantId: contexto.tenantId,
+          lojaId: dados.lojaId,
+          localId: local.id,
+          numero,
+          origem: opcoes.origem,
+          status: 'RASCUNHO',
+          ...(opcoes.pedidoId ? { pedidoId: opcoes.pedidoId } : {}),
+          ...(clienteId ? { clienteId } : {}),
+          vendedorId: principal.id,
+          ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
+          ...(caixaId ? { caixaId } : {}),
+          subtotal: '0',
+          total: '0',
+        },
+        select: { id: true },
+      });
+
+      const avisosColetados: Aviso[] = [];
+      let subtotal = dec(0);
+
+      for (const item of dados.itens) {
+        const preco = await this.resolverPreco(
+          tx,
+          item,
+          tabelaPrecoId,
+          principal,
+          opcoes.precosCongelados ?? false,
+        );
+        const quantidade = dec(item.quantidade);
+        const descontoItem = dec(item.descontoItem ?? '0');
+        const totalItem = quantidade.times(preco.valor).minus(descontoItem);
+
+        if (totalItem.lessThan(0)) {
+          throw new BadRequestException({
+            codigo: 'DESCONTO_MAIOR_QUE_ITEM',
+            mensagem: `O desconto do item ${preco.sku} é maior que o próprio item.`,
+          });
+        }
+
+        // A baixa acontece ANTES de gravar o item, porque é dela que sai o
+        // custo congelado. Inverter a ordem obrigaria a um UPDATE depois —
+        // e um UPDATE que falhasse deixaria a margem errada para sempre.
+        const baixa = await this.estoque.baixarParaVenda(
+          tx,
+          {
+            variacaoId: item.variacaoId,
+            local,
+            quantidade: item.quantidade,
+            vendaId: venda.id,
+            numeroVenda: String(numero),
+          },
+          principal,
+        );
+
+        avisosColetados.push(
+          ...baixa.avisos.map((a) => ({
+            codigo: a.codigo,
+            mensagem: `${preco.sku}: ${a.mensagem}`,
+          })),
+        );
+
+        await tx.vendaItem.create({
           data: {
             tenantId: contexto.tenantId,
-            lojaId: dados.lojaId,
-            localId: local.id,
-            numero,
-            origem: opcoes.origem,
-            status: 'RASCUNHO',
-            ...(opcoes.pedidoId ? { pedidoId: opcoes.pedidoId } : {}),
-            ...(clienteId ? { clienteId } : {}),
-            vendedorId: principal.id,
+            vendaId: venda.id,
+            variacaoId: item.variacaoId,
+            quantidade: quantidade.toFixed(6),
+            precoUnitario: preco.valor.toFixed(2),
+            descontoItem: descontoItem.toFixed(2),
+            totalItem: totalItem.toFixed(2),
             ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
-            ...(caixaId ? { caixaId } : {}),
-            subtotal: '0',
-            total: '0',
+            precoOrigem: preco.origem,
+            custoUnitario: baixa.custoUnitario.toFixed(6),
           },
-          select: { id: true },
         });
 
-        const avisosColetados: Aviso[] = [];
-        let subtotal = dec(0);
+        subtotal = subtotal.plus(totalItem);
+      }
 
-        for (const item of dados.itens) {
-          const preco = await this.resolverPreco(
-            tx,
-            item,
-            tabelaPrecoId,
-            principal,
-            opcoes.precosCongelados ?? false,
-          );
-          const quantidade = dec(item.quantidade);
-          const descontoItem = dec(item.descontoItem ?? '0');
-          const totalItem = quantidade.times(preco.valor).minus(descontoItem);
+      const desconto = dec(dados.desconto ?? '0');
+      const acrescimo = dec(dados.acrescimo ?? '0');
+      const total = subtotal.minus(desconto).plus(acrescimo);
 
-          if (totalItem.lessThan(0)) {
-            throw new BadRequestException({
-              codigo: 'DESCONTO_MAIOR_QUE_ITEM',
-              mensagem: `O desconto do item ${preco.sku} é maior que o próprio item.`,
-            });
-          }
+      if (total.lessThan(0)) {
+        throw new BadRequestException({
+          codigo: 'TOTAL_NEGATIVO',
+          mensagem: 'O desconto é maior que a venda.',
+        });
+      }
 
-          // A baixa acontece ANTES de gravar o item, porque é dela que sai o
-          // custo congelado. Inverter a ordem obrigaria a um UPDATE depois —
-          // e um UPDATE que falhasse deixaria a margem errada para sempre.
-          const baixa = await this.estoque.baixarParaVenda(
-            tx,
-            {
-              variacaoId: item.variacaoId,
-              local,
-              quantidade: item.quantidade,
-              vendaId: venda.id,
-              numeroVenda: String(numero),
-            },
-            principal,
-          );
+      if (desconto.greaterThan(0) && !principal.permissoes.has(PERM.preco.aplicarDesconto)) {
+        throw new ForbiddenException({
+          codigo: 'SEM_PERMISSAO_DESCONTO',
+          mensagem: 'Você não tem permissão para conceder desconto.',
+        });
+      }
 
-          avisosColetados.push(
-            ...baixa.avisos.map((a) => ({
-              codigo: a.codigo,
-              mensagem: `${preco.sku}: ${a.mensagem}`,
-            })),
-          );
+      const troco = await this.registrarPagamentos(tx, venda.id, dados, total, contexto.tenantId);
 
-          await tx.vendaItem.create({
-            data: {
-              tenantId: contexto.tenantId,
-              vendaId: venda.id,
-              variacaoId: item.variacaoId,
-              quantidade: quantidade.toFixed(6),
-              precoUnitario: preco.valor.toFixed(2),
-              descontoItem: descontoItem.toFixed(2),
-              totalItem: totalItem.toFixed(2),
-              ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
-              precoOrigem: preco.origem,
-              custoUnitario: baixa.custoUnitario.toFixed(6),
-            },
-          });
+      // Pagamento em carteira DEBITA a conta corrente do cliente, na mesma
+      // transação. Enquanto isto não existia, o PDV aceitava a forma
+      // `CARTEIRA` e não lançava nada: a venda fechava e o cliente não devia
+      // nada. Ver docs/WALLET.md §5.
+      const emCarteira = dados.pagamentos
+        .filter((p) => p.forma === 'CARTEIRA')
+        .reduce((soma, p) => soma.plus(dec(p.valor)), dec(0));
 
-          subtotal = subtotal.plus(totalItem);
-        }
-
-        const desconto = dec(dados.desconto ?? '0');
-        const acrescimo = dec(dados.acrescimo ?? '0');
-        const total = subtotal.minus(desconto).plus(acrescimo);
-
-        if (total.lessThan(0)) {
+      if (emCarteira.greaterThan(0)) {
+        if (!clienteId) {
           throw new BadRequestException({
-            codigo: 'TOTAL_NEGATIVO',
-            mensagem: 'O desconto é maior que a venda.',
+            codigo: 'CARTEIRA_EXIGE_CLIENTE',
+            mensagem: 'Pagamento em carteira exige identificar o cliente.',
           });
         }
 
-        if (desconto.greaterThan(0) && !principal.permissoes.has(PERM.preco.aplicarDesconto)) {
-          throw new ForbiddenException({
-            codigo: 'SEM_PERMISSAO_DESCONTO',
-            mensagem: 'Você não tem permissão para conceder desconto.',
-          });
-        }
+        const debito = await this.carteira.debitarPorVenda(
+          tx,
+          { clienteId, valor: emCarteira, vendaId: venda.id },
+          principal,
+        );
 
-        const troco = await this.registrarPagamentos(tx, venda.id, dados, total, contexto.tenantId);
-
-        // Pagamento em carteira DEBITA a conta corrente do cliente, na mesma
-        // transação. Enquanto isto não existia, o PDV aceitava a forma
-        // `CARTEIRA` e não lançava nada: a venda fechava e o cliente não devia
-        // nada. Ver docs/WALLET.md §5.
-        const emCarteira = dados.pagamentos
-          .filter((p) => p.forma === 'CARTEIRA')
-          .reduce((soma, p) => soma.plus(dec(p.valor)), dec(0));
-
-        if (emCarteira.greaterThan(0)) {
-          if (!clienteId) {
-            throw new BadRequestException({
-              codigo: 'CARTEIRA_EXIGE_CLIENTE',
-              mensagem: 'Pagamento em carteira exige identificar o cliente.',
-            });
-          }
-
-          const debito = await this.carteira.debitarPorVenda(
-            tx,
-            { clienteId, valor: emCarteira, vendaId: venda.id },
-            principal,
-          );
-
-          if (debito.excedeuLimite) {
-            avisosColetados.push({
-              codigo: 'LIMITE_DE_CARTEIRA_EXCEDIDO',
-              mensagem: `A compra passou do limite. O saldo do cliente ficou em R$ ${debito.saldoPosterior.toFixed(2)}.`,
-            });
-          } else {
-            avisosColetados.push({
-              codigo: 'DEBITADO_EM_CARTEIRA',
-              mensagem: `R$ ${emCarteira.toFixed(2)} debitados. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
-            });
-          }
-        }
-
-        await tx.venda.update({
-          where: { id: venda.id },
-          data: {
-            status: 'CONCLUIDA',
-            subtotal: subtotal.toFixed(2),
-            desconto: desconto.toFixed(2),
-            acrescimo: acrescimo.toFixed(2),
-            total: total.toFixed(2),
-            // Gravado, não derivado: é ele que a conferência de caixa
-            // subtrai. Ver docs/CASHBOX.md §4.
-            troco: troco.toFixed(2),
-            concluidaEm: new Date(),
-          },
-        });
-
-        if (troco.greaterThan(0)) {
+        if (debito.excedeuLimite) {
           avisosColetados.push({
-            codigo: 'TROCO',
-            mensagem: `Troco de R$ ${troco.toFixed(2)}.`,
+            codigo: 'LIMITE_DE_CARTEIRA_EXCEDIDO',
+            mensagem: `A compra passou do limite. O saldo do cliente ficou em R$ ${debito.saldoPosterior.toFixed(2)}.`,
+          });
+        } else {
+          avisosColetados.push({
+            codigo: 'DEBITADO_EM_CARTEIRA',
+            mensagem: `R$ ${emCarteira.toFixed(2)} debitados. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
           });
         }
+      }
+
+      await tx.venda.update({
+        where: { id: venda.id },
+        data: {
+          status: 'CONCLUIDA',
+          subtotal: subtotal.toFixed(2),
+          desconto: desconto.toFixed(2),
+          acrescimo: acrescimo.toFixed(2),
+          total: total.toFixed(2),
+          // Gravado, não derivado: é ele que a conferência de caixa
+          // subtrai. Ver docs/CASHBOX.md §4.
+          troco: troco.toFixed(2),
+          concluidaEm: new Date(),
+        },
+      });
+
+      if (troco.greaterThan(0)) {
+        avisosColetados.push({
+          codigo: 'TROCO',
+          mensagem: `Troco de R$ ${troco.toFixed(2)}.`,
+        });
+      }
 
       return { vendaId: venda.id, avisos: avisosColetados };
     }
@@ -319,11 +327,7 @@ export class VendasService {
    * Um cancelamento que some do histórico é um cancelamento que ninguém
    * consegue auditar.
    */
-  async cancelar(
-    id: string,
-    dados: CancelamentoVenda,
-    principal: Principal,
-  ): Promise<Venda> {
+  async cancelar(id: string, dados: CancelamentoVenda, principal: Principal): Promise<Venda> {
     const contexto = exigirContexto();
 
     await comEscopoAtual(

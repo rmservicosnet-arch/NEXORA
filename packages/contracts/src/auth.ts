@@ -54,9 +54,7 @@ export type Sessao = z.infer<typeof sessaoSchema>;
 export const erroApiSchema = z.object({
   codigo: z.string(),
   mensagem: z.string(),
-  campos: z
-    .array(z.object({ campo: z.string(), problema: z.string() }))
-    .optional(),
+  campos: z.array(z.object({ campo: z.string(), problema: z.string() })).optional(),
   permissoesFaltantes: z.array(z.string()).optional(),
 });
 export type ErroApi = z.infer<typeof erroApiSchema>;

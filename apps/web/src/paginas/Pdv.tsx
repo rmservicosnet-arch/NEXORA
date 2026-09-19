@@ -214,7 +214,9 @@ export function Pdv() {
     },
     onError: (e) => {
       setConcluida(null);
-      setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível concluir a venda.');
+      setErro(
+        e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível concluir a venda.',
+      );
     },
   });
 
@@ -510,7 +512,11 @@ export function Pdv() {
               {totais.falta > 0 ? (
                 <Linha rotulo="Falta" valor={totais.falta} tom="perigo" />
               ) : (
-                <Linha rotulo="Troco" valor={totais.troco} tom={totais.troco > 0 ? 'sucesso' : undefined} />
+                <Linha
+                  rotulo="Troco"
+                  valor={totais.troco}
+                  tom={totais.troco > 0 ? 'sucesso' : undefined}
+                />
               )}
             </div>
           </div>
@@ -637,7 +643,9 @@ function LinhaItem({
           aria-label={`Preço de ${linha.sku}`}
           className={juntar(
             'h-9 w-[92px] shrink-0 rounded-md border px-2 text-right font-mono text-[13.5px]',
-            linha.precoManual ? 'border-[--color-atencao] bg-[--color-atencao-fundo]' : 'border-neutral-200',
+            linha.precoManual
+              ? 'border-[--color-atencao] bg-[--color-atencao-fundo]'
+              : 'border-neutral-200',
           )}
           title={linha.precoManual ? `Preço de tabela: R$ ${linha.precoTabela}` : undefined}
         />

@@ -19,7 +19,8 @@ const VARIANTES: Record<VarianteBotao, string> = {
   primario: 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm',
   secundario: 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50',
   fantasma: 'bg-transparent text-neutral-700 hover:bg-neutral-50',
-  perigo: 'bg-white text-[--color-perigo] border border-neutral-200 hover:bg-[--color-perigo-fundo]',
+  perigo:
+    'bg-white text-[--color-perigo] border border-neutral-200 hover:bg-[--color-perigo-fundo]',
 };
 
 const TAMANHOS: Record<TamanhoBotao, string> = {
@@ -88,7 +89,12 @@ function Girando() {
       aria-hidden="true"
     >
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
-      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

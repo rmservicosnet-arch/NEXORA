@@ -13,14 +13,13 @@ import {
 import { PERM } from '@estoque/contracts';
 import type { Response } from 'express';
 
-import {
-  Armazenamento,
-} from '../armazenamento/armazenamento';
+import { Armazenamento } from '../armazenamento/armazenamento';
 import {
   ArmazenamentoLocal,
   AutorizacaoDeEnvioInvalidaError,
 } from '../armazenamento/armazenamento-local.service';
-import { Permissoes, Publico } from '../comum/decoradores';
+import { DOMINIO_CLIENTE } from '../auth/dominios';
+import { ExigeDominio, Permissoes, Publico } from '../comum/decoradores';
 import { ImagensService } from '../produtos/imagens.service';
 
 @Controller('midia')
@@ -82,11 +81,7 @@ export class MidiaController {
         });
       }
 
-      await this.armazenamento.gravar(
-        autorizacao.chave,
-        new Uint8Array(corpo),
-        autorizacao.tipo,
-      );
+      await this.armazenamento.gravar(autorizacao.chave, new Uint8Array(corpo), autorizacao.tipo);
 
       return { recebido: corpo.byteLength };
     } catch (erro) {
@@ -105,11 +100,35 @@ export class MidiaController {
   @Get(':imagemId')
   @Permissoes(PERM.produto.visualizar)
   @Header('Cache-Control', 'private, max-age=300')
-  async servir(
-    @Param('imagemId') imagemId: string,
-    @Res() resposta: Response,
-  ): Promise<void> {
+  async servir(@Param('imagemId') imagemId: string, @Res() resposta: Response): Promise<void> {
     const { bytes, tipo } = await this.imagens.conteudo(imagemId);
+
+    resposta.setHeader('Content-Type', tipo);
+    resposta.setHeader('Content-Length', bytes.byteLength);
+    resposta.end(Buffer.from(bytes));
+  }
+}
+
+/**
+ * As imagens, para o PORTAL do cliente.
+ *
+ * Rota separada pelo mesmo motivo de `portal/pedidos`: os dois domínios são
+ * independentes por desenho (ADR-009) e cada um precisa dizer o que autoriza.
+ * O cliente carrega só `portal.acessar` — na rota da equipe ele levaria 403 e
+ * o catálogo apareceria sem foto nenhuma.
+ *
+ * Aqui não há `@Permissoes`: quem chega já é do domínio do cliente, e o
+ * recorte de o QUE ele pode ver é feito na consulta, contra o catálogo.
+ */
+@Controller('portal/midia')
+@ExigeDominio(DOMINIO_CLIENTE)
+export class PortalMidiaController {
+  constructor(private readonly imagens: ImagensService) {}
+
+  @Get(':imagemId')
+  @Header('Cache-Control', 'private, max-age=300')
+  async servir(@Param('imagemId') imagemId: string, @Res() resposta: Response): Promise<void> {
+    const { bytes, tipo } = await this.imagens.conteudoDoCatalogo(imagemId);
 
     resposta.setHeader('Content-Type', tipo);
     resposta.setHeader('Content-Length', bytes.byteLength);

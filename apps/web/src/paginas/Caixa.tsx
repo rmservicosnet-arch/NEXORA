@@ -28,9 +28,9 @@ export function Caixa() {
 
   const [lojaId, setLojaId] = useState('');
   const [erro, setErro] = useState<string | null>(null);
-  const [formulario, setFormulario] = useState<'abrir' | 'fechar' | 'sangria' | 'suprimento' | null>(
-    null,
-  );
+  const [formulario, setFormulario] = useState<
+    'abrir' | 'fechar' | 'sangria' | 'suprimento' | null
+  >(null);
   const [valor, setValor] = useState('');
   const [motivo, setMotivo] = useState('');
 
@@ -393,7 +393,11 @@ function Parcela({
       <p
         className={juntar(
           'font-mono text-[15px]',
-          destaque ? 'font-semibold text-neutral-900' : discreto ? 'text-neutral-600' : 'text-neutral-900',
+          destaque
+            ? 'font-semibold text-neutral-900'
+            : discreto
+              ? 'text-neutral-600'
+              : 'text-neutral-900',
         )}
       >
         {sinal && Number(valor) > 0 ? `${sinal} ` : ''}R$ {brl(valor)}
@@ -412,8 +416,7 @@ function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
       <div className="min-w-0">
         <p className="truncate text-[13.5px] text-neutral-900">{caixa.operador}</p>
         <p className="truncate text-[11.5px] text-neutral-400">
-          {caixa.loja} ·{' '}
-          {new Date(caixa.abertoEm).toLocaleDateString('pt-BR')}
+          {caixa.loja} · {new Date(caixa.abertoEm).toLocaleDateString('pt-BR')}
         </p>
       </div>
 

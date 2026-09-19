@@ -5,11 +5,7 @@ import { dirname, join, normalize, resolve, sep } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import {
-  Armazenamento,
-  type DestinoDeEnvio,
-  type OpcoesDeEnvio,
-} from './armazenamento';
+import { Armazenamento, type DestinoDeEnvio, type OpcoesDeEnvio } from './armazenamento';
 
 export class ChaveForaDaRaizError extends Error {
   readonly codigo = 'CHAVE_INVALIDA';

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api, definirToken } from './cliente';
+import { api, definirToken, pedir, tokenAtual } from './cliente';
 
 /**
  * O refresh é rotativo e o servidor trata reapresentação como reuso: ele
@@ -82,7 +82,7 @@ describe('restauração de sessão', () => {
 
     const sessao = await api.restaurar();
 
-    expect(pedidos).toEqual(['estoque:restaurar-sessao']);
+    expect(pedidos).toEqual(['estoque:restaurar-equipe']);
     expect(sessao).not.toBeNull();
   });
 
@@ -90,5 +90,64 @@ describe('restauração de sessão', () => {
     vi.stubGlobal('navigator', undefined);
 
     await expect(api.restaurar()).resolves.not.toBeNull();
+  });
+});
+
+/**
+ * Equipe e cliente são domínios separados por desenho (ADR-009). No navegador
+ * isso significa dois cofres de token: se fossem um só, abrir o portal
+ * derrubaria a sessão da equipe na mesma aba — e o inverso.
+ */
+describe('dois domínios de autenticação', () => {
+  beforeEach(() => {
+    definirToken(null);
+    definirToken(null, 'portal');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const autorizacao = (init?.headers as Record<string, string> | undefined)?.[
+          'Authorization'
+        ];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              tokenAcesso: url.includes('/portal/') ? 'token-portal' : 'token-equipe',
+              usuario: { id: 'u1', nome: 'Alguém', email: 'a@b.c', permissoes: [] },
+              // Devolvido para o teste conferir QUAL token viajou.
+              autorizacaoRecebida: autorizacao ?? null,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    definirToken(null);
+    definirToken(null, 'portal');
+  });
+
+  it('entrar no portal não derruba o token da equipe', async () => {
+    await api.entrar('a@b.c', 'x');
+    expect(tokenAtual()).toBe('token-equipe');
+
+    await api.portal.entrar('cliente@b.c', 'x');
+
+    expect(tokenAtual('portal')).toBe('token-portal');
+    expect(tokenAtual()).toBe('token-equipe');
+  });
+
+  it('o caminho decide qual token viaja', async () => {
+    await api.entrar('a@b.c', 'x');
+    await api.portal.entrar('cliente@b.c', 'x');
+
+    const daEquipe = await pedir<{ autorizacaoRecebida: string }>('/pedidos');
+    const doPortal = await pedir<{ autorizacaoRecebida: string }>('/portal/pedidos');
+
+    expect(daEquipe.autorizacaoRecebida).toBe('Bearer token-equipe');
+    expect(doPortal.autorizacaoRecebida).toBe('Bearer token-portal');
   });
 });

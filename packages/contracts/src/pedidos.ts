@@ -200,6 +200,14 @@ export const pedidoSchema = z.object({
   cliente: z.string(),
   solicitante: z.string().nullable(),
   tabelaPreco: z.string().nullable(),
+  /**
+   * A tabela pelo id, nao so pelo nome.
+   *
+   * A tela da equipe busca itens para incluir e precisa pedir o preco DESTA
+   * tabela. Sem o id ela cai na tabela padrao, mostra um preco ao operador e
+   * grava outro no pedido — dois numeros para o mesmo ato.
+   */
+  tabelaPrecoId: z.string().nullable(),
   /** Congelado no envio. A referencia contra a qual se compara toda edicao. */
   valorSolicitado: z.string(),
   valorConfirmado: z.string(),

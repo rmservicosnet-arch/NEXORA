@@ -9,9 +9,7 @@ import { z } from 'zod';
  */
 
 const decimalString = (rotulo: string) =>
-  z
-    .string()
-    .regex(/^-?\d+(\.\d+)?$/, `${rotulo} precisa ser um número decimal em texto`);
+  z.string().regex(/^-?\d+(\.\d+)?$/, `${rotulo} precisa ser um número decimal em texto`);
 
 export const statusProdutoSchema = z.enum(['RASCUNHO', 'ATIVO', 'INATIVO']);
 export type StatusProduto = z.infer<typeof statusProdutoSchema>;

@@ -134,8 +134,7 @@ export class CaixaService {
 
       this.exigirDonoOuConferente(caixa.operadorId, principal);
 
-      const permissao =
-        dados.tipo === 'SANGRIA' ? PERM.caixa.sangria : PERM.caixa.suprimento;
+      const permissao = dados.tipo === 'SANGRIA' ? PERM.caixa.sangria : PERM.caixa.suprimento;
 
       if (!principal.permissoes.has(permissao)) {
         throw new ForbiddenException({
@@ -253,11 +252,7 @@ export class CaixaService {
    * **Quem fechou não confere a si mesmo.** Conferência é o segundo par de
    * olhos; feita pela mesma pessoa, é assinatura em branco.
    */
-  async conferir(
-    caixaId: string,
-    dados: ConferenciaCaixa,
-    principal: Principal,
-  ): Promise<Caixa> {
+  async conferir(caixaId: string, dados: ConferenciaCaixa, principal: Principal): Promise<Caixa> {
     const contexto = exigirContexto();
 
     await comEscopoAtual(this.prisma, async (tx) => {
@@ -280,8 +275,7 @@ export class CaixaService {
       if (caixa.operadorId === principal.id) {
         throw new ConflictException({
           codigo: 'NAO_CONFERE_O_PROPRIO_CAIXA',
-          mensagem:
-            'Quem fecha o caixa não o confere. A conferência precisa de outra pessoa.',
+          mensagem: 'Quem fecha o caixa não o confere. A conferência precisa de outra pessoa.',
         });
       }
 
@@ -438,9 +432,7 @@ export class CaixaService {
         status: 'ABERTO',
         // No modo compartilhado a loja tem um caixa só, de quem quer que o
         // tenha aberto. No modo por operador, cada um tem o seu.
-        ...(config?.modoCaixa === 'COMPARTILHADO_POR_LOJA'
-          ? {}
-          : { operadorId: principal.id }),
+        ...(config?.modoCaixa === 'COMPARTILHADO_POR_LOJA' ? {} : { operadorId: principal.id }),
       },
       select: { id: true },
     });
@@ -554,7 +546,12 @@ export class CaixaService {
   private async exigirCaixa(
     tx: ClienteEmTransacao,
     id: string,
-  ): Promise<{ id: string; status: string; operadorId: string; valorAbertura: { toString(): string } }> {
+  ): Promise<{
+    id: string;
+    status: string;
+    operadorId: string;
+    valorAbertura: { toString(): string };
+  }> {
     const caixa = await tx.caixa.findFirst({
       where: { id },
       select: { id: true, status: true, operadorId: true, valorAbertura: true },

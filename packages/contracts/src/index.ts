@@ -20,6 +20,27 @@ export {
 
 export { PERM, temPermissao, type ChavePermissao } from './permissoes.js';
 
+export {
+  alteracaoClienteSchema,
+  apoioClienteSchema,
+  clienteSchema,
+  filtroClientesSchema,
+  modoCheckoutSchema,
+  novoClienteSchema,
+  paginaClientesSchema,
+  statusClienteSchema,
+  tabelaPrecoResumoSchema,
+  type AlteracaoCliente,
+  type ApoioCliente,
+  type Cliente,
+  type FiltroClientes,
+  type ModoCheckout,
+  type NovoCliente,
+  type PaginaClientes,
+  type StatusCliente,
+  type TabelaPrecoResumo,
+} from './clientes.js';
+
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {

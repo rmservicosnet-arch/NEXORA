@@ -5,7 +5,10 @@ import { juntar } from './juntar';
 export type TomAviso = 'info' | 'sucesso' | 'atencao' | 'perigo';
 
 const TONS: Record<TomAviso, { caixa: string; icone: string }> = {
-  info: { caixa: 'bg-primary-50 border-primary-100 text-primary-800', icone: 'var(--color-primary-600)' },
+  info: {
+    caixa: 'bg-primary-50 border-primary-100 text-primary-800',
+    icone: 'var(--color-primary-600)',
+  },
   sucesso: {
     caixa: 'bg-[--color-sucesso-fundo] border-[#c6e4d3] text-[#155635]',
     icone: 'var(--color-sucesso)',

@@ -51,10 +51,7 @@ export class VendasController {
 
   @Get(':id')
   @Permissoes(PERM.venda.criar)
-  async detalhe(
-    @Param('id') id: string,
-    @PrincipalAtual() principal: Principal,
-  ): Promise<Venda> {
+  async detalhe(@Param('id') id: string, @PrincipalAtual() principal: Principal): Promise<Venda> {
     return this.vendas.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));
   }
 

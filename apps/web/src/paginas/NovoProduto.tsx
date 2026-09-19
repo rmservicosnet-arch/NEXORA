@@ -1,4 +1,8 @@
-﻿import { novoProdutoSchema, type ApoioProduto, type NovoProduto as NovoProdutoDto } from '@estoque/contracts';
+﻿import {
+  novoProdutoSchema,
+  type ApoioProduto,
+  type NovoProduto as NovoProdutoDto,
+} from '@estoque/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -83,9 +87,7 @@ export function NovoProduto() {
     valor: string,
   ) {
     limparErro(`variacoes.${indice}.${campo}`);
-    setVariacoes((atual) =>
-      atual.map((v) => (v.chave === chave ? { ...v, [campo]: valor } : v)),
-    );
+    setVariacoes((atual) => atual.map((v) => (v.chave === chave ? { ...v, [campo]: valor } : v)));
   }
 
   function enviar() {
@@ -127,7 +129,10 @@ export function NovoProduto() {
   return (
     <>
       <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-6">
-        <Link to="/produtos" className="text-[13.5px] text-neutral-500 no-underline hover:underline">
+        <Link
+          to="/produtos"
+          className="text-[13.5px] text-neutral-500 no-underline hover:underline"
+        >
           Produtos
         </Link>
         <span className="text-neutral-300">/</span>
@@ -206,7 +211,8 @@ export function NovoProduto() {
           <section className="flex flex-col gap-3 rounded-md border border-neutral-100 bg-white p-5 shadow-sm">
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-[15px] font-semibold text-neutral-900">
-                Variações <span className="font-sans text-[13px] font-normal text-neutral-500">
+                Variações{' '}
+                <span className="font-sans text-[13px] font-normal text-neutral-500">
                   ({variacoes.length})
                 </span>
               </h2>

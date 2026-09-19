@@ -95,7 +95,9 @@ export function Login() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <h2 className="font-display text-[27px] font-bold leading-8 text-neutral-900">Entrar</h2>
+            <h2 className="font-display text-[27px] font-bold leading-8 text-neutral-900">
+              Entrar
+            </h2>
             <p className="text-[14px] leading-5 text-neutral-500">
               Use as credenciais fornecidas pelo administrador da sua empresa.
             </p>

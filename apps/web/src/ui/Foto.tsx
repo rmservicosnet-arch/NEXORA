@@ -15,16 +15,25 @@ export function Foto({
   imagemId,
   alt,
   className,
+  raiz = '/midia',
 }: {
   readonly imagemId: string;
   readonly alt: string;
   readonly className?: string;
+  /**
+   * A rota que serve os bytes. O portal do cliente usa `/portal/midia`: outro
+   * domínio de autenticação, outro token, e um recorte a menos — o cliente só
+   * alcança imagem de produto publicado.
+   */
+  readonly raiz?: '/midia' | '/portal/midia';
 }) {
   const [endereco, setEndereco] = useState<string | null>(null);
 
   const consulta = useQuery({
-    queryKey: ['midia', imagemId],
-    queryFn: () => pedirBlob(`/midia/${imagemId}`),
+    // A raiz entra na chave: as duas rotas têm recortes diferentes, e uma
+    // chave comum faria a resposta de um domínio servir o outro.
+    queryKey: ['midia', raiz, imagemId],
+    queryFn: () => pedirBlob(`${raiz}/${imagemId}`),
     // O binário não muda: a mesma imagem tem sempre o mesmo id.
     staleTime: Infinity,
     gcTime: 10 * 60_000,

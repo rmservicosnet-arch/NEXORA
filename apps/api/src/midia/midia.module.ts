@@ -5,11 +5,11 @@ import { LIMITE_BYTES_IMAGEM } from '@estoque/core';
 
 import { ArmazenamentoModule } from '../armazenamento/armazenamento.module';
 import { ProdutosModule } from '../produtos/produtos.module';
-import { MidiaController } from './midia.controller';
+import { MidiaController, PortalMidiaController } from './midia.controller';
 
 @Module({
   imports: [ArmazenamentoModule, ProdutosModule],
-  controllers: [MidiaController],
+  controllers: [MidiaController, PortalMidiaController],
 })
 export class MidiaModule implements NestModule {
   /**

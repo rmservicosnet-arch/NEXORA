@@ -137,7 +137,7 @@ beforeAll(async () => {
 
   const contexto = (
     await http.get('/api/vendas/contexto').set('Authorization', `Bearer ${tokenAdmin}`).expect(200)
-  ).body as { lojas: typeof loja[] };
+  ).body as { lojas: (typeof loja)[] };
 
   loja = contexto.lojas.find((l) => l.localPadraoId !== null)!;
 
@@ -299,7 +299,13 @@ describe.runIf(temBanco)('venda de balcão', () => {
           itens: [{ variacaoId, quantidade: '1' }],
           pagamentos: [
             { forma: 'DINHEIRO', valor: '50.00' },
-            { forma: 'CREDITO', valor: '150.00', parcelas: 3, bandeira: 'Visa', ultimosQuatro: '4321' },
+            {
+              forma: 'CREDITO',
+              valor: '150.00',
+              parcelas: 3,
+              bandeira: 'Visa',
+              ultimosQuatro: '4321',
+            },
           ],
         })
         .expect(201)

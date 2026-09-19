@@ -24,11 +24,7 @@ import {
 } from '@estoque/db';
 
 import type { Principal } from '../auth/dominios';
-import {
-  Armazenamento,
-  EXTENSAO_POR_TIPO,
-  montarChave,
-} from '../armazenamento/armazenamento';
+import { Armazenamento, EXTENSAO_POR_TIPO, montarChave } from '../armazenamento/armazenamento';
 import { AuditoriaService } from '../comum/auditoria.service';
 import { PRISMA } from '../infra/prisma/prisma.module';
 
@@ -431,10 +427,33 @@ export class ImagensService {
    * armazenamento: é o RLS que decide se aquela imagem é desta empresa. Servir
    * a partir do id sem essa volta transformaria o id em senha.
    */
+  /**
+   * Os bytes da imagem, para o PORTAL do cliente.
+   *
+   * O RLS já prende ao tenant, mas isso não basta aqui: o cliente veria a foto
+   * de qualquer produto da empresa, inclusive dos que não estão no catálogo
+   * dele. O id é uuidv7 — ordenado no tempo, não é segredo. Então a consulta
+   * exige o produto **publicado e ativo**, que é a mesma fronteira do
+   * catálogo. Fora dela a resposta é "não encontrada", não "não autorizada":
+   * o que o cliente não pode ver, para ele não existe.
+   */
+  async conteudoDoCatalogo(imagemId: string): Promise<{ bytes: Uint8Array; tipo: string }> {
+    return this.lerBytes(imagemId, {
+      produto: { publicadoNoCatalogo: true, status: 'ATIVO' },
+    });
+  }
+
   async conteudo(imagemId: string): Promise<{ bytes: Uint8Array; tipo: string }> {
+    return this.lerBytes(imagemId, {});
+  }
+
+  private async lerBytes(
+    imagemId: string,
+    extra: { produto?: { publicadoNoCatalogo: boolean; status: 'ATIVO' } },
+  ): Promise<{ bytes: Uint8Array; tipo: string }> {
     const registro = await comEscopoAtual(this.prisma, (tx) =>
       tx.produtoImagem.findFirst({
-        where: { id: imagemId, excluidoEm: null },
+        where: { id: imagemId, excluidoEm: null, ...extra },
         select: { chaveObjeto: true },
       }),
     );
@@ -446,7 +465,22 @@ export class ImagensService {
       });
     }
 
-    const bytes = await this.armazenamento.ler(registro.chaveObjeto);
+    // O banco diz que a imagem existe; o armazenamento pode discordar.
+    //
+    // Acontece quando um envio falhou no meio, quando o banco foi restaurado
+    // sem os objetos, ou quando alguém limpou o diretório. Deixar o ENOENT
+    // subir vira 500 com pilha no log — e 500 diz "o servidor quebrou", que é
+    // falso: ele sabe exatamente o que houve. Para quem chama, a imagem não
+    // existe, e é isso que a resposta precisa dizer.
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.armazenamento.ler(registro.chaveObjeto);
+    } catch {
+      throw new NotFoundException({
+        codigo: 'IMAGEM_SEM_CONTEUDO',
+        mensagem: 'Imagem não encontrada.',
+      });
+    }
 
     // O tipo sai do conteúdo, como em todo o resto deste módulo.
     return { bytes, tipo: lerImagem(bytes).tipo };

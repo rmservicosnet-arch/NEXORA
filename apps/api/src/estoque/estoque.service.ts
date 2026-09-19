@@ -185,7 +185,12 @@ export class EstoqueService {
     const documentoId = crypto.randomUUID();
 
     const resultado = await comEscopoAtual(this.prisma, async (tx) => {
-      const origem = await this.resolverLocal(tx, dados.localOrigemId, dados.lojaOrigemId, contexto);
+      const origem = await this.resolverLocal(
+        tx,
+        dados.localOrigemId,
+        dados.lojaOrigemId,
+        contexto,
+      );
       const destino = await this.resolverLocal(
         tx,
         dados.localDestinoId,
@@ -228,7 +233,8 @@ export class EstoqueService {
         tipo: 'SAIDA_TRANSFERENCIA',
         quantidade: dec(dados.quantidade),
         calculo: saidaCalc,
-        justificativa: dados.justificativa ?? `Transferência para ${destino.loja} · ${destino.nome}`,
+        justificativa:
+          dados.justificativa ?? `Transferência para ${destino.loja} · ${destino.nome}`,
         documentoTipo: 'TRANSFERENCIA',
         documentoId,
       };
@@ -334,7 +340,13 @@ export class EstoqueService {
       return null;
     }
 
-    await this.auditar('ESTOQUE_CONTAGEM', resultado.movimento, resultado.lancamento, principal, contexto);
+    await this.auditar(
+      'ESTOQUE_CONTAGEM',
+      resultado.movimento,
+      resultado.lancamento,
+      principal,
+      contexto,
+    );
 
     return {
       movimento: resultado.movimento,
@@ -470,8 +482,7 @@ export class EstoqueService {
     if (!local) {
       throw new ConflictException({
         codigo: 'LOJA_SEM_LOCAL_PADRAO',
-        mensagem:
-          'Esta loja não tem local padrão de venda. Defina um antes de operar o PDV.',
+        mensagem: 'Esta loja não tem local padrão de venda. Defina um antes de operar o PDV.',
       });
     }
 

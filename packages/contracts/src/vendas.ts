@@ -62,7 +62,10 @@ export const pagamentoVendaSchema = z.object({
   parcelas: z.number().int().min(1).max(36).default(1),
   bandeira: z.string().trim().max(30).optional(),
   /** Só os quatro últimos. Nunca o cartão inteiro. */
-  ultimosQuatro: z.string().regex(/^\d{4}$/, 'Informe os quatro últimos dígitos').optional(),
+  ultimosQuatro: z
+    .string()
+    .regex(/^\d{4}$/, 'Informe os quatro últimos dígitos')
+    .optional(),
   autorizacao: z.string().trim().max(60).optional(),
 });
 export type PagamentoVenda = z.infer<typeof pagamentoVendaSchema>;

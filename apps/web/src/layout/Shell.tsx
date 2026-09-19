@@ -75,6 +75,14 @@ const ICONE = {
       <path d="M10 13l-3 3 3 3" />
     </>
   ),
+  cliente: (
+    <>
+      <path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" />
+      <circle cx="9.5" cy="7.5" r="3.5" />
+      <path d="M17 4.5a3.5 3.5 0 0 1 0 6.8" />
+      <path d="M21 20v-1.5a4 4 0 0 0-3-3.8" />
+    </>
+  ),
   relatorio: (
     <>
       <path d="M4 20V10" />
@@ -134,6 +142,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Cadastros',
     permissoes: [PERM.produto.visualizar],
     icone: ICONE.caixa,
+  },
+  {
+    rotulo: 'Clientes',
+    para: '/clientes',
+    grupo: 'Cadastros',
+    permissoes: [PERM.cliente.visualizar],
+    icone: ICONE.cliente,
   },
   {
     rotulo: 'Carteiras',

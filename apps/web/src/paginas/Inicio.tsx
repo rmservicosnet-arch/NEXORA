@@ -33,8 +33,8 @@ export function Inicio() {
             Suas permissões
           </h2>
           <p className="mt-1 text-[13px] text-neutral-500">
-            {usuario?.permissoes.length} permissões, vindas dos seus perfis. O menu à esquerda mostra
-            apenas o que elas liberam.
+            {usuario?.permissoes.length} permissões, vindas dos seus perfis. O menu à esquerda
+            mostra apenas o que elas liberam.
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {usuario?.permissoes.slice(0, 24).map((p) => (

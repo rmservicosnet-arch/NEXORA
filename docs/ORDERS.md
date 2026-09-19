@@ -496,6 +496,67 @@ linha do item empilham. Os invólucros com `sm:contents` somem no desktop e as
 células voltam para as colunas originais, na ordem — o layout de desktop não
 foi tocado.
 
+### 10.3 O portal do cliente
+
+`/portal` é uma aplicação com **sessão própria**: cookie
+`estoque_portal_refresh`, token próprio, provedor próprio, fora da árvore da
+equipe. Não é uma área da aplicação da loja com outro menu — são dois
+domínios de autenticação independentes (ADR-009), e as duas sessões convivem
+no mesmo navegador sem se derrubarem.
+
+Telas: catálogo, carrinho, meus pedidos e o pedido com linha do tempo e
+**aceite**. O vocabulário é o de quem compra, não o de quem confirma:
+"Confirmado parcialmente" virou "Confirmado em parte", e
+`AGUARDANDO_ACEITE_CLIENTE` virou "Esperando você".
+
+**O carrinho relê o servidor.** Ele guarda um retrato do preço no
+`localStorage` para a lista não ficar muda, e esse retrato sobrevive a dias.
+Decidir por ele seria a armadilha "guardar o item buscado e reusar a foto
+dele": a tela do carrinho reconsulta cada item, marca "preço atualizado"
+quando mudou e bloqueia o envio do que saiu do catálogo.
+
+#### A rota de mídia do portal
+
+`GET /portal/midia/:id`, separada de `GET /midia/:id`. O cliente carrega uma
+permissão só, `portal.acessar` — na rota da equipe ele levaria 403 e o
+catálogo apareceria **sem foto nenhuma**.
+
+O recorte não é só o tenant: a consulta exige o produto publicado e ativo, a
+mesma fronteira do catálogo. O id é uuidv7, ordenado no tempo e adivinhável;
+com recorte de tenant apenas, o cliente veria a foto de qualquer produto da
+empresa, inclusive dos que ela ainda não pôs à venda.
+
+### 10.4 O cadastro de cliente — onde a tabela é vinculada
+
+`/clientes` e `/clientes/:id`. Este módulo **não existia**: dava para *usar* a
+tabela de preço de um cliente e não dava para *atribuí-la*. O portal, o PDV e
+o pedido liam `cliente.tabelaPrecoId`; só o seed conseguia gravá-lo.
+
+A tela decide três coisas que são três perguntas diferentes:
+
+| Campo | Pergunta |
+|---|---|
+| `tabelaPrecoId` | Qual lista este cadastro enxerga |
+| `modoCheckout` | Como a compra dele termina — ou `null`, seguindo a empresa |
+| `usaCarteira` | Onde a dívida dele vive |
+
+Dois avisos que a tela dá porque o silêncio custa caro:
+
+- **Sem tabela**, o portal fica vazio. Não é erro em lugar nenhum: o cliente
+  entra e não encontra nada. A lista conta quantos cadastros ativos estão
+  nesse estado.
+- **Com tabela vazia**, o portal também fica vazio — e esse caso engana mais,
+  porque parece configurado. O seletor mostra quantos itens cada tabela tem
+  precificado.
+
+**Decisão em aberto:** `cliente.editar` hoje junta "corrigir o telefone" com
+"trocar a tabela de preço", e o perfil VENDEDOR tem essa permissão. Mover
+alguém para a tabela Revendedor é conceder desconto permanente sem passar por
+`preco.aplicar_desconto`. Separar exigiria uma permissão própria.
+
+**Não incluído:** criar acesso ao portal (`cliente_acesso`). Um cadastro novo
+tem tabela e não tem login — só o seed cria credencial de cliente.
+
 ### O que ainda não existe
 
 - **Notificação** de pedido novo, alterado ou aguardando aceite. O modelo está
@@ -507,6 +568,5 @@ foi tocado.
   faturamento.
 - **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
   ainda não é conferido.
-- **O portal do cliente.** A API está pronta e as telas da equipe existem
-  (§10.1); o catálogo, o carrinho, "meus pedidos" e a tela de aceite ainda
-  não foram construídos.
+- **Criar acesso ao portal** pela aplicação: o cadastro de cliente existe
+  (§10.4), a credencial dele não. Ver §10.4.

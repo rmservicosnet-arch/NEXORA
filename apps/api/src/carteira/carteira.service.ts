@@ -115,7 +115,9 @@ export class CarteiraService {
       return {
         itens: pagina.map((c) => this.paraContrato(c)),
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
-        totalAReceber: dec((devedores._sum.saldo ?? 0).toString()).negated().toFixed(2),
+        totalAReceber: dec((devedores._sum.saldo ?? 0).toString())
+          .negated()
+          .toFixed(2),
       };
     });
   }

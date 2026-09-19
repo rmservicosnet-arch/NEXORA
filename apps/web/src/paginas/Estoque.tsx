@@ -1,9 +1,4 @@
-import {
-  PERM,
-  type LocalResumo,
-  type Movimento,
-  type PaginaMovimentos,
-} from '@estoque/contracts';
+import { PERM, type LocalResumo, type Movimento, type PaginaMovimentos } from '@estoque/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -58,9 +53,7 @@ export function Estoque() {
     staleTime: 5 * 60_000,
   });
 
-  const parametros = new URLSearchParams(
-    FILTROS.find((f) => f.chave === filtro)?.params ?? '',
-  );
+  const parametros = new URLSearchParams(FILTROS.find((f) => f.chave === filtro)?.params ?? '');
   if (localId) parametros.set('localId', localId);
   parametros.set('limite', '50');
 
@@ -97,8 +90,8 @@ export function Estoque() {
             Movimentação
           </h1>
           <p className="mt-1 text-[13.5px] text-neutral-500">
-            O razão é a verdade: o saldo é derivado daqui. Nada é editado nem apagado — correção
-            é lançamento contrário.
+            O razão é a verdade: o saldo é derivado daqui. Nada é editado nem apagado — correção é
+            lançamento contrário.
           </p>
         </div>
 

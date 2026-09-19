@@ -120,6 +120,14 @@ o runtime.
 | Largura fixa numa tela de uso móvel | 240px de menu num telefone de 375px não é acabamento: é a funcionalidade não existir. Empilhe abaixo do ponto de corte e devolva as colunas com `sm:contents` |
 | Renovar o refresh duas vezes com o mesmo cookie | A revogação por reuso derruba a família inteira — a sessão boa junto. Uma promessa compartilhada por aba **e** `navigator.locks` entre abas. O caminho de boot também conta |
 | Reusar o erro de login na renovação | Sessão expirada não é senha errada; manda a pessoa trocar uma senha certa. `SESSAO_ENCERRADA` à parte, ainda sem distinguir o motivo |
+| Campo que o sistema LÊ e ninguém consegue gravar | `cliente.tabelaPrecoId` decidia o catálogo inteiro e só o seed o preenchia. Antes de usar uma configuração, procure a tela que a define |
+| Rota reusada entre os dois domínios | O cliente carrega só `portal.acessar`: `@Permissoes(produto.visualizar)` lhe dá 403. Domínio separado quer rota separada — e recorte próprio, porque uuidv7 é adivinhável |
+| Linha no banco sem os bytes no armazenamento | Envio interrompido, banco restaurado sem objetos, diretório limpo. Vira 500 com pilha; traduza para 404 — o servidor sabe o que houve |
+| Um só cofre de token para dois domínios | Entrar no portal derrubaria a sessão da equipe na mesma aba. O token é por domínio, e o domínio sai do CAMINHO, não de um parâmetro por chamada |
+| Preço da busca vindo de tabela diferente da que grava | A tela mostrava R$ 129,90 e o pedido gravava R$ 110,42. Quem busca item para um pedido pede o preço da tabela DAQUELE pedido — e a tabela entra na chave do cache |
+| Invariante do razão inteiro medido numa página | Somar a primeira página e comparar com o saldo total passa enquanto o cadastro é novo. Siga o cursor até o fim |
+| SKU fixo em teste de ponta a ponta | Passa na primeira execução e dá 409 em todas as seguintes, contra o mesmo banco. Sufixo aleatório |
+| Schema novo em `@estoque/contracts` sem rebuild | A API importa o pacote CONSTRUÍDO: o schema chega `undefined` e o `ZodPipe` quebra com `safeParse of undefined` |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

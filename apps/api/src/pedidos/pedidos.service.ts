@@ -221,9 +221,7 @@ export class PedidosService {
             enviadoEm: new Date(),
             // Preco congelado vence aqui. Depois disso, preco maior exige
             // aceite do cliente. docs/ORDERS.md §5.
-            validoAte: new Date(
-              Date.now() + (config?.validadePedidoHoras ?? 72) * 60 * 60 * 1000,
-            ),
+            validoAte: new Date(Date.now() + (config?.validadePedidoHoras ?? 72) * 60 * 60 * 1000),
             ...(dados.observacao ? { motivo: dados.observacao } : {}),
             valorSolicitado: '0',
           },
@@ -543,11 +541,7 @@ export class PedidosService {
    * aceita: dois pedidos disputam a ultima peca, e o primeiro a confirmar
    * leva. docs/ORDERS.md §2 e §4.
    */
-  async confirmar(
-    id: string,
-    dados: ConfirmacaoPedido,
-    principal: Principal,
-  ): Promise<Pedido> {
+  async confirmar(id: string, dados: ConfirmacaoPedido, principal: Principal): Promise<Pedido> {
     const contexto = exigirContexto();
 
     const { destino, semSaldo } = await comEscopoAtual(
@@ -567,9 +561,7 @@ export class PedidosService {
           select: { prazoReservaHoras: true },
         });
 
-        const expiraEm = new Date(
-          Date.now() + (config?.prazoReservaHoras ?? 168) * 60 * 60 * 1000,
-        );
+        const expiraEm = new Date(Date.now() + (config?.prazoReservaHoras ?? 168) * 60 * 60 * 1000);
 
         let algumConfirmado = false;
         let algumDevolvido = false;
@@ -692,9 +684,7 @@ export class PedidosService {
           });
         }
 
-        const statusFinal: StatusPedido = algumDevolvido
-          ? 'CONFIRMADO_PARCIALMENTE'
-          : 'CONFIRMADO';
+        const statusFinal: StatusPedido = algumDevolvido ? 'CONFIRMADO_PARCIALMENTE' : 'CONFIRMADO';
 
         this.exigirTransicao(pedido.status, statusFinal);
         await this.recalcularConfirmado(tx, id);
@@ -1185,7 +1175,11 @@ export class PedidosService {
       },
     });
 
-    if (subiu && config?.exigirAceiteAumento !== false && pedido.status !== 'AGUARDANDO_ACEITE_CLIENTE') {
+    if (
+      subiu &&
+      config?.exigirAceiteAumento !== false &&
+      pedido.status !== 'AGUARDANDO_ACEITE_CLIENTE'
+    ) {
       await this.registrarEvento(tx, contexto, {
         pedidoId: id,
         deStatus: pedido.status,
@@ -1287,7 +1281,7 @@ export class PedidosService {
       loja: { select: { nome: true } },
       cliente: { select: { nome: true } },
       clienteAcesso: { select: { nome: true } },
-      tabelaPreco: { select: { nome: true } },
+      tabelaPreco: { select: { id: true, nome: true } },
       venda: { select: { numero: true } },
       eventos: { orderBy: { criadoEm: 'asc' as const } },
       itens: {
@@ -1366,6 +1360,7 @@ export class PedidosService {
       cliente: p.cliente.nome,
       solicitante: p.clienteAcesso?.nome ?? null,
       tabelaPreco: p.tabelaPreco?.nome ?? null,
+      tabelaPrecoId: p.tabelaPreco?.id ?? null,
       valorSolicitado: solicitado.toFixed(2),
       valorConfirmado: confirmado.toFixed(2),
       diferenca: confirmado.minus(solicitado).toFixed(2),
@@ -1414,7 +1409,7 @@ interface PedidoComRelacoes {
   loja: { nome: string };
   cliente: { nome: string };
   clienteAcesso: { nome: string } | null;
-  tabelaPreco: { nome: string } | null;
+  tabelaPreco: { id: string; nome: string } | null;
   venda: { numero: number } | null;
   eventos: {
     id: string;

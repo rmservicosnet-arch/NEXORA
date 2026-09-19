@@ -104,30 +104,24 @@ function entrada(
   quantidade: string,
   custoUnitario: string,
 ) {
-  return http
-    .post('/api/estoque/entrada')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      variacaoId,
-      lojaId: local.lojaId,
-      localId: local.id,
-      quantidade,
-      custoUnitario,
-    });
+  return http.post('/api/estoque/entrada').set('Authorization', `Bearer ${token}`).send({
+    variacaoId,
+    lojaId: local.lojaId,
+    localId: local.id,
+    quantidade,
+    custoUnitario,
+  });
 }
 
 function saida(token: string, variacaoId: string, local: Local, quantidade: string) {
-  return http
-    .post('/api/estoque/saida')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      variacaoId,
-      lojaId: local.lojaId,
-      localId: local.id,
-      quantidade,
-      tipo: 'SAIDA_PERDA',
-      justificativa: 'Teste automatizado de saída',
-    });
+  return http.post('/api/estoque/saida').set('Authorization', `Bearer ${token}`).send({
+    variacaoId,
+    lojaId: local.lojaId,
+    localId: local.id,
+    quantidade,
+    tipo: 'SAIDA_PERDA',
+    justificativa: 'Teste automatizado de saída',
+  });
 }
 
 beforeAll(async () => {

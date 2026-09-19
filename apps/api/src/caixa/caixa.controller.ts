@@ -56,10 +56,7 @@ export class CaixaController {
 
   @Get(':id')
   @Permissoes(PERM.caixa.abrir)
-  async detalhe(
-    @Param('id') id: string,
-    @PrincipalAtual() principal: Principal,
-  ): Promise<Caixa> {
+  async detalhe(@Param('id') id: string, @PrincipalAtual() principal: Principal): Promise<Caixa> {
     return this.caixa.detalhe(id, principal);
   }
 

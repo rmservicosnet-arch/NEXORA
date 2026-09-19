@@ -483,7 +483,9 @@ export function PainelMovimento({ aoFechar }: { readonly aoFechar: () => void })
               }
               className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-[13.5px] placeholder:text-neutral-400"
             />
-            {operacao === 'saida' && justificativa.trim().length > 0 && justificativa.trim().length < 5 ? (
+            {operacao === 'saida' &&
+            justificativa.trim().length > 0 &&
+            justificativa.trim().length < 5 ? (
               <span className="text-[11.5px] text-[--color-perigo]">
                 Descreva o motivo com ao menos 5 caracteres.
               </span>

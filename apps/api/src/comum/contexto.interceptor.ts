@@ -35,8 +35,8 @@ export class ContextoInterceptor implements NestInterceptor {
       correlacaoId: (requisicao['correlacaoId'] as string | undefined) ?? crypto.randomUUID(),
     };
 
-    return from(
-      comContexto(contexto, async () => proximo.handle()),
-    ).pipe(switchMap((observavel) => observavel));
+    return from(comContexto(contexto, async () => proximo.handle())).pipe(
+      switchMap((observavel) => observavel),
+    );
   }
 }

@@ -106,9 +106,11 @@ export const PERM = {
   },
 } as const;
 
-type ValoresDe<T> = T extends string ? T : T[keyof T] extends object
-  ? ValoresDe<T[keyof T]>
-  : T[keyof T];
+type ValoresDe<T> = T extends string
+  ? T
+  : T[keyof T] extends object
+    ? ValoresDe<T[keyof T]>
+    : T[keyof T];
 
 export type ChavePermissao = ValoresDe<typeof PERM>;
 

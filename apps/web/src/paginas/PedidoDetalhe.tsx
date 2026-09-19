@@ -145,10 +145,16 @@ export function PedidoDetalhe() {
   const [quantidadeNova, setQuantidadeNova] = useState('1');
 
   const catalogo = useQuery({
-    queryKey: ['pedidos', 'catalogo-equipe', buscaItem],
+    // A tabela entra na chave: o mesmo termo em dois pedidos de tabelas
+    // diferentes tem preços diferentes, e uma chave comum serviria o do outro.
+    queryKey: ['pedidos', 'catalogo-equipe', pedido?.tabelaPrecoId ?? 'padrao', buscaItem],
     queryFn: () =>
       pedir<ItemCatalogo[]>(
-        `/vendas/itens?termo=${encodeURIComponent(buscaItem)}&lojaId=${pedido?.lojaId ?? ''}`,
+        // A tabela do PEDIDO, não a padrão. Sem ela o operador lê um preço
+        // na busca e o item entra no pedido por outro — foi o que aconteceu
+        // com uma faixa: R$ 129,90 na tela, R$ 110,42 gravados.
+        `/vendas/itens?termo=${encodeURIComponent(buscaItem)}&lojaId=${pedido?.lojaId ?? ''}` +
+          (pedido?.tabelaPrecoId ? `&tabelaPrecoId=${pedido.tabelaPrecoId}` : ''),
       ),
     enabled: acao === 'incluir' && buscaItem.trim().length >= 2 && Boolean(pedido),
   });
@@ -375,7 +381,7 @@ export function PedidoDetalhe() {
                         </span>
                       </span>
                       <span className="shrink-0 font-mono text-[13px] text-neutral-700">
-                        R$ {i.preco}
+                        R$ {brl(i.preco)}
                       </span>
                     </button>
                   ))}

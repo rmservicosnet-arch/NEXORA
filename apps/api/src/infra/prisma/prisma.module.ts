@@ -28,7 +28,8 @@ export const PRISMA = Symbol('PRISMA');
         return criarPrisma({
           url: config.get('DATABASE_URL', { infer: true }),
           registrarConsultas: ambiente === 'development',
-          maxConexoes: config.get('DATABASE_POOL_MAX', { infer: true }) ?? (ambiente === 'test' ? 4 : 10),
+          maxConexoes:
+            config.get('DATABASE_POOL_MAX', { infer: true }) ?? (ambiente === 'test' ? 4 : 10),
         });
       },
     },
