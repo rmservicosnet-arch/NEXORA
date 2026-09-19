@@ -110,6 +110,8 @@ o runtime.
 | Cache do TanStack Query sobrevivendo à troca de usuário | `queryClient.clear()` ao entrar e ao sair; a chave descreve o filtro, não quem perguntou — foi assim que a coluna de custo do admin apareceu para uma vendedora |
 | `Slot` do Radix com mais de um filho | `Botao` com `comoFilho` emite só `children`; `{spinner}{children}` vira array e o Radix lança |
 | Mensagem de validação do Zod em inglês | `packages/contracts/src/idioma.ts` configura pt-BR; o mesmo schema valida no navegador e na API |
+| `_count` de relação com exclusão lógica | Sempre com `where`; senão foto excluída conta como foto e o produto publica sem ter nenhuma |
+| Eleger "o primeiro" em operações paralelas | Quatro envios simultâneos disputam a capa; o índice único derruba três. Engolir o P2002 é o correto — abortar a operação inteira não |
 
 ## Testes
 

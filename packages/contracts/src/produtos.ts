@@ -42,6 +42,8 @@ export const produtoListaSchema = z.object({
   marca: z.string().nullable(),
   totalVariacoes: z.number().int(),
   totalFotos: z.number().int(),
+  /** Id da capa, para a miniatura da listagem. `null` = produto sem foto. */
+  imagemPrincipalId: z.string().nullable(),
   publicadoNoCatalogo: z.boolean(),
   /** Menor preço da tabela padrão entre as variações. */
   precoMinimo: z.string().nullable(),

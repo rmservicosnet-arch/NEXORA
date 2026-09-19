@@ -8,6 +8,7 @@ import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
 import { NovoProduto } from './paginas/NovoProduto';
+import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { EstadoVazio } from './ui/Estados';
 
@@ -39,6 +40,7 @@ export function App() {
               <Route path="lojas" element={<Lojas />} />
               <Route path="produtos" element={<Produtos />} />
               <Route path="produtos/novo" element={<NovoProduto />} />
+              <Route path="produtos/:produtoId" element={<Produto />} />
               <Route
                 path="*"
                 element={

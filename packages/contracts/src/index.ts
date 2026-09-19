@@ -23,6 +23,24 @@ export { PERM, temPermissao, type ChavePermissao } from './permissoes.js';
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {
+  LIMITE_FOTOS_PRODUTO,
+  alteracaoImagemSchema,
+  autorizacaoDeEnvioSchema,
+  destinoDeEnvioSchema,
+  imagemProdutoSchema,
+  pedidoDeEnvioSchema,
+  statusImagemSchema,
+  tipoImagemSchema,
+  type AlteracaoImagem,
+  type AutorizacaoDeEnvio,
+  type DestinoDeEnvio,
+  type ImagemProduto,
+  type PedidoDeEnvio,
+  type StatusImagem,
+  type TipoImagemAceito,
+} from './imagens.js';
+
+export {
   alteracaoProdutoSchema,
   apoioProdutoSchema,
   filtroProdutosSchema,

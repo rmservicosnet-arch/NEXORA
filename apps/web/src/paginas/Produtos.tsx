@@ -7,7 +7,11 @@ import { ErroRequisicao, pedir } from '../api/cliente';
 import { SePode, useSessao } from '../auth/sessao';
 import { Botao } from '../ui/Botao';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
+import { Foto } from '../ui/Foto';
 import { juntar } from '../ui/juntar';
+
+/** Largura em que todas as colunas ainda cabem sem se sobrepor. */
+const LARGURA_MINIMA = 'min-w-[900px]';
 
 const STATUS = [
   { valor: undefined, rotulo: 'Todos' },
@@ -148,10 +152,14 @@ export function Produtos() {
           ) : null}
 
           {itens.length > 0 ? (
-            <>
+            // Abaixo da largura mínima a tabela ROLA, não se comprime: colunas
+            // numéricas espremidas passam a se sobrepor, e saldo lido por cima
+            // de preço é pior do que uma barra de rolagem.
+            <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
               <div
                 className={juntar(
                   'grid h-9 shrink-0 items-center gap-2.5 border-b border-neutral-100 bg-neutral-25 px-4',
+                  LARGURA_MINIMA,
                   colunas,
                 )}
               >
@@ -166,13 +174,18 @@ export function Produtos() {
                 <Cabecalho>Status</Cabecalho>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-auto">
+              <div className={juntar('min-h-0 flex-1 overflow-y-auto', LARGURA_MINIMA)}>
                 {itens.map((p) => (
                   <Linha key={p.id} produto={p} colunas={colunas} mostrarCusto={mostrarCusto} />
                 ))}
               </div>
 
-              <div className="flex h-12 shrink-0 items-center justify-between border-t border-neutral-100 bg-neutral-25 px-4 text-[13px] text-neutral-500">
+              <div
+                className={juntar(
+                  'flex h-12 shrink-0 items-center justify-between border-t border-neutral-100 bg-neutral-25 px-4 text-[13px] text-neutral-500',
+                  LARGURA_MINIMA,
+                )}
+              >
                 <span>
                   Exibindo <strong className="font-semibold text-neutral-900">{itens.length}</strong>{' '}
                   de <strong className="font-semibold text-neutral-900">{consulta.data?.total}</strong>
@@ -181,7 +194,7 @@ export function Produtos() {
                   <span className="text-[12.5px]">Há mais páginas — paginação por cursor</span>
                 ) : null}
               </div>
-            </>
+            </div>
           ) : null}
         </section>
       </main>
@@ -224,21 +237,28 @@ function Linha({
   const semFoto = produto.totalFotos === 0;
 
   return (
-    <div
+    <Link
+      to={`/produtos/${produto.id}`}
       className={juntar(
-        'grid h-[45px] items-center gap-2.5 border-b border-neutral-50 px-4',
-        produto.temSaldoNegativo && 'bg-[#fdf5f5]',
+        'grid h-[45px] items-center gap-2.5 border-b border-neutral-50 px-4 no-underline hover:bg-neutral-25',
+        produto.temSaldoNegativo && 'bg-[#fdf5f5] hover:bg-[#fbeeee]',
         colunas,
       )}
     >
       <div
         className={juntar(
-          'flex size-9 items-center justify-center rounded',
+          'flex size-9 items-center justify-center overflow-hidden rounded',
           semFoto ? 'border border-dashed border-[#d3a87a] bg-white' : 'bg-primary-50',
         )}
         title={semFoto ? 'Sem foto' : `${produto.totalFotos} foto(s)`}
       >
-        {semFoto ? <IconeSemFoto /> : <IconeCaixa />}
+        {produto.imagemPrincipalId ? (
+          <Foto imagemId={produto.imagemPrincipalId} alt={produto.nome} className="size-full" />
+        ) : semFoto ? (
+          <IconeSemFoto />
+        ) : (
+          <IconeCaixa />
+        )}
       </div>
 
       <span className="font-mono text-[12.5px] text-neutral-600">{produto.skuBase}</span>
@@ -275,7 +295,7 @@ function Linha({
       </span>
 
       <Selo status={produto.status} />
-    </div>
+    </Link>
   );
 }
 

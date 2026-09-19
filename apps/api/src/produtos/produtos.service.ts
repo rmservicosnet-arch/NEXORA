@@ -76,7 +76,15 @@ export class ProdutosService {
         include: {
           categoria: { select: { nome: true } },
           marca: { select: { nome: true } },
-          _count: { select: { variacoes: true, imagens: true } },
+          _count: { select: { variacoes: true } },
+          // `_count` de imagens contaria as excluídas e as que falharam no
+          // envio — e o produto apareceria "com foto" sem ter nenhuma
+          // utilizável. Aqui só entram as vivas e prontas.
+          imagens: {
+            where: { excluidoEm: null, status: 'PRONTA' },
+            select: { id: true, principal: true },
+            orderBy: [{ principal: 'desc' }, { ordem: 'asc' }],
+          },
         },
       });
 
@@ -104,7 +112,8 @@ export class ProdutosService {
           categoria: p.categoria?.nome ?? null,
           marca: p.marca?.nome ?? null,
           totalVariacoes: p._count.variacoes,
-          totalFotos: p._count.imagens,
+          totalFotos: p.imagens.length,
+          imagemPrincipalId: p.imagens.find((i) => i.principal)?.id ?? null,
           publicadoNoCatalogo: p.publicadoNoCatalogo,
           precoMinimo: precos.get(p.id)?.toFixed(2) ?? null,
           saldoTotal: agregado.saldo.toFixed(0),
@@ -344,7 +353,14 @@ export class ProdutosService {
     const resultado = await comEscopoAtual(this.prisma, async (tx) => {
       const antes = await tx.produto.findUnique({
         where: { id },
-        include: { _count: { select: { imagens: true } } },
+        include: {
+          // Contagem filtrada: foto excluída ou que falhou no envio não
+          // habilita publicação. Sem o `where`, bastava excluir a única foto
+          // e publicar em seguida — a linha continuaria lá.
+          _count: {
+            select: { imagens: { where: { excluidoEm: null, status: 'PRONTA' } } },
+          },
+        },
       });
 
       // 404, não 403: recurso de outra empresa simplesmente não existe para

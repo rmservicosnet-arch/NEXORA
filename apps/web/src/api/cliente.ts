@@ -133,6 +133,46 @@ export async function pedir<T>(caminho: string, opcoes: Opcoes = {}): Promise<T>
   return (await resposta.json()) as T;
 }
 
+/**
+ * Busca um binário (imagem) com o token de acesso.
+ *
+ * `<img src="/api/midia/…">` não serve: a tag não manda cabeçalho de
+ * autorização. Ou a rota de mídia viraria pública — e o id da foto viraria
+ * senha —, ou o binário vem por aqui e o navegador recebe um `blob:` local.
+ */
+export async function pedirBlob(caminho: string): Promise<Blob> {
+  let resposta = await bruto(caminho);
+
+  if (resposta.status === 401) {
+    const renovou = await renovar();
+    if (renovou) {
+      resposta = await bruto(caminho, { semRenovar: true });
+    }
+  }
+
+  if (!resposta.ok) {
+    throw new ErroRequisicao(resposta.status, await lerErro(resposta));
+  }
+
+  return resposta.blob();
+}
+
+/** Envia o arquivo para onde a API autorizou. Não passa pelo cliente da API. */
+export async function enviarArquivo(
+  destino: { url: string; metodo: string; cabecalhos: Record<string, string> },
+  arquivo: File,
+): Promise<void> {
+  const resposta = await fetch(destino.url, {
+    method: destino.metodo,
+    headers: destino.cabecalhos,
+    body: arquivo,
+  });
+
+  if (!resposta.ok) {
+    throw new ErroRequisicao(resposta.status, await lerErro(resposta));
+  }
+}
+
 export const api = {
   entrar: (email: string, senha: string): Promise<Sessao> =>
     pedir<Sessao>('/auth/login', {

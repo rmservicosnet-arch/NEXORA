@@ -37,6 +37,12 @@ Geração é **assíncrona**, em fila. O upload responde assim que o original es
 salvo; as derivadas aparecem em seguida. A interface mostra o estado
 `processando` — não trava o cadastro do produto esperando redimensionamento.
 
+> **Estado atual (Fase 2):** as derivadas **ainda não são geradas**. A imagem
+> vai a `PRONTA` com o original salvo, e `GET /midia/:id` devolve o original em
+> qualquer tamanho. A fila e o redimensionamento entram junto com o catálogo
+> público, que é quem sofre com foto de 3 MB no celular. O contrato já prevê a
+> variante no caminho, então a mudança não alcança quem consome.
+
 ## 3. Modelo de dados
 
 ```
@@ -87,7 +93,33 @@ pelo servidor a partir do tenant da sessão — **nunca** aceita do cliente.
 
 Validação de conteúdo no passo 6: o arquivo é lido e confirmado como imagem
 real antes de virar derivada. Extensão e MIME declarados pelo cliente não são
-prova de nada.
+prova de nada. Quem faz essa leitura é `lerImagem` em `@estoque/core`, a partir
+do cabeçalho do arquivo — PNG, JPEG e WebP, sem biblioteca externa.
+
+### O driver local
+
+Em desenvolvimento, `STORAGE_DRIVER="local"` grava em disco. Ele **imita o
+mesmo fluxo de três passos**, inclusive a autorização de curta duração: o que
+no S3 seria uma URL pré-assinada é aqui `PUT /midia/enviar?bilhete=…`, com um
+bilhete assinado em HMAC que carrega a chave, o tipo e o limite de bytes.
+
+A rota de envio é pública, e é assim de propósito: no S3 quem recebe o arquivo
+é o bucket, que não conhece a sessão do usuário. A autorização é o bilhete.
+
+Manter o contrato idêntico não é purismo. Se o modo local expusesse um `POST`
+multipart mais simples, trocar para S3 deixaria de ser trocar um provedor e
+passaria a ser reescrever a tela, o aplicativo e os testes.
+
+### A capa é eleita na confirmação
+
+Nunca na autorização. Uma imagem que foi autorizada e nunca chegou — ou que
+chegou corrompida — não pode ser a capa do produto no catálogo.
+
+Quem arrasta quatro fotos dispara quatro confirmações em paralelo: todas veem
+"este produto não tem capa" antes de qualquer uma gravar, e o índice único
+parcial derruba as perdedoras. **Perder essa eleição é resultado correto**, e é
+engolido; o que não pode é a exceção abortar a confirmação e deixar a foto
+presa em `PROCESSANDO` para sempre. Fixado em teste.
 
 ## 5. Entrega
 

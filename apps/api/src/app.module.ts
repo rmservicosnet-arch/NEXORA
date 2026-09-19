@@ -5,14 +5,15 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
 import { AutenticacaoGuard } from './comum/autenticacao.guard';
+import { ComumModule } from './comum/comum.module';
 import { ContextoInterceptor } from './comum/contexto.interceptor';
 import { EscopoLojaGuard } from './comum/escopo-loja.guard';
 import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { LojasController } from './lojas/lojas.controller';
-import { ProdutosController } from './produtos/produtos.controller';
-import { ProdutosService } from './produtos/produtos.service';
+import { MidiaModule } from './midia/midia.module';
+import { ProdutosModule } from './produtos/produtos.module';
 import { SaudeController } from './saude/saude.controller';
 
 @Module({
@@ -41,12 +42,13 @@ import { SaudeController } from './saude/saude.controller';
     }),
 
     PrismaModule,
+    ComumModule,
     AuthModule,
+    ProdutosModule,
+    MidiaModule,
   ],
-  controllers: [SaudeController, LojasController, ProdutosController],
+  controllers: [SaudeController, LojasController],
   providers: [
-    ProdutosService,
-
     // A ordem importa e é esta:
     //
     //   1. Throttler       antes de tudo, inclusive de verificar senha

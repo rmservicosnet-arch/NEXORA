@@ -26,6 +26,17 @@ export {
 } from './erros';
 
 export {
+  ImagemInvalidaError,
+  LADO_MINIMO_IMAGEM,
+  LIMITE_BYTES_IMAGEM,
+  TIPOS_IMAGEM_ACEITOS,
+  conferirImagemDeCatalogo,
+  lerImagem,
+  type Imagem,
+  type TipoImagem,
+} from './imagem';
+
+export {
   aplicarEntrada,
   aplicarSaida,
   aplicarSaidaComCustoEspecifico,

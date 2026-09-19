@@ -799,9 +799,19 @@ model ProdutoImagem {
 
   status StatusImagem @default(PROCESSANDO)
 
+  /// Exclusão é LÓGICA. O objeto no armazenamento só sai por rotina posterior,
+  /// depois de confirmado que nenhuma venda ou catálogo publicado o referencia.
+  /// docs/MEDIA.md §3.
+  excluidoEm DateTime? @map("excluido_em") @db.Timestamptz(3)
+  criadoPor  String?   @map("criado_por") @db.Uuid
+
   criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
+  /// A unicidade de `principal` é um índice ÚNICO PARCIAL — só vale para
+  /// linhas com `principal` e não excluídas. Prisma não expressa índice
+  /// parcial, então ele vive na migração `imagem_principal_unica`, do mesmo
+  /// jeito que as políticas de RLS.
   @@index([tenantId, produtoId, ordem])
   @@index([tenantId, variacaoId])
   @@map("produto_imagem")
