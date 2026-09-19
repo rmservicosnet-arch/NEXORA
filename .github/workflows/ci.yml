@@ -1,0 +1,132 @@
+# Integração contínua.
+#
+# O ponto principal não é "rodar os testes": é rodá-los contra um PostgreSQL
+# DESCARTÁVEL. Hoje, na máquina de quem desenvolve, a suíte roda contra o banco
+# de desenvolvimento e deixa produtos de teste nele — já passou de cem. Aqui o
+# banco nasce e morre com o job.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Um push novo cancela a execução anterior do mesmo ramo. Sem isto, uma
+  # sequência de commits enfileira execuções que já nasceram obsoletas.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: Tipos, lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # PostgreSQL 18: as chaves primárias usam `uuidv7()` nativo, que não
+        # existe na 17. Ver docs/DEPLOY.md §1.
+        image: postgres:18-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Banco do job, não o de ninguém. Senhas de mentira de propósito: não há
+      # nada aqui que valha proteger, e usar segredos do repositório para isto
+      # só criaria a ilusão de que existe.
+      POSTGRES_SUPERUSER_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DATABASE_URL: postgresql://estoque_app:ci_app@localhost:5432/estoque?schema=public
+      DIRECT_URL: postgresql://estoque_migrator:ci_migrator@localhost:5432/estoque?schema=public
+
+      # Diferentes entre si — a aplicação se recusa a subir se forem iguais,
+      # e é isso que impede um token de cliente virar token de funcionário.
+      # Ver ADR-009.
+      JWT_FUNCIONARIO_SECRET: ci-funcionario-secret-com-mais-de-32-caracteres
+      JWT_CLIENTE_SECRET: ci-cliente-secret-com-mais-de-32-caracteres-outro
+
+      NODE_ENV: test
+      # Um worker de teste não precisa de dez conexões. Medido na máquina de
+      # desenvolvimento, o pico da suíte inteira é 13 conexões — folga enorme
+      # num Postgres que aceita 100.
+      DATABASE_POOL_MAX: 4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # `npm ci` e não `npm install`: respeita o lock exatamente. O projeto usa
+      # `save-exact=true` justamente para que a versão instalada seja decisão,
+      # nunca efeito colateral.
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar o cliente Prisma
+        run: npm run db:generate:ci
+
+      - name: Preparar o banco
+        # `db:setup:ci` cria os dois papéis: `estoque_migrator` (dono) e
+        # `estoque_app` (sem BYPASSRLS). É a separação que faz o isolamento
+        # entre empresas valer — ver docs/TENANCY.md §2.
+        run: |
+          npm run db:setup:ci
+          npm run db:deploy:ci
+          npm run db:seed:ci
+
+      # Os três separados, e nenhum com `continue-on-error`: quando falham
+      # juntos num passo só, o log vira um muro e ninguém lê.
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm test
+
+  imagens:
+    name: Imagens Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Construir as duas é o teste. Quatro defeitos do Dockerfile e do compose
+      # só apareceram no primeiro `build`/`up` de verdade — nenhum deles seria
+      # pego por revisão de código. Ver docs/DEPLOY.md §7.
+      - name: Imagem da API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Imagem da web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          build-args: VITE_API_URL=/api
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max

@@ -44,13 +44,16 @@ export interface OpcoesConexao {
    */
   readonly permitirPapelPrivilegiado?: boolean;
   /**
-   * Conexões simultâneas do pool.
+   * Conexões simultâneas do pool. Padrão do `pg`: 10 por processo.
    *
-   * O padrão do `pg` é 10 por processo, o que basta para um servidor e é
-   * demais para uma suíte de testes: sete arquivos em paralelo, cada um
-   * subindo a aplicação inteira, pedem 70 conexões de um PostgreSQL que
-   * aceita 100 — e a suíte falha com `ECONNABORTED` de vez em quando, sem
-   * relação com o que está sendo testado.
+   * Existe para que a suíte de testes não peça 10 conexões por arquivo sem
+   * precisar — um worker de teste usa uma de cada vez.
+   *
+   * **Não é correção de bug.** A suíte já falhou uma vez com `ECONNABORTED`, e
+   * eu atribuí isso a esgotamento de conexões. Medido depois: o pico foi de 13
+   * conexões num PostgreSQL que aceita 100, e `fileParallelism: false` faz os
+   * arquivos rodarem um de cada vez. A causa daquela falha continua
+   * desconhecida; este parâmetro é higiene, não remédio.
    */
   readonly maxConexoes?: number;
 }

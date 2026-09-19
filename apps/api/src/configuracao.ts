@@ -24,10 +24,9 @@ export const esquemaAmbiente = z.object({
   /**
    * Conexões do pool por processo.
    *
-   * Sob teste o padrão cai para 4: a suíte sobe a aplicação uma vez por
-   * arquivo, em paralelo, e sete pools de dez estouram o `max_connections`
-   * do PostgreSQL. O sintoma é `ECONNABORTED` em um teste aleatório, que não
-   * tem nada a ver com o que ele testa.
+   * Sob teste o padrão cai para 4 — um worker de teste não precisa de dez.
+   * É higiene, não correção: medido, o pico da suíte é de 13 conexões num
+   * PostgreSQL que aceita 100. Ver o comentário em `packages/db/src/client.ts`.
    */
   DATABASE_POOL_MAX: z.coerce.number().int().positive().optional(),
 

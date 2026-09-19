@@ -132,16 +132,33 @@ contra a origem da página e passa pelo nginx.
 - O ciclo de foto inteiro — autorizar, enviar, confirmar, servir — funciona, e
   o volume de mídia é gravável pelo usuário `node`.
 
-## 8. O que ainda falta para chamar de produção
+## 8. Integração contínua
+
+`.github/workflows/ci.yml` roda a cada push e pull request, em dois jobs
+paralelos:
+
+- **Tipos, lint e testes**, contra um PostgreSQL 18 **descartável** que nasce e
+  morre com o job. É a diferença que importa: na máquina de quem desenvolve a
+  suíte roda contra o banco de desenvolvimento e deixa produtos de teste nele —
+  já passaram de cem.
+- **Imagens Docker**, as duas. Quatro defeitos do Dockerfile e do compose só
+  apareceram no primeiro `build`/`up` de verdade (§7); construir a cada commit
+  é o que impede o quinto.
+
+A sequência inteira foi validada localmente contra um contêiner Postgres
+descartável, com configuração **só por variável de ambiente**: `db:setup:ci`,
+`db:deploy:ci`, `db:seed:ci` e os 169 testes, num banco zerado.
+
+O repositório ainda **não tem remoto**. O arquivo está pronto e nada o executa
+até existir um `origin` no GitHub.
+
+## 9. O que ainda falta para chamar de produção
 
 Nada disto está feito, e nenhum é opcional:
 
 - **Backup do PostgreSQL, com restauração testada.** Backup que nunca foi
   restaurado não é backup.
 - **Segredos em cofre**, não em arquivo no servidor.
-- **Integração contínua**: `typecheck`, `lint` e `test` a cada commit, contra
-  um banco descartável — hoje a suíte roda contra o banco de desenvolvimento e
-  deixa produtos de teste nele.
 - **Observabilidade**: para onde vão os logs, quem avisa quando a API cai.
 - **Limites de CPU e memória** nos serviços.
 - **Rotina de limpeza** das imagens em `PROCESSANDO` que nunca foram enviadas
