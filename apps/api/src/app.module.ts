@@ -16,6 +16,7 @@ import { LojasController } from './lojas/lojas.controller';
 import { MidiaModule } from './midia/midia.module';
 import { ProdutosModule } from './produtos/produtos.module';
 import { SaudeController } from './saude/saude.controller';
+import { VendasModule } from './vendas/vendas.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SaudeController } from './saude/saude.controller';
     AuthModule,
     ProdutosModule,
     EstoqueModule,
+    VendasModule,
     MidiaModule,
   ],
   controllers: [SaudeController, LojasController],

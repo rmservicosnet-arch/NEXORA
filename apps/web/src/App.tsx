@@ -9,6 +9,7 @@ import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
 import { NovoProduto } from './paginas/NovoProduto';
+import { Pdv } from './paginas/Pdv';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { EstadoVazio } from './ui/Estados';
@@ -43,6 +44,7 @@ export function App() {
               <Route path="produtos/novo" element={<NovoProduto />} />
               <Route path="produtos/:produtoId" element={<Produto />} />
               <Route path="estoque" element={<Estoque />} />
+              <Route path="pdv" element={<Pdv />} />
               <Route
                 path="*"
                 element={

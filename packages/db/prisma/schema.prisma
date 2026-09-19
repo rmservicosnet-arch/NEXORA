@@ -353,6 +353,8 @@ model LocalEstoque {
   saldos     SaldoEstoque[]
   movimentos MovimentoEstoque[]
   reservas   EstoqueReserva[]
+  vendas     Venda[]            @relation("VendaLocal")
+  pedidos    Pedido[]           @relation("PedidoLocal")
 
   @@unique([tenantId, lojaId, codigo])
   @@index([tenantId, lojaId])
@@ -1008,7 +1010,11 @@ model Venda {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lojaId   String @map("loja_id") @db.Uuid
   loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
-  localId  String @map("local_id") @db.Uuid
+  /// De onde a mercadoria saiu. Com chave estrangeira: sem ela, `local_id`
+  /// aceitaria o id de um local excluído — ou de outra loja — e o relatório
+  /// de saída por local passaria a mentir sem nada acusar.
+  localId String       @map("local_id") @db.Uuid
+  local   LocalEstoque @relation("VendaLocal", fields: [localId], references: [id], onDelete: Restrict)
 
   numero Int
   origem OrigemVenda @default(PDV)
@@ -1116,7 +1122,9 @@ model Pedido {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lojaId   String @map("loja_id") @db.Uuid
   loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
-  localId  String @map("local_id") @db.Uuid
+  /// Mesma razão da venda: sem chave estrangeira, o id do local é só um texto.
+  localId String       @map("local_id") @db.Uuid
+  local   LocalEstoque @relation("PedidoLocal", fields: [localId], references: [id], onDelete: Restrict)
 
   numero Int
   status StatusPedido @default(RASCUNHO)

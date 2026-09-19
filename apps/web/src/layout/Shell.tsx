@@ -38,6 +38,13 @@ const ICONE = {
       <path d="M12 12v9" />
     </>
   ),
+  caixaRegistradora: (
+    <>
+      <rect x="3" y="10" width="18" height="10" rx="2" />
+      <path d="M7 10V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v4" />
+      <path d="M8 15h3" />
+    </>
+  ),
   movimento: (
     <>
       <path d="M4 8h13" />
@@ -70,6 +77,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Operação',
     permissoes: [PERM.estoque.visualizar],
     icone: ICONE.loja,
+  },
+  {
+    rotulo: 'PDV',
+    para: '/pdv',
+    grupo: 'Operação',
+    permissoes: [PERM.venda.criar],
+    icone: ICONE.caixaRegistradora,
   },
   {
     rotulo: 'Estoque',

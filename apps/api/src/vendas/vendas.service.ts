@@ -1,0 +1,839 @@
+﻿import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type {
+  BuscaItemVenda,
+  CancelamentoVenda,
+  ContextoPdv,
+  ItemParaVenda,
+  FiltroVendas,
+  NovaVenda,
+  PaginaVendas,
+  ResultadoVenda,
+  Venda,
+} from '@estoque/contracts';
+import { PERM } from '@estoque/contracts';
+import { dec, type Dec } from '@estoque/core';
+import {
+  comEscopoAtual,
+  exigirContexto,
+  type ClienteEmTransacao,
+  type PrismaClient,
+} from '@estoque/db';
+
+import type { Principal } from '../auth/dominios';
+import { AuditoriaService } from '../comum/auditoria.service';
+import { EstoqueService } from '../estoque/estoque.service';
+import { PRISMA } from '../infra/prisma/prisma.module';
+
+interface Aviso {
+  readonly codigo: string;
+  readonly mensagem: string;
+}
+
+/** Formas que não podem passar do total. Dinheiro pode — vira troco. */
+const SEM_TROCO = new Set(['PIX', 'DEBITO', 'CREDITO', 'TRANSFERENCIA', 'BOLETO', 'PRAZO', 'CARTEIRA']);
+
+@Injectable()
+export class VendasService {
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    private readonly estoque: EstoqueService,
+    private readonly auditoria: AuditoriaService,
+  ) {}
+
+  // -------------------------------------------------------------------------
+  // Concluir venda
+  // -------------------------------------------------------------------------
+
+  /**
+   * Registra uma venda de balcão, inteira, numa transação só.
+   *
+   * Tudo acontece junto: numeração, itens com preço e custo congelados, baixa
+   * de estoque e pagamentos. Se qualquer parte falhar, nada fica — venda com
+   * estoque não baixado é divergência que ninguém encontra depois.
+   */
+  async criar(dados: NovaVenda, principal: Principal): Promise<ResultadoVenda> {
+    const contexto = exigirContexto();
+    const podeVerCusto = principal.permissoes.has(PERM.produto.verCusto);
+
+    const { vendaId, avisos } = await comEscopoAtual(
+      this.prisma,
+      async (tx) => {
+        const local = dados.localId
+          ? await this.estoque.resolverLocalDaLoja(tx, dados.localId, dados.lojaId)
+          : await this.estoque.localPadraoDaLoja(tx, dados.lojaId);
+
+        const { tabelaPrecoId, clienteId } = await this.resolverTabela(tx, dados);
+
+        // Numeração serializada por empresa. Duas vendas simultâneas pegariam
+        // o mesmo `max(numero) + 1` e uma delas morreria no índice único —
+        // no balcão, com o cliente esperando. O lock de transação resolve sem
+        // custo perceptível: ele vale só até o commit.
+        const numero = await this.proximoNumero(tx, contexto.tenantId);
+
+        const venda = await tx.venda.create({
+          data: {
+            tenantId: contexto.tenantId,
+            lojaId: dados.lojaId,
+            localId: local.id,
+            numero,
+            origem: 'PDV',
+            status: 'RASCUNHO',
+            ...(clienteId ? { clienteId } : {}),
+            vendedorId: principal.id,
+            ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
+            subtotal: '0',
+            total: '0',
+          },
+          select: { id: true },
+        });
+
+        const avisosColetados: Aviso[] = [];
+        let subtotal = dec(0);
+
+        for (const item of dados.itens) {
+          const preco = await this.resolverPreco(tx, item, tabelaPrecoId, principal);
+          const quantidade = dec(item.quantidade);
+          const descontoItem = dec(item.descontoItem ?? '0');
+          const totalItem = quantidade.times(preco.valor).minus(descontoItem);
+
+          if (totalItem.lessThan(0)) {
+            throw new BadRequestException({
+              codigo: 'DESCONTO_MAIOR_QUE_ITEM',
+              mensagem: `O desconto do item ${preco.sku} é maior que o próprio item.`,
+            });
+          }
+
+          // A baixa acontece ANTES de gravar o item, porque é dela que sai o
+          // custo congelado. Inverter a ordem obrigaria a um UPDATE depois —
+          // e um UPDATE que falhasse deixaria a margem errada para sempre.
+          const baixa = await this.estoque.baixarParaVenda(
+            tx,
+            {
+              variacaoId: item.variacaoId,
+              local,
+              quantidade: item.quantidade,
+              vendaId: venda.id,
+              numeroVenda: String(numero),
+            },
+            principal,
+          );
+
+          avisosColetados.push(
+            ...baixa.avisos.map((a) => ({
+              codigo: a.codigo,
+              mensagem: `${preco.sku}: ${a.mensagem}`,
+            })),
+          );
+
+          await tx.vendaItem.create({
+            data: {
+              tenantId: contexto.tenantId,
+              vendaId: venda.id,
+              variacaoId: item.variacaoId,
+              quantidade: quantidade.toFixed(6),
+              precoUnitario: preco.valor.toFixed(2),
+              descontoItem: descontoItem.toFixed(2),
+              totalItem: totalItem.toFixed(2),
+              ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
+              precoOrigem: preco.origem,
+              custoUnitario: baixa.custoUnitario.toFixed(6),
+            },
+          });
+
+          subtotal = subtotal.plus(totalItem);
+        }
+
+        const desconto = dec(dados.desconto ?? '0');
+        const acrescimo = dec(dados.acrescimo ?? '0');
+        const total = subtotal.minus(desconto).plus(acrescimo);
+
+        if (total.lessThan(0)) {
+          throw new BadRequestException({
+            codigo: 'TOTAL_NEGATIVO',
+            mensagem: 'O desconto é maior que a venda.',
+          });
+        }
+
+        if (desconto.greaterThan(0) && !principal.permissoes.has(PERM.preco.aplicarDesconto)) {
+          throw new ForbiddenException({
+            codigo: 'SEM_PERMISSAO_DESCONTO',
+            mensagem: 'Você não tem permissão para conceder desconto.',
+          });
+        }
+
+        const troco = await this.registrarPagamentos(tx, venda.id, dados, total, contexto.tenantId);
+
+        await tx.venda.update({
+          where: { id: venda.id },
+          data: {
+            status: 'CONCLUIDA',
+            subtotal: subtotal.toFixed(2),
+            desconto: desconto.toFixed(2),
+            acrescimo: acrescimo.toFixed(2),
+            total: total.toFixed(2),
+            concluidaEm: new Date(),
+          },
+        });
+
+        if (troco.greaterThan(0)) {
+          avisosColetados.push({
+            codigo: 'TROCO',
+            mensagem: `Troco de R$ ${troco.toFixed(2)}.`,
+          });
+        }
+
+        return { vendaId: venda.id, avisos: avisosColetados };
+      },
+      // Uma venda com vinte itens faz vinte travamentos de saldo. O limite
+      // padrão de 10 s é curto para o balcão em dia cheio.
+      { tempoLimiteMs: 30_000 },
+    );
+
+    const venda = await this.detalhe(vendaId, podeVerCusto);
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'VENDA_CONCLUIDA',
+      entidade: 'venda',
+      entidadeId: vendaId,
+      atorNome: principal.nome,
+      depois: {
+        numero: venda.numero,
+        total: venda.total,
+        itens: venda.itens.length,
+        loja: venda.loja,
+        formas: venda.pagamentos.map((p) => p.forma),
+      },
+    });
+
+    return { venda, avisos };
+  }
+
+  // -------------------------------------------------------------------------
+  // Cancelar
+  // -------------------------------------------------------------------------
+
+  /**
+   * Cancela uma venda concluída, devolvendo a mercadoria ao estoque.
+   *
+   * A venda **não** é apagada: muda de status, guarda o motivo e a hora. O
+   * estoque volta por lançamento contrário, apontando para a saída original.
+   * Um cancelamento que some do histórico é um cancelamento que ninguém
+   * consegue auditar.
+   */
+  async cancelar(
+    id: string,
+    dados: CancelamentoVenda,
+    principal: Principal,
+  ): Promise<Venda> {
+    const contexto = exigirContexto();
+
+    await comEscopoAtual(
+      this.prisma,
+      async (tx) => {
+        const venda = await tx.venda.findFirst({
+          where: { id },
+          include: { itens: true },
+        });
+
+        if (!venda) {
+          throw new NotFoundException({
+            codigo: 'VENDA_NAO_ENCONTRADA',
+            mensagem: 'Venda não encontrada.',
+          });
+        }
+
+        if (venda.status === 'CANCELADA') {
+          throw new ConflictException({
+            codigo: 'VENDA_JA_CANCELADA',
+            mensagem: 'Esta venda já foi cancelada.',
+          });
+        }
+
+        if (venda.status !== 'CONCLUIDA') {
+          throw new ConflictException({
+            codigo: 'VENDA_NAO_CONCLUIDA',
+            mensagem: 'Só uma venda concluída pode ser cancelada.',
+          });
+        }
+
+        const local = await this.estoque.resolverLocalDaLoja(tx, venda.localId, venda.lojaId);
+
+        // Os movimentos originais desta venda, para o estorno apontar para
+        // eles. Sem o vínculo, o razão teria uma entrada solta e ninguém
+        // saberia que ela desfez algo.
+        const originais = await tx.movimentoEstoque.findMany({
+          where: { documentoTipo: 'VENDA', documentoId: venda.id, tipo: 'SAIDA_VENDA' },
+          select: { id: true, variacaoId: true, quantidade: true },
+        });
+
+        for (const item of venda.itens) {
+          const original = originais.find((m) => m.variacaoId === item.variacaoId);
+
+          await this.estoque.estornarSaidaDeVenda(
+            tx,
+            {
+              ...(original ? { movimentoOriginalId: original.id } : { movimentoOriginalId: '' }),
+              variacaoId: item.variacaoId,
+              local,
+              quantidade: dec(item.quantidade.toString()).toFixed(6),
+              // Reentra pelo custo congelado na venda, não pelo custo médio de
+              // hoje. Ver docs/COST_POLICY.md.
+              custoUnitario: dec(item.custoUnitario.toString()).toFixed(6),
+              vendaId: venda.id,
+              numeroVenda: String(venda.numero),
+              motivo: `Cancelamento da venda ${String(venda.numero)}: ${dados.motivo}`,
+            },
+            principal,
+          );
+        }
+
+        await tx.venda.update({
+          where: { id: venda.id },
+          data: {
+            status: 'CANCELADA',
+            canceladaEm: new Date(),
+            motivoCancelamento: dados.motivo,
+          },
+        });
+      },
+      { tempoLimiteMs: 30_000 },
+    );
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'VENDA_CANCELADA',
+      entidade: 'venda',
+      entidadeId: id,
+      atorNome: principal.nome,
+      motivo: dados.motivo,
+    });
+
+    return this.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));
+  }
+
+  // -------------------------------------------------------------------------
+  // Consultas
+  // -------------------------------------------------------------------------
+
+  async detalhe(id: string, podeVerCusto: boolean): Promise<Venda> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const venda = await tx.venda.findFirst({
+        where: { id },
+        include: this.inclusaoCompleta(),
+      });
+
+      if (!venda) {
+        throw new NotFoundException({
+          codigo: 'VENDA_NAO_ENCONTRADA',
+          mensagem: 'Venda não encontrada.',
+        });
+      }
+
+      return this.paraContrato(venda, podeVerCusto);
+    });
+  }
+
+  async listar(
+    filtro: FiltroVendas,
+    principal: Principal,
+    podeVerCusto: boolean,
+  ): Promise<PaginaVendas> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const onde = {
+        ...(filtro.lojaId ? { lojaId: filtro.lojaId } : {}),
+        ...(filtro.clienteId ? { clienteId: filtro.clienteId } : {}),
+        ...(filtro.status ? { status: filtro.status } : {}),
+        // Quem não tem `venda.ver_todas` vê apenas as próprias. O filtro por
+        // vendedor que ele mandar não amplia isso.
+        ...(principal.permissoes.has(PERM.venda.verTodas)
+          ? filtro.vendedorId
+            ? { vendedorId: filtro.vendedorId }
+            : {}
+          : { vendedorId: principal.id }),
+        ...(filtro.de || filtro.ate
+          ? {
+              criadoEm: {
+                ...(filtro.de ? { gte: new Date(filtro.de) } : {}),
+                ...(filtro.ate ? { lte: new Date(filtro.ate) } : {}),
+              },
+            }
+          : {}),
+      };
+
+      const linhas = await tx.venda.findMany({
+        where: onde,
+        orderBy: { id: 'desc' },
+        take: filtro.limite + 1,
+        ...(filtro.cursor ? { cursor: { id: filtro.cursor }, skip: 1 } : {}),
+        include: this.inclusaoCompleta(),
+      });
+
+      const temMais = linhas.length > filtro.limite;
+      const pagina = temMais ? linhas.slice(0, filtro.limite) : linhas;
+
+      const soma = await tx.venda.aggregate({
+        where: { ...onde, status: 'CONCLUIDA' },
+        _sum: { total: true },
+      });
+
+      return {
+        itens: pagina.map((v) => this.paraContrato(v, podeVerCusto)),
+        proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
+        totalVendido: dec((soma._sum.total ?? 0).toString()).toFixed(2),
+      };
+    });
+  }
+
+  /**
+   * Busca itens para vender.
+   *
+   * Devolve o preço da tabela escolhida e o saldo **do local de venda daquela
+   * loja** — não o saldo da rede. Mostrar o total da empresa faria o operador
+   * prometer ao cliente uma peça que está em outra cidade.
+   */
+  async buscarItens(busca: BuscaItemVenda): Promise<ItemParaVenda[]> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const local = await this.estoque.localPadraoDaLoja(tx, busca.lojaId);
+
+      const tabelaId =
+        busca.tabelaPrecoId ??
+        (
+          await tx.tabelaPreco.findFirst({
+            where: { padrao: true, status: 'ATIVO' },
+            select: { id: true },
+          })
+        )?.id;
+
+      const linhas = await tx.variacao.findMany({
+        where: {
+          status: 'ATIVO',
+          OR: [
+            { codigoBarras: busca.termo },
+            { sku: { contains: busca.termo, mode: 'insensitive' } },
+            { descricao: { contains: busca.termo, mode: 'insensitive' } },
+            { produto: { nome: { contains: busca.termo, mode: 'insensitive' } } },
+          ],
+        },
+        orderBy: { sku: 'asc' },
+        take: busca.limite,
+        include: {
+          produto: {
+            select: {
+              nome: true,
+              imagens: {
+                where: { excluidoEm: null, status: 'PRONTA', principal: true },
+                select: { id: true },
+                take: 1,
+              },
+            },
+          },
+          precos: {
+            where: tabelaId ? { tabelaPrecoId: tabelaId } : { tabelaPreco: { padrao: true } },
+            select: { preco: true },
+            take: 1,
+          },
+          saldos: {
+            where: { localId: local.id },
+            select: { quantidade: true },
+            take: 1,
+          },
+        },
+      });
+
+      return linhas
+        .map((v) => ({
+          variacaoId: v.id,
+          sku: v.sku,
+          codigoBarras: v.codigoBarras,
+          produto: v.produto.nome,
+          descricaoVariacao: v.descricao,
+          imagemPrincipalId: v.produto.imagens[0]?.id ?? null,
+          preco: v.precos[0] ? dec(v.precos[0].preco.toString()).toFixed(2) : null,
+          saldo: dec((v.saldos[0]?.quantidade ?? 0).toString()).toFixed(0),
+          casouCodigoBarras: v.codigoBarras === busca.termo,
+        }))
+        .sort((a, b) => Number(b.casouCodigoBarras) - Number(a.casouCodigoBarras));
+    });
+  }
+
+  /** O que o PDV precisa saber antes de abrir. */
+  async contexto(principal: Principal): Promise<ContextoPdv> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const ctx = exigirContexto();
+
+      const lojas = await tx.loja.findMany({
+        where: { id: { in: [...(ctx.lojaIds ?? [])] }, status: 'ATIVO' },
+        orderBy: { nome: 'asc' },
+        include: {
+          locais: {
+            where: { padraoVenda: true, status: 'ATIVO' },
+            select: { id: true, nome: true },
+            take: 1,
+          },
+        },
+      });
+
+      const tabelas = await tx.tabelaPreco.findMany({
+        where: { status: 'ATIVO' },
+        orderBy: [{ padrao: 'desc' }, { nome: 'asc' }],
+        select: { id: true, nome: true, chave: true, padrao: true },
+      });
+
+      return {
+        lojas: lojas.map((l) => ({
+          id: l.id,
+          nome: l.nome,
+          localPadraoId: l.locais[0]?.id ?? null,
+          localPadrao: l.locais[0]?.nome ?? null,
+        })),
+        tabelas,
+        podeDarDesconto: principal.permissoes.has(PERM.preco.aplicarDesconto),
+        podeVenderSemSaldo: principal.permissoes.has(PERM.estoque.venderSemSaldo),
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Interno
+  // -------------------------------------------------------------------------
+
+  /**
+   * Próximo número da venda, serializado por empresa.
+   *
+   * `pg_advisory_xact_lock` vale até o fim da transação e é por empresa: duas
+   * lojas da mesma rede não esperam uma pela outra, mas dois caixas da mesma
+   * empresa nunca pegam o mesmo número.
+   *
+   * A alternativa — `SEQUENCE` — não serve: a numeração é por tenant, e uma
+   * sequência global deixaria buracos visíveis para o cliente ("minha última
+   * venda foi a 41, por que a próxima é a 87?").
+   */
+  private async proximoNumero(tx: ClienteEmTransacao, tenantId: string): Promise<number> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId} || ':venda'))`;
+
+    const linhas = await tx.$queryRaw<{ proximo: number }[]>`
+      SELECT COALESCE(MAX(numero), 0) + 1 AS proximo FROM venda
+    `;
+
+    return linhas[0]?.proximo ?? 1;
+  }
+
+  private async resolverTabela(
+    tx: ClienteEmTransacao,
+    dados: NovaVenda,
+  ): Promise<{ tabelaPrecoId: string | null; clienteId: string | null }> {
+    let clienteId: string | null = null;
+    let tabelaDoCliente: string | null = null;
+
+    if (dados.clienteId) {
+      const cliente = await tx.cliente.findFirst({
+        where: { id: dados.clienteId },
+        select: { id: true, tabelaPrecoId: true },
+      });
+
+      if (!cliente) {
+        throw new NotFoundException({
+          codigo: 'CLIENTE_NAO_ENCONTRADO',
+          mensagem: 'Cliente não encontrado.',
+        });
+      }
+
+      clienteId = cliente.id;
+      tabelaDoCliente = cliente.tabelaPrecoId;
+    }
+
+    // Precedência: o que o operador escolheu, a tabela do cliente, a padrão.
+    // O cliente Professor entra e o preço de professor aparece sozinho — mas
+    // o operador ainda pode trocar, porque a exceção existe no balcão.
+    const escolhida = dados.tabelaPrecoId ?? tabelaDoCliente;
+
+    if (escolhida) {
+      const tabela = await tx.tabelaPreco.findFirst({
+        where: { id: escolhida, status: 'ATIVO' },
+        select: { id: true },
+      });
+
+      if (!tabela) {
+        throw new NotFoundException({
+          codigo: 'TABELA_PRECO_NAO_ENCONTRADA',
+          mensagem: 'Tabela de preço não encontrada ou inativa.',
+        });
+      }
+
+      return { tabelaPrecoId: tabela.id, clienteId };
+    }
+
+    const padrao = await tx.tabelaPreco.findFirst({
+      where: { padrao: true, status: 'ATIVO' },
+      select: { id: true },
+    });
+
+    return { tabelaPrecoId: padrao?.id ?? null, clienteId };
+  }
+
+  private async resolverPreco(
+    tx: ClienteEmTransacao,
+    item: { variacaoId: string; precoUnitario?: string | undefined },
+    tabelaPrecoId: string | null,
+    principal: Principal,
+  ): Promise<{ valor: Dec; origem: string; sku: string }> {
+    const variacao = await tx.variacao.findFirst({
+      where: { id: item.variacaoId },
+      select: { id: true, sku: true, status: true },
+    });
+
+    if (!variacao) {
+      throw new NotFoundException({
+        codigo: 'VARIACAO_NAO_ENCONTRADA',
+        mensagem: 'Um dos itens não existe.',
+      });
+    }
+
+    if (variacao.status !== 'ATIVO') {
+      throw new ConflictException({
+        codigo: 'VARIACAO_INATIVA',
+        mensagem: `O item ${variacao.sku} está inativo e não pode ser vendido.`,
+      });
+    }
+
+    if (item.precoUnitario !== undefined) {
+      if (!principal.permissoes.has(PERM.preco.aplicarDesconto)) {
+        throw new ForbiddenException({
+          codigo: 'SEM_PERMISSAO_PRECO_MANUAL',
+          mensagem: 'Você não tem permissão para alterar o preço na venda.',
+        });
+      }
+
+      // `MANUAL` não é detalhe: o relatório de desconto precisa saber quais
+      // preços alguém digitou à mão, e não dá para deduzir isso depois
+      // comparando com a tabela, que pode ter mudado.
+      return { valor: dec(item.precoUnitario), origem: 'MANUAL', sku: variacao.sku };
+    }
+
+    if (!tabelaPrecoId) {
+      throw new ConflictException({
+        codigo: 'SEM_TABELA_DE_PRECO',
+        mensagem: 'Não há tabela de preço ativa para usar.',
+      });
+    }
+
+    const preco = await tx.precoItem.findFirst({
+      where: { tabelaPrecoId, variacaoId: item.variacaoId },
+      select: { preco: true },
+    });
+
+    if (!preco) {
+      throw new ConflictException({
+        codigo: 'ITEM_SEM_PRECO',
+        mensagem: `O item ${variacao.sku} não tem preço nesta tabela.`,
+      });
+    }
+
+    return { valor: dec(preco.preco.toString()), origem: 'TABELA', sku: variacao.sku };
+  }
+
+  private async registrarPagamentos(
+    tx: ClienteEmTransacao,
+    vendaId: string,
+    dados: NovaVenda,
+    total: Dec,
+    tenantId: string,
+  ): Promise<Dec> {
+    let recebido = dec(0);
+    let emDinheiro = dec(0);
+
+    for (const pagamento of dados.pagamentos) {
+      const valor = dec(pagamento.valor);
+
+      if (valor.lessThanOrEqualTo(0)) {
+        throw new BadRequestException({
+          codigo: 'PAGAMENTO_INVALIDO',
+          mensagem: 'Todo pagamento precisa ter valor maior que zero.',
+        });
+      }
+
+      recebido = recebido.plus(valor);
+      if (pagamento.forma === 'DINHEIRO') {
+        emDinheiro = emDinheiro.plus(valor);
+      }
+
+      await tx.vendaPagamento.create({
+        data: {
+          tenantId,
+          vendaId,
+          forma: pagamento.forma,
+          valor: valor.toFixed(2),
+          parcelas: pagamento.parcelas,
+          ...(pagamento.bandeira ? { bandeira: pagamento.bandeira } : {}),
+          ...(pagamento.ultimosQuatro ? { ultimosQuatro: pagamento.ultimosQuatro } : {}),
+          ...(pagamento.autorizacao ? { autorizacao: pagamento.autorizacao } : {}),
+        },
+      });
+    }
+
+    if (recebido.lessThan(total)) {
+      throw new BadRequestException({
+        codigo: 'PAGAMENTO_INSUFICIENTE',
+        mensagem: `Falta R$ ${total.minus(recebido).toFixed(2)} para fechar a venda.`,
+      });
+    }
+
+    const troco = recebido.minus(total);
+
+    // Só dinheiro devolve troco. Passar do total no cartão ou no PIX é erro de
+    // digitação, e deixar passar vira um acerto manual no fechamento.
+    if (troco.greaterThan(0)) {
+      const semTroco = dados.pagamentos.some((p) => SEM_TROCO.has(p.forma));
+
+      if (troco.greaterThan(emDinheiro) || (semTroco && emDinheiro.isZero())) {
+        throw new BadRequestException({
+          codigo: 'PAGAMENTO_EXCEDE_TOTAL',
+          mensagem: `O pagamento passa R$ ${troco.toFixed(2)} do total, e só dinheiro devolve troco.`,
+        });
+      }
+    }
+
+    return troco;
+  }
+
+  private inclusaoCompleta() {
+    return {
+      loja: { select: { nome: true } },
+      local: { select: { nome: true } },
+      cliente: { select: { nome: true } },
+      vendedor: { select: { nome: true } },
+      tabelaPreco: { select: { nome: true } },
+      pagamentos: true,
+      itens: {
+        include: {
+          variacao: {
+            select: { sku: true, descricao: true, produto: { select: { nome: true } } },
+          },
+        },
+      },
+    } as const;
+  }
+
+  private paraContrato(v: VendaComRelacoes, podeVerCusto: boolean): Venda {
+    const total = dec(v.total.toString());
+
+    let recebido = dec(0);
+    for (const p of v.pagamentos) {
+      recebido = recebido.plus(dec(p.valor.toString()));
+    }
+
+    let custoTotal = dec(0);
+    for (const i of v.itens) {
+      custoTotal = custoTotal.plus(
+        dec(i.custoUnitario.toString()).times(dec(i.quantidade.toString())),
+      );
+    }
+
+    const base: Venda = {
+      id: v.id,
+      numero: v.numero,
+      status: v.status as Venda['status'],
+      origem: v.origem as Venda['origem'],
+      lojaId: v.lojaId,
+      loja: v.loja.nome,
+      local: v.local.nome,
+      clienteId: v.clienteId,
+      cliente: v.cliente?.nome ?? null,
+      vendedorId: v.vendedorId,
+      vendedor: v.vendedor.nome,
+      tabelaPreco: v.tabelaPreco?.nome ?? null,
+      subtotal: dec(v.subtotal.toString()).toFixed(2),
+      desconto: dec(v.desconto.toString()).toFixed(2),
+      acrescimo: dec(v.acrescimo.toString()).toFixed(2),
+      total: total.toFixed(2),
+      troco: recebido.minus(total).toFixed(2),
+      concluidaEm: v.concluidaEm?.toISOString() ?? null,
+      canceladaEm: v.canceladaEm?.toISOString() ?? null,
+      motivoCancelamento: v.motivoCancelamento,
+      itens: v.itens.map((i) => ({
+        id: i.id,
+        variacaoId: i.variacaoId,
+        sku: i.variacao.sku,
+        produto: i.variacao.produto.nome,
+        descricaoVariacao: i.variacao.descricao,
+        quantidade: dec(i.quantidade.toString()).toFixed(6),
+        precoUnitario: dec(i.precoUnitario.toString()).toFixed(2),
+        descontoItem: dec(i.descontoItem.toString()).toFixed(2),
+        totalItem: dec(i.totalItem.toString()).toFixed(2),
+        precoOrigem: i.precoOrigem,
+        ...(podeVerCusto ? { custoUnitario: dec(i.custoUnitario.toString()).toFixed(6) } : {}),
+      })),
+      pagamentos: v.pagamentos.map((p) => ({
+        forma: p.forma as Venda['pagamentos'][number]['forma'],
+        valor: dec(p.valor.toString()).toFixed(2),
+        parcelas: p.parcelas,
+        bandeira: p.bandeira,
+        ultimosQuatro: p.ultimosQuatro,
+      })),
+    };
+
+    if (!podeVerCusto) {
+      return base;
+    }
+
+    return {
+      ...base,
+      custoTotal: custoTotal.toFixed(2),
+      margem: total.minus(custoTotal).toFixed(2),
+    };
+  }
+}
+
+/** O Decimal do Prisma. Só precisamos de 	oString() — dec faz o resto. */
+interface Numerico {
+  toString(): string;
+}
+
+interface VendaComRelacoes {
+  id: string;
+  numero: number;
+  status: string;
+  origem: string;
+  lojaId: string;
+  localId: string;
+  clienteId: string | null;
+  vendedorId: string;
+  subtotal: Numerico;
+  desconto: Numerico;
+  acrescimo: Numerico;
+  total: Numerico;
+  concluidaEm: Date | null;
+  canceladaEm: Date | null;
+  motivoCancelamento: string | null;
+  loja: { nome: string };
+  local: { nome: string };
+  cliente: { nome: string } | null;
+  vendedor: { nome: string };
+  tabelaPreco: { nome: string } | null;
+  pagamentos: {
+    forma: string;
+    valor: Numerico;
+    parcelas: number;
+    bandeira: string | null;
+    ultimosQuatro: string | null;
+  }[];
+  itens: {
+    id: string;
+    variacaoId: string;
+    quantidade: Numerico;
+    precoUnitario: Numerico;
+    descontoItem: Numerico;
+    totalItem: Numerico;
+    precoOrigem: string;
+    custoUnitario: Numerico;
+    variacao: { sku: string; descricao: string; produto: { nome: string } };
+  }[];
+}

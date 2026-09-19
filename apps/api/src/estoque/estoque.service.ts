@@ -45,11 +45,18 @@ interface Aviso {
   readonly mensagem: string;
 }
 
-interface LocalResolvido {
+export interface LocalResolvido {
   readonly id: string;
   readonly nome: string;
   readonly lojaId: string;
   readonly loja: string;
+}
+
+export interface BaixaDeVenda {
+  readonly movimento: Movimento;
+  /** Custo médio no instante da saída. É o que congela no item da venda. */
+  readonly custoUnitario: Dec;
+  readonly avisos: Aviso[];
 }
 
 /** O que a gravação de um movimento precisa saber. */
@@ -64,6 +71,8 @@ interface Lancamento {
   readonly documentoTipo?: string | undefined;
   readonly documentoId?: string | undefined;
   readonly documentoNumero?: string | undefined;
+  /** Movimento que este lançamento estorna. O original permanece. */
+  readonly estornoDeId?: string | undefined;
 }
 
 @Injectable()
@@ -336,6 +345,140 @@ export class EstoqueService {
   }
 
   // -------------------------------------------------------------------------
+  // Usado por outros módulos, dentro da transação DELES
+  // -------------------------------------------------------------------------
+
+  /**
+   * Baixa o estoque de um item vendido.
+   *
+   * Recebe o `tx` de quem chamou de propósito: a baixa e a venda precisam
+   * estar na **mesma transação**. Venda gravada com estoque não baixado — ou o
+   * contrário — é divergência que ninguém encontra depois.
+   *
+   * É o mesmo caminho da saída manual: mesmo travamento, mesmo cálculo, mesma
+   * regra de saldo negativo. Uma segunda implementação "só para a venda" seria
+   * uma segunda verdade sobre o custo.
+   */
+  async baixarParaVenda(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly variacaoId: string;
+      readonly local: LocalResolvido;
+      readonly quantidade: string;
+      readonly vendaId: string;
+      readonly numeroVenda: string;
+    },
+    principal: Principal,
+  ): Promise<BaixaDeVenda> {
+    const contexto = exigirContexto();
+
+    const atual = await this.travarPosicao(tx, params.variacaoId, params.local.id, contexto);
+    const calculo = aplicarSaida(atual, { quantidade: params.quantidade });
+
+    await this.conferirSaldoNegativo(tx, calculo, principal);
+
+    const movimento = await this.gravar(
+      tx,
+      {
+        variacaoId: params.variacaoId,
+        local: params.local,
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_VENDA',
+        quantidade: dec(params.quantidade),
+        calculo,
+        documentoTipo: 'VENDA',
+        documentoId: params.vendaId,
+        documentoNumero: params.numeroVenda,
+      },
+      principal,
+      contexto,
+    );
+
+    return { movimento, custoUnitario: calculo.custoUnitario, avisos: this.avisos(calculo) };
+  }
+
+  /**
+   * Devolve ao estoque o que uma venda cancelada havia tirado.
+   *
+   * **Lançamento contrário, não exclusão.** O movimento original permanece e o
+   * novo aponta para ele por `estorno_de_id`. Apagar a saída faria o razão
+   * mentir sobre o que aconteceu no balcão.
+   *
+   * A reentrada é pelo custo congelado na saída — a mercadoria volta valendo o
+   * que valia quando saiu. Se outras entradas ocorreram no meio, a média é
+   * recalculada normalmente, e a política gravada diz qual regra foi aplicada.
+   */
+  async estornarSaidaDeVenda(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly movimentoOriginalId: string;
+      readonly variacaoId: string;
+      readonly local: LocalResolvido;
+      readonly quantidade: string;
+      readonly custoUnitario: string;
+      readonly vendaId: string;
+      readonly numeroVenda: string;
+      readonly motivo: string;
+    },
+    principal: Principal,
+  ): Promise<Movimento> {
+    const contexto = exigirContexto();
+
+    const atual = await this.travarPosicao(tx, params.variacaoId, params.local.id, contexto);
+
+    const calculo = aplicarEntrada(atual, {
+      quantidade: params.quantidade,
+      custoUnitario: params.custoUnitario,
+    });
+
+    return this.gravar(
+      tx,
+      {
+        variacaoId: params.variacaoId,
+        local: params.local,
+        sentido: 'ENTRADA',
+        tipo: 'ENTRADA_DEVOLUCAO_CLIENTE',
+        quantidade: dec(params.quantidade),
+        calculo,
+        justificativa: params.motivo,
+        documentoTipo: 'VENDA_CANCELADA',
+        documentoId: params.vendaId,
+        documentoNumero: params.numeroVenda,
+        estornoDeId: params.movimentoOriginalId,
+      },
+      principal,
+      contexto,
+    );
+  }
+
+  /** Resolve e confere o local. Público porque a venda precisa do mesmo. */
+  async resolverLocalDaLoja(
+    tx: ClienteEmTransacao,
+    localId: string,
+    lojaId: string,
+  ): Promise<LocalResolvido> {
+    return this.resolverLocal(tx, localId, lojaId, exigirContexto());
+  }
+
+  /** O local padrão de venda da loja. É onde o PDV baixa por omissão. */
+  async localPadraoDaLoja(tx: ClienteEmTransacao, lojaId: string): Promise<LocalResolvido> {
+    const local = await tx.localEstoque.findFirst({
+      where: { lojaId, padraoVenda: true, status: 'ATIVO' },
+      include: { loja: { select: { id: true, nome: true } } },
+    });
+
+    if (!local) {
+      throw new ConflictException({
+        codigo: 'LOJA_SEM_LOCAL_PADRAO',
+        mensagem:
+          'Esta loja não tem local padrão de venda. Defina um antes de operar o PDV.',
+      });
+    }
+
+    return this.resolverLocal(tx, local.id, lojaId, exigirContexto());
+  }
+
+  // -------------------------------------------------------------------------
   // Consultas
   // -------------------------------------------------------------------------
 
@@ -574,6 +717,7 @@ export class EstoqueService {
         ...(lanc.documentoTipo ? { documentoTipo: lanc.documentoTipo } : {}),
         ...(lanc.documentoId ? { documentoId: lanc.documentoId } : {}),
         ...(lanc.documentoNumero ? { documentoNumero: lanc.documentoNumero } : {}),
+        ...(lanc.estornoDeId ? { estornoDeId: lanc.estornoDeId } : {}),
         ...(lanc.justificativa ? { justificativa: lanc.justificativa } : {}),
         atorTipo: 'FUNCIONARIO',
         atorId: principal.id,
