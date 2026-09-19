@@ -16,7 +16,7 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaClient } from './generated';
+import { PrismaClient } from '../generated';
 
 export class ConexaoPrivilegiadaError extends Error {
   readonly codigo = 'CONEXAO_PRIVILEGIADA';

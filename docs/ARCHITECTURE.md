@@ -17,7 +17,7 @@ tamanho A2 azul" é apenas um produto com variações.
 |---|---|---|---|
 | Runtime | Node.js | 24.x | Requisito do Prisma 7 (`>=24.0`) |
 | Linguagem | TypeScript | 5.9.3 | Ver ADR-002 |
-| Backend | NestJS | 12.0.3 | DI + guards/interceptors para tenancy, RBAC e auditoria transversais |
+| Backend | NestJS | 11.2.5 | Ver ADR-010 |
 | ORM | Prisma | 7.10.0 | Ver ADR-003 |
 | Banco | PostgreSQL | 18.6 | RLS nativo, `numeric` exato, `FOR UPDATE` |
 | Frontend | React + Vite | 19.x / 8.x | — |
@@ -136,11 +136,23 @@ diretório em 19/09/2026 encontrou 0 arquivos.
 
 ### ADR-002 — TypeScript 5.9.3, não 7.0.2
 **Contexto:** `typescript@latest` é 7.0.2, a reimplementação nativa.
+
 **Decisão:** fixar 5.9.3 (último estável da linha 5.x).
-**Motivo:** NestJS depende de `emitDecoratorMetadata` e de metadados de
-decorator em runtime. Essa é precisamente a superfície de maior risco da port
-nativa. O projeto não pode pagar esse risco na fundação.
-**Revisão:** reavaliar quando NestJS declarar suporte explícito a TS 7.
+
+**Motivo inicial (receio):** NestJS depende de `emitDecoratorMetadata`, que é
+a superfície de maior risco da port nativa.
+
+**Motivo verificado (medido em 19/09/2026):** `typescript-eslint` **não
+suporta TypeScript 7**. A versão estável 8.70.0 e até a canary
+(8.70.1-alpha.27) declaram `typescript: ">=4.8.4 <6.1.0"`.
+
+Adotar TS 7 hoje significaria ficar **sem lint** — e este projeto tem regras
+de lint que proíbem `parseFloat` e `Math.round` em código monetário e
+restringem o cliente Prisma sem escopo. Perder isso custa mais do que ganhar
+um compilador mais rápido.
+
+**Revisão:** reavaliar quando `typescript-eslint` publicar suporte a TS 7.
+O gatilho é objetivo — basta olhar o `peerDependencies` dele.
 
 ### ADR-003 — Prisma 7.10.0, não 8.0.0-rc
 **Contexto:** a tag `latest` de `prisma` (CLI) aponta para `8.0.0-rc.15`, um
@@ -158,6 +170,30 @@ exatamente onde mais importa.
 
 ### ADR-005 — Schema único + `tenant_id` + RLS
 Ver `TENANCY.md` para o detalhamento completo.
+
+### ADR-010 — NestJS 11.2.5, não 12.0.3
+
+**Contexto:** a linha 12 do NestJS é a mais recente. Comecei por ela.
+
+**O que a instalação revelou:** `@nestjs/schematics@12` declara
+`typescript: ">=6.0.0"`. Como TypeScript 6 nunca saiu estável — a linha pulou
+de 5.9 para 7.0 —, na prática **NestJS 12 exige TypeScript 7**.
+
+Isso colide de frente com o ADR-002: TS 7 deixaria o projeto sem
+`typescript-eslint`, e portanto sem as regras de lint que protegem o código
+monetário.
+
+**Decisão:** NestJS 11.2.5, a última estável da linha 11.
+`@nestjs/schematics@11.1.0` pede apenas `typescript >=4.8.2`.
+
+**Compatibilidade conferida:** `@nestjs/config@12.0.0` e
+`@nestjs/throttler@6.7.0` aceitam `@nestjs/common ^11`; `@nestjs/jwt@11.0.2`
+também. A instalação resolve sem `--force` nem `--legacy-peer-deps` — que
+seria a alternativa ruim: silenciar um requisito declarado pelo fornecedor e
+descobrir o estrago em runtime.
+
+**Consequência:** a migração para NestJS 12 e TypeScript 7 acontece junta,
+quando o `typescript-eslint` acompanhar. São a mesma decisão, não duas.
 
 ### ADR-008 — Pedido e venda são entidades distintas
 

@@ -15,9 +15,15 @@
 //  5. Tabelas append-only (`MovimentoEstoque`, `AuditLog`, `PedidoEvento`) não
 //     têm `updatedAt` de propósito: elas não são atualizadas.
 
+// O cliente é gerado FORA de `src`, de propósito.
+//
+// Em `src/generated`, o `tsc` não o copia para `dist` — e `dist/client.js`
+// procuraria `./generated`, que não existiria. Em `packages/db/generated`, o
+// caminho relativo `../generated` resolve igual a partir de `src` e de
+// `dist`. Um só import funciona em desenvolvimento e em produção.
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated"
+  output   = "../generated"
 }
 
 // Prisma 7: a URL de conexão NÃO vive mais aqui.

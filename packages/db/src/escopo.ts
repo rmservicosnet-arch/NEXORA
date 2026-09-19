@@ -19,7 +19,7 @@
 
 import type { Contexto } from './contexto';
 import { exigirContexto } from './contexto';
-import type { PrismaClient } from './generated';
+import type { PrismaClient } from '../generated';
 
 /** O cliente disponível dentro de `comEscopo`. Sem `$transaction` aninhada. */
 export type ClienteEmTransacao = Omit<

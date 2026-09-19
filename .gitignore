@@ -11,7 +11,7 @@ coverage/
 !.env.example
 
 # Prisma Client gerado
-packages/db/src/generated/
+packages/db/generated/
 
 # Editores e sistema
 .vscode/*

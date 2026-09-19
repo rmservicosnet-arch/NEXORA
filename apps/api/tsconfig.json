@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2023"],
+    "types": ["node"],
+
+    // NestJS resolve dependências pelos metadados de decorator em runtime.
+    // Sem estas duas, a injeção simplesmente não funciona — e o erro que
+    // aparece não diz isso. Ver ADR-002.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Propriedades injetadas pelo Nest não são atribuídas no construtor de
+    // forma que o TypeScript reconheça.
+    "strictPropertyInitialization": false,
+
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/db" }],
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "dist", "node_modules"]
+}

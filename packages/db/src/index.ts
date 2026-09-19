@@ -23,4 +23,4 @@ export {
   type OpcoesEscopo,
 } from './escopo';
 
-export { Prisma } from './generated';
+export { Prisma } from '../generated';
