@@ -67,6 +67,8 @@ export const PERM = {
   caixa: {
     abrir: 'caixa.abrir',
     fechar: 'caixa.fechar',
+    sangria: 'caixa.sangria',
+    suprimento: 'caixa.suprimento',
     conferir: 'caixa.conferir',
   },
   cliente: {

@@ -1,4 +1,5 @@
-import {
+﻿import {
+  type CaixaAtual,
   type ContextoPdv,
   type FormaPagamento,
   type ItemParaVenda,
@@ -6,6 +7,7 @@ import {
 } from '@estoque/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { Aviso } from '../ui/Aviso';
@@ -79,6 +81,17 @@ export function Pdv() {
   useEffect(() => {
     campoBusca.current?.focus();
   }, [concluida]);
+
+  // O caixa é perguntado na abertura da tela, não no fechamento da venda.
+  // Descobrir que o caixa está fechado depois de montar o carrinho inteiro é
+  // fazer o cliente esperar por uma informação que já existia.
+  const caixa = useQuery({
+    queryKey: ['caixa', 'meu', lojaId],
+    queryFn: () => pedir<CaixaAtual>(`/caixa/meu?lojaId=${lojaId}`),
+    enabled: Boolean(lojaId),
+  });
+
+  const caixaAberto = caixa.data?.caixa ?? null;
 
   const busca = useQuery({
     queryKey: ['pdv', 'itens', termo, lojaId, tabelaPrecoId],
@@ -195,6 +208,9 @@ export function Pdv() {
       setErro(null);
       await fila.invalidateQueries({ queryKey: ['estoque'] });
       await fila.invalidateQueries({ queryKey: ['produtos'] });
+      // Venda em dinheiro muda o esperado na gaveta. Sem isto, o selo do
+      // cabeçalho continuaria mostrando o valor de antes da venda.
+      await fila.invalidateQueries({ queryKey: ['caixa'] });
     },
     onError: (e) => {
       setConcluida(null);
@@ -248,6 +264,28 @@ export function Pdv() {
         </select>
 
         <div className="flex-1" />
+
+        {lojaId ? (
+          caixaAberto ? (
+            <Link
+              to="/caixa"
+              className="flex items-center gap-1.5 rounded-full bg-[--color-sucesso-fundo] px-2.5 py-1 text-[11.5px] font-semibold text-[--color-sucesso] no-underline"
+              title={`Esperado na gaveta: R$ ${caixaAberto.resumo.esperadoEmCaixa}`}
+            >
+              <span className="size-1.5 rounded-full bg-current" />
+              Caixa {caixaAberto.numero} aberto
+            </Link>
+          ) : (
+            <Link
+              to="/caixa"
+              className="flex items-center gap-1.5 rounded-full bg-[--color-atencao-fundo] px-2.5 py-1 text-[11.5px] font-semibold text-[--color-atencao] no-underline"
+              title="Sem caixa aberto, o PDV não recebe em dinheiro"
+            >
+              <span className="size-1.5 rounded-full bg-current" />
+              Caixa fechado
+            </Link>
+          )
+        ) : null}
 
         {carrinho.length > 0 ? (
           <Botao

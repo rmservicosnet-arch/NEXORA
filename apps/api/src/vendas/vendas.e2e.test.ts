@@ -144,6 +144,23 @@ beforeAll(async () => {
   locais = (
     await http.get('/api/estoque/locais').set('Authorization', `Bearer ${tokenAdmin}`).expect(200)
   ).body as typeof locais;
+
+  // Venda em dinheiro exige caixa aberto. Reaproveita o que já estiver aberto
+  // de uma execução anterior — o índice único impede abrir um segundo.
+  const existente = (
+    await http
+      .get(`/api/caixa/meu?lojaId=${loja.id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200)
+  ).body as { caixa: { id: string } | null };
+
+  if (!existente.caixa) {
+    await http
+      .post('/api/caixa/abrir')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ lojaId: loja.id, valorAbertura: '200.00' })
+      .expect(201);
+  }
 }, 60_000);
 
 afterAll(async () => {
@@ -367,6 +384,42 @@ describe.runIf(temBanco)('venda de balcão', () => {
       .expect(400);
 
     expect(await saldoDe(variacaoId)).toBe(saldoAntes);
+  });
+});
+
+describe.runIf(temBanco)('dinheiro exige caixa', () => {
+  it('a vendedora, sem caixa aberto, não recebe em dinheiro', async () => {
+    const token = await entrar(VENDEDORA);
+    const { variacaoId } = await produtoComPreco('20.00');
+    await abastecer(variacaoId, '5', '5.00');
+
+    const recusa = await http
+      .post('/api/vendas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        lojaId: loja.id,
+        itens: [{ variacaoId, quantidade: '1' }],
+        pagamentos: [{ forma: 'DINHEIRO', valor: '20.00' }],
+      })
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('CAIXA_FECHADO');
+  });
+
+  it('mas conclui em PIX — cartão e PIX não vão para a gaveta', async () => {
+    const token = await entrar(VENDEDORA);
+    const { variacaoId } = await produtoComPreco('20.00');
+    await abastecer(variacaoId, '5', '5.00');
+
+    await http
+      .post('/api/vendas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        lojaId: loja.id,
+        itens: [{ variacaoId, quantidade: '1' }],
+        pagamentos: [{ forma: 'PIX', valor: '20.00' }],
+      })
+      .expect(201);
   });
 });
 

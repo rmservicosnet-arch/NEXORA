@@ -4,6 +4,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
+import { CaixaModule } from './caixa/caixa.module';
 import { AutenticacaoGuard } from './comum/autenticacao.guard';
 import { ComumModule } from './comum/comum.module';
 import { ContextoInterceptor } from './comum/contexto.interceptor';
@@ -48,6 +49,7 @@ import { VendasModule } from './vendas/vendas.module';
     AuthModule,
     ProdutosModule,
     EstoqueModule,
+    CaixaModule,
     VendasModule,
     MidiaModule,
   ],

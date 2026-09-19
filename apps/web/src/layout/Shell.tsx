@@ -1,4 +1,4 @@
-import { PERM } from '@estoque/contracts';
+﻿import { PERM } from '@estoque/contracts';
 import type { ReactElement } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
@@ -45,6 +45,13 @@ const ICONE = {
       <path d="M8 15h3" />
     </>
   ),
+  gaveta: (
+    <>
+      <rect x="3" y="7" width="18" height="12" rx="2" />
+      <path d="M3 12h18" />
+      <path d="M10 16h4" />
+    </>
+  ),
   movimento: (
     <>
       <path d="M4 8h13" />
@@ -84,6 +91,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Operação',
     permissoes: [PERM.venda.criar],
     icone: ICONE.caixaRegistradora,
+  },
+  {
+    rotulo: 'Caixa',
+    para: '/caixa',
+    grupo: 'Operação',
+    permissoes: [PERM.caixa.abrir],
+    icone: ICONE.gaveta,
   },
   {
     rotulo: 'Estoque',

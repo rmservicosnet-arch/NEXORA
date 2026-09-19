@@ -62,6 +62,23 @@ enum ModoCaixa {
   COMPARTILHADO_POR_LOJA
 }
 
+enum StatusCaixa {
+  ABERTO
+  FECHADO
+  /// Fechamento revisado por outra pessoa. Quem fecha não confere a si mesmo.
+  CONFERIDO
+}
+
+/// Só o que ENTRA e SAI da gaveta por decisão de alguém.
+/// Venda em dinheiro NÃO entra aqui: ela já é fato registrado em `venda`, e
+/// duplicá-la criaria duas verdades sobre o mesmo dinheiro.
+enum TipoMovimentoCaixa {
+  /// Dinheiro retirado da gaveta (para o cofre, para depósito).
+  SANGRIA
+  /// Dinheiro colocado na gaveta durante o turno (troco que faltou).
+  SUPRIMENTO
+}
+
 enum StatusRegistro {
   ATIVO
   INATIVO
@@ -270,6 +287,7 @@ model Tenant {
   tabelasPreco TabelaPreco[]
   vendas       Venda[]
   pedidos      Pedido[]
+  caixas       Caixa[]
   auditoria    AuditLog[]
 
   @@map("tenant")
@@ -331,6 +349,7 @@ model Loja {
   acessosUsuario UsuarioLojaAcesso[]
   vendas         Venda[]
   pedidos        Pedido[]
+  caixas         Caixa[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, status])
@@ -386,7 +405,9 @@ model Usuario {
   perfis       UsuarioPerfil[]
   acessosLoja  UsuarioLojaAcesso[]
   sessoes      SessaoRefresh[]
-  vendasFeitas Venda[]             @relation("VendaVendedor")
+  vendasFeitas     Venda[]  @relation("VendaVendedor")
+  caixasOperados   Caixa[]  @relation("CaixaOperador")
+  caixasConferidos Caixa[]  @relation("CaixaConferente")
 
   @@unique([tenantId, email])
   @@index([tenantId, status])
@@ -1034,6 +1055,21 @@ model Venda {
   acrescimo Decimal @default(0) @db.Decimal(14, 2)
   total     Decimal @db.Decimal(14, 2)
 
+  /// Troco devolvido em dinheiro.
+  ///
+  /// Gravado, e não derivado de `recebido − total`, porque é ele que a
+  /// conferência de caixa subtrai: o que ficou na gaveta é
+  /// `dinheiro recebido − troco`. Recalcular isso em toda conferência
+  /// espalharia a mesma fórmula por vários lugares.
+  troco Decimal @default(0) @db.Decimal(14, 2)
+
+  /// Caixa em que esta venda entrou.
+  ///
+  /// Nulo quando a venda não teve dinheiro: cartão e PIX vão para a
+  /// adquirente, não para a gaveta. Ver docs/CASHBOX.md §3.
+  caixaId String? @map("caixa_id") @db.Uuid
+  caixa   Caixa?  @relation(fields: [caixaId], references: [id], onDelete: Restrict)
+
   /// Pedido que originou esta venda. Faturar o mesmo pedido duas vezes é
   /// impedido pelo índice único.
   pedidoId String? @unique @map("pedido_id") @db.Uuid
@@ -1053,6 +1089,7 @@ model Venda {
   @@index([tenantId, lojaId, status])
   @@index([tenantId, concluidaEm])
   @@index([tenantId, vendedorId])
+  @@index([tenantId, caixaId])
   @@map("venda")
 }
 
@@ -1107,6 +1144,87 @@ model VendaPagamento {
 
   @@index([tenantId, vendaId])
   @@map("venda_pagamento")
+}
+
+// ===========================================================================
+// Caixa
+//
+// Controla o DINHEIRO FÍSICO da gaveta. Cartão e PIX não passam por aqui —
+// vão para a adquirente, não para a gaveta. Ver docs/CASHBOX.md.
+// ===========================================================================
+
+model Caixa {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lojaId   String @map("loja_id") @db.Uuid
+  loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+
+  numero Int
+
+  operadorId String  @map("operador_id") @db.Uuid
+  operador   Usuario @relation("CaixaOperador", fields: [operadorId], references: [id], onDelete: Restrict)
+
+  status StatusCaixa @default(ABERTO)
+
+  /// Fundo de troco contado na abertura.
+  valorAbertura Decimal @map("valor_abertura") @db.Decimal(14, 2)
+
+  /// Preenchidos no fechamento, e nunca depois.
+  valorContado  Decimal? @map("valor_contado") @db.Decimal(14, 2)
+  valorEsperado Decimal? @map("valor_esperado") @db.Decimal(14, 2)
+
+  /// `contado − esperado`. Negativo é falta, positivo é sobra.
+  /// NUNCA é ajustado em silêncio: a diferença fica registrada como é.
+  diferenca Decimal? @db.Decimal(14, 2)
+
+  observacaoAbertura   String? @map("observacao_abertura") @db.VarChar(400)
+  observacaoFechamento String? @map("observacao_fechamento") @db.VarChar(400)
+
+  abertoEm  DateTime  @default(now()) @map("aberto_em") @db.Timestamptz(3)
+  fechadoEm DateTime? @map("fechado_em") @db.Timestamptz(3)
+
+  conferidoPorId String?   @map("conferido_por_id") @db.Uuid
+  conferidoPor   Usuario?  @relation("CaixaConferente", fields: [conferidoPorId], references: [id], onDelete: SetNull)
+  conferidoEm    DateTime? @map("conferido_em") @db.Timestamptz(3)
+  observacaoConferencia String? @map("observacao_conferencia") @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  movimentos MovimentoCaixa[]
+  vendas     Venda[]
+
+  /// Um caixa ABERTO por operador e loja é garantido por índice único
+  /// PARCIAL, na migração — Prisma não expressa índice parcial.
+  @@unique([tenantId, numero])
+  @@index([tenantId, lojaId, status])
+  @@index([tenantId, operadorId, status])
+  @@map("caixa")
+}
+
+/// APPEND-ONLY. Sangria e suprimento não se corrigem: lança-se o contrário.
+model MovimentoCaixa {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  caixaId  String @map("caixa_id") @db.Uuid
+  caixa    Caixa  @relation(fields: [caixaId], references: [id], onDelete: Restrict)
+
+  tipo TipoMovimentoCaixa
+
+  /// Sempre positivo. O sinal está no tipo.
+  valor Decimal @db.Decimal(14, 2)
+
+  /// Obrigatório na prática: dinheiro que sai da gaveta sem motivo escrito
+  /// vira diferença sem dono no fechamento.
+  motivo String @db.VarChar(400)
+
+  atorId String? @map("ator_id") @db.Uuid
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, caixaId, criadoEm])
+  @@map("movimento_caixa")
 }
 
 // ===========================================================================

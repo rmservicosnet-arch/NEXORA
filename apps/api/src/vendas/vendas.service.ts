@@ -27,6 +27,7 @@ import {
 } from '@estoque/db';
 
 import type { Principal } from '../auth/dominios';
+import { CaixaService } from '../caixa/caixa.service';
 import { AuditoriaService } from '../comum/auditoria.service';
 import { EstoqueService } from '../estoque/estoque.service';
 import { PRISMA } from '../infra/prisma/prisma.module';
@@ -44,6 +45,7 @@ export class VendasService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly estoque: EstoqueService,
+    private readonly caixa: CaixaService,
     private readonly auditoria: AuditoriaService,
   ) {}
 
@@ -71,6 +73,13 @@ export class VendasService {
 
         const { tabelaPrecoId, clienteId } = await this.resolverTabela(tx, dados);
 
+        // Dinheiro exige caixa aberto; cartão e PIX, não — vão para a
+        // adquirente, não para a gaveta. A recusa vem ANTES de qualquer
+        // escrita: nada pior do que baixar estoque e descobrir no fim que a
+        // venda não podia ser registrada. Ver docs/CASHBOX.md §3.
+        const temDinheiro = dados.pagamentos.some((p) => p.forma === 'DINHEIRO');
+        const caixaId = await this.caixa.caixaParaVenda(tx, dados.lojaId, temDinheiro, principal);
+
         // Numeração serializada por empresa. Duas vendas simultâneas pegariam
         // o mesmo `max(numero) + 1` e uma delas morreria no índice único —
         // no balcão, com o cliente esperando. O lock de transação resolve sem
@@ -88,6 +97,7 @@ export class VendasService {
             ...(clienteId ? { clienteId } : {}),
             vendedorId: principal.id,
             ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
+            ...(caixaId ? { caixaId } : {}),
             subtotal: '0',
             total: '0',
           },
@@ -178,6 +188,9 @@ export class VendasService {
             desconto: desconto.toFixed(2),
             acrescimo: acrescimo.toFixed(2),
             total: total.toFixed(2),
+            // Gravado, não derivado: é ele que a conferência de caixa
+            // subtrai. Ver docs/CASHBOX.md §4.
+            troco: troco.toFixed(2),
             concluidaEm: new Date(),
           },
         });

@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+﻿import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router';
 
 import { ErroRequisicao } from './api/cliente';
 import { ProvedorSessao } from './auth/sessao';
 import { Shell } from './layout/Shell';
+import { Caixa } from './paginas/Caixa';
 import { Estoque } from './paginas/Estoque';
 import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
@@ -45,6 +46,7 @@ export function App() {
               <Route path="produtos/:produtoId" element={<Produto />} />
               <Route path="estoque" element={<Estoque />} />
               <Route path="pdv" element={<Pdv />} />
+              <Route path="caixa" element={<Caixa />} />
               <Route
                 path="*"
                 element={
