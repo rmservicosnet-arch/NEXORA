@@ -51,6 +51,7 @@ export const PERM = {
     devolver: 'pedido.devolver',
     recusar: 'pedido.recusar',
     faturar: 'pedido.faturar',
+    cancelarConfirmado: 'pedido.cancelar_confirmado',
   },
   carteira: {
     visualizar: 'carteira.visualizar',

@@ -190,3 +190,54 @@ export const apoioProdutoSchema = z.object({
   marcas: z.array(opcaoSchema),
 });
 export type ApoioProduto = z.infer<typeof apoioProdutoSchema>;
+
+// ---------------------------------------------------------------------------
+// Preços por tabela
+// ---------------------------------------------------------------------------
+
+/**
+ * O preço de uma variação em cada tabela.
+ *
+ * O cadastro de produto define só o preço da tabela padrão. As demais —
+ * Professor, Aluno, Revendedor — precisam ser preenchidas, senão o cliente
+ * vinculado a elas simplesmente não enxerga o item: sem preço na tabela dele,
+ * o produto não existe para ele.
+ */
+export const precoPorTabelaSchema = z.object({
+  tabelaPrecoId: z.string(),
+  tabela: z.string(),
+  chave: z.string(),
+  padrao: z.boolean(),
+  preco: z.string().nullable(),
+});
+export type PrecoPorTabela = z.infer<typeof precoPorTabelaSchema>;
+
+export const precosDaVariacaoSchema = z.object({
+  variacaoId: z.string(),
+  sku: z.string(),
+  descricao: z.string(),
+  precos: z.array(precoPorTabelaSchema),
+});
+export type PrecosDaVariacao = z.infer<typeof precosDaVariacaoSchema>;
+
+export const precosDoProdutoSchema = z.object({
+  produtoId: z.string(),
+  nome: z.string(),
+  variacoes: z.array(precosDaVariacaoSchema),
+});
+export type PrecosDoProduto = z.infer<typeof precosDoProdutoSchema>;
+
+export const alteracaoPrecosSchema = z.object({
+  precos: z
+    .array(
+      z.object({
+        variacaoId: z.string().uuid(),
+        tabelaPrecoId: z.string().uuid(),
+        /** `null` remove o preço: o item some da tabela daquele cliente. */
+        preco: decimalString('Preço').nullable(),
+      }),
+    )
+    .min(1)
+    .max(400),
+});
+export type AlteracaoPrecos = z.infer<typeof alteracaoPrecosSchema>;

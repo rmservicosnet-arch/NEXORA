@@ -14,6 +14,7 @@ import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
 import { EstoqueModule } from './estoque/estoque.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
+import { PedidosModule } from './pedidos/pedidos.module';
 import { LojasController } from './lojas/lojas.controller';
 import { MidiaModule } from './midia/midia.module';
 import { ProdutosModule } from './produtos/produtos.module';
@@ -53,6 +54,7 @@ import { VendasModule } from './vendas/vendas.module';
     CaixaModule,
     CarteiraModule,
     VendasModule,
+    PedidosModule,
     MidiaModule,
   ],
   controllers: [SaudeController, LojasController],

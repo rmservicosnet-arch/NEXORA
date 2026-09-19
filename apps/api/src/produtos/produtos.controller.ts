@@ -1,25 +1,32 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import {
+  alteracaoPrecosSchema,
   alteracaoProdutoSchema,
   filtroProdutosSchema,
   novoProdutoSchema,
   PERM,
+  type AlteracaoPrecos,
   type AlteracaoProduto,
   type ApoioProduto,
   type FiltroProdutos,
   type NovoProduto,
   type PaginaProdutos,
+  type PrecosDoProduto,
   type ProdutoDetalhe,
 } from '@estoque/contracts';
 
 import type { Principal } from '../auth/dominios';
 import { Permissoes, PrincipalAtual } from '../comum/decoradores';
 import { ZodPipe } from '../comum/zod.pipe';
+import { PrecosService } from './precos.service';
 import { ProdutosService } from './produtos.service';
 
 @Controller('produtos')
 export class ProdutosController {
-  constructor(private readonly produtos: ProdutosService) {}
+  constructor(
+    private readonly produtos: ProdutosService,
+    private readonly precos: PrecosService,
+  ) {}
 
   @Get()
   @Permissoes(PERM.produto.visualizar)
@@ -48,6 +55,22 @@ export class ProdutosController {
     @PrincipalAtual() principal: Principal,
   ): Promise<ProdutoDetalhe> {
     return this.produtos.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));
+  }
+
+  @Get(':id/precos')
+  @Permissoes(PERM.preco.visualizar)
+  async precosDoProduto(@Param('id') id: string): Promise<PrecosDoProduto> {
+    return this.precos.doProduto(id);
+  }
+
+  @Put(':id/precos')
+  @Permissoes(PERM.preco.editar)
+  async alterarPrecos(
+    @Param('id') id: string,
+    @Body(new ZodPipe(alteracaoPrecosSchema)) dados: AlteracaoPrecos,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<PrecosDoProduto> {
+    return this.precos.alterar(id, dados, principal);
   }
 
   @Post()

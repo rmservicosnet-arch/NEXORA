@@ -1,7 +1,9 @@
 # Pedidos com confirmação
 
-> Fase 4. Documentado agora porque muda o modelo de autenticação (Fase 1) e o
-> modelo de estoque (Fase 3), que vêm antes.
+> Fase 4. **A API está implementada**: catálogo do portal, carrinho, envio,
+> edição pela equipe, aceite do cliente, confirmação com reserva, devolução,
+> recusa, cancelamento e faturamento. 21 testes de ponta a ponta. O que falta
+> está em §10.
 
 ## 1. O problema
 
@@ -412,3 +414,60 @@ Além dos da Fase 1:
     registra quem decidiu.
 19. Cliente não consegue aceitar alteração de pedido de outro cliente.
 20. Editar pedido que já saiu de `AGUARDANDO_CONFIRMACAO` é rejeitado.
+
+
+## 10. O que já existe, e o que não
+
+### Implementado
+
+| | Rota |
+|---|---|
+| Catálogo do cliente | `GET /portal/pedidos/catalogo` |
+| Enviar carrinho | `POST /portal/pedidos` |
+| Meus pedidos / um pedido | `GET /portal/pedidos[/:id]` |
+| Aceitar ou recusar o novo valor | `POST /portal/pedidos/:id/aceite` |
+| Fila da equipe | `GET /pedidos?apenasFila=true` |
+| Incluir / remover item | `POST /pedidos/:id/itens[/:itemId/remover]` |
+| Confirmar (total ou parcial) | `POST /pedidos/:id/confirmar` |
+| Devolver / recusar / cancelar | `POST /pedidos/:id/{devolver,recusar,cancelar}` |
+| Faturar → vira venda | `POST /pedidos/:id/faturar` |
+
+`modoCheckout` é respeitado, **e a sobreposição por cliente vence a da
+empresa** — `cliente.modoCheckout` já existia no schema e era a "extensão
+natural, decisão pendente" deste documento. Uma loja que atende varejo e
+atacado configura cada um.
+
+`PAGAMENTO_IMEDIATO` gera **venda debitada na carteira do cliente**. Não existe
+"pagamento automático" sem uma conta de onde tirar o dinheiro; sem carteira, a
+API recusa com motivo. Um gateway resolveria de outro jeito — e não existe.
+
+### O que descobrimos construindo
+
+**Não havia como preencher as tabelas de preço.** O cadastro de produto define
+só o preço da tabela padrão, e não existia rota para as demais. Consequência:
+um cliente vinculado à tabela Professor via um catálogo **vazio** — sem preço
+na tabela dele, o item não existe para ele. Foi o primeiro teste do portal que
+revelou. Existe agora `GET`/`PUT /produtos/:id/precos`, com `preco_historico`
+append-only.
+
+**As tabelas filhas não tinham escopo de cliente no RLS.** `pedido_item`,
+`pedido_evento` e `carteira_movimento` não têm coluna `cliente_id` — o vínculo
+passa pelo pai —, então a migração original não as alcançou. No portal, o
+pedido do outro cliente era invisível, mas os **itens** dele não. A aplicação
+filtrava certo; o ponto do RLS é valer quando ela esquece. Corrigido, com
+`estoque_reserva` fechada por completo para o portal: reserva revela
+quantidade.
+
+### O que ainda não existe
+
+- **Notificação** de pedido novo, alterado ou aguardando aceite. O modelo está
+  em [NOTIFICATIONS.md](NOTIFICATIONS.md); nada dispara ainda.
+- **Expiração automática** de reserva e de pedido. `expiraEm` e `validoAte` são
+  gravados, mas nenhuma rotina os varre. Ver §4.
+- **Reenvio** de um pedido devolvido pelo cliente.
+- **`momentoCobranca = NA_CONFIRMACAO`**: hoje a cobrança é sempre no
+  faturamento.
+- **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
+  ainda não é conferido.
+- **Telas.** A API está pronta; a fila da equipe e o aplicativo do cliente
+  ainda não foram construídos.

@@ -122,6 +122,9 @@ o runtime.
 | Chamar uma função de conferência e descartar o retorno | `conferirLimite` devolve "excedeu com autorização". Descartar grava o movimento como se tivesse cabido — e "nunca silencioso" vira silencioso |
 | Helper de teste `async` devolvendo a cadeia do supertest | Sem `async`: a Promise não tem `.expect`. O `await` continua funcionando, a cadeia é thenable |
 | Perfil do seed mais permissivo que o documento | `docs/` é a verdade. `npm run db:sync-perfis` aplica a correção sem apagar dados |
+| RLS de cliente só onde há coluna `cliente_id` | Tabela filha precisa da política via `EXISTS` no pai; senão o portal esconde o pedido e mostra os itens |
+| Ciclo de vida escrito como `if`s espalhados | Tabela `TRANSICOES` única. Transição não listada é proibida |
+| Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes
 

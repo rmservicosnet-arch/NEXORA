@@ -12,5 +12,7 @@ import { VendasService } from './vendas.service';
   imports: [EstoqueModule, CaixaModule, CarteiraModule],
   controllers: [VendasController],
   providers: [VendasService],
+  // O faturamento de pedido grava a venda pelo mesmo servico.
+  exports: [VendasService],
 })
 export class VendasModule {}

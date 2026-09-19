@@ -68,7 +68,64 @@ export class VendasService {
 
     const { vendaId, avisos } = await comEscopoAtual(
       this.prisma,
-      async (tx) => {
+      async (tx) => this.registrar(tx, dados, principal, { origem: 'PDV' }),
+      // Uma venda com vinte itens faz vinte travamentos de saldo. O limite
+      // padrao de 10 s e curto para o balcao em dia cheio.
+      { tempoLimiteMs: 30_000 },
+    );
+
+    const venda = await this.detalhe(vendaId, podeVerCusto);
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'VENDA_CONCLUIDA',
+      entidade: 'venda',
+      entidadeId: vendaId,
+      atorNome: principal.nome,
+      depois: {
+        numero: venda.numero,
+        total: venda.total,
+        itens: venda.itens.length,
+        loja: venda.loja,
+        formas: venda.pagamentos.map((p) => p.forma),
+      },
+    });
+
+    return { venda, avisos };
+  }
+
+  /**
+   * O corpo da venda, dentro da transacao de QUEM CHAMOU.
+   *
+   * Separado de `criar` porque o faturamento de um pedido precisa gravar a
+   * venda na MESMA transacao em que consome a reserva e muda o status do
+   * pedido. Pedido faturado sem venda — ou venda sem pedido faturado — e
+   * divergencia que ninguem encontra depois.
+   *
+   * `criar` continua sendo o caminho do PDV; ele so abre a transacao e chama
+   * isto. Uma segunda implementacao "para o pedido" seria uma segunda verdade
+   * sobre preco, custo e baixa de estoque.
+   */
+  async registrar(
+    tx: ClienteEmTransacao,
+    dados: NovaVenda,
+    principal: Principal,
+    opcoes: {
+      readonly origem: 'PDV' | 'PEDIDO';
+      readonly pedidoId?: string;
+      /**
+       * Os precos ja vieram congelados do pedido.
+       *
+       * Sem isto, `resolverPreco` trataria cada preco informado como digitado
+       * a mao e exigiria `preco.aplicar_desconto` de quem fatura — que nao
+       * digitou nada: o preco e o que o cliente viu ao enviar o pedido.
+       */
+      readonly precosCongelados?: boolean;
+    },
+  ): Promise<{ vendaId: string; avisos: Aviso[] }> {
+    const contexto = exigirContexto();
+
+    {
         const local = dados.localId
           ? await this.estoque.resolverLocalDaLoja(tx, dados.localId, dados.lojaId)
           : await this.estoque.localPadraoDaLoja(tx, dados.lojaId);
@@ -94,8 +151,9 @@ export class VendasService {
             lojaId: dados.lojaId,
             localId: local.id,
             numero,
-            origem: 'PDV',
+            origem: opcoes.origem,
             status: 'RASCUNHO',
+            ...(opcoes.pedidoId ? { pedidoId: opcoes.pedidoId } : {}),
             ...(clienteId ? { clienteId } : {}),
             vendedorId: principal.id,
             ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
@@ -110,7 +168,13 @@ export class VendasService {
         let subtotal = dec(0);
 
         for (const item of dados.itens) {
-          const preco = await this.resolverPreco(tx, item, tabelaPrecoId, principal);
+          const preco = await this.resolverPreco(
+            tx,
+            item,
+            tabelaPrecoId,
+            principal,
+            opcoes.precosCongelados ?? false,
+          );
           const quantidade = dec(item.quantidade);
           const descontoItem = dec(item.descontoItem ?? '0');
           const totalItem = quantidade.times(preco.valor).minus(descontoItem);
@@ -239,31 +303,8 @@ export class VendasService {
           });
         }
 
-        return { vendaId: venda.id, avisos: avisosColetados };
-      },
-      // Uma venda com vinte itens faz vinte travamentos de saldo. O limite
-      // padrão de 10 s é curto para o balcão em dia cheio.
-      { tempoLimiteMs: 30_000 },
-    );
-
-    const venda = await this.detalhe(vendaId, podeVerCusto);
-
-    await this.auditoria.registrar({
-      contexto,
-      acao: 'VENDA_CONCLUIDA',
-      entidade: 'venda',
-      entidadeId: vendaId,
-      atorNome: principal.nome,
-      depois: {
-        numero: venda.numero,
-        total: venda.total,
-        itens: venda.itens.length,
-        loja: venda.loja,
-        formas: venda.pagamentos.map((p) => p.forma),
-      },
-    });
-
-    return { venda, avisos };
+      return { vendaId: venda.id, avisos: avisosColetados };
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -634,6 +675,7 @@ export class VendasService {
     item: { variacaoId: string; precoUnitario?: string | undefined },
     tabelaPrecoId: string | null,
     principal: Principal,
+    precoJaCongelado: boolean,
   ): Promise<{ valor: Dec; origem: string; sku: string }> {
     const variacao = await tx.variacao.findFirst({
       where: { id: item.variacaoId },
@@ -655,6 +697,13 @@ export class VendasService {
     }
 
     if (item.precoUnitario !== undefined) {
+      // Preco vindo de um pedido ja foi congelado no envio, e e o que o
+      // cliente viu. Quem fatura nao digitou nada — exigir permissao de
+      // desconto dele seria cobrar por uma decisao que nao foi dele.
+      if (precoJaCongelado) {
+        return { valor: dec(item.precoUnitario), origem: 'PEDIDO', sku: variacao.sku };
+      }
+
       if (!principal.permissoes.has(PERM.preco.aplicarDesconto)) {
         throw new ForbiddenException({
           codigo: 'SEM_PERMISSAO_PRECO_MANUAL',
