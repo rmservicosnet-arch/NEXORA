@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+
+/**
+ * Tokens do Design System.
+ *
+ * Esta é a fonte única: DESIGN_SYSTEM.md descreve, este arquivo define. Se
+ * divergirem, o documento é que precisa ser corrigido.
+ *
+ * Tailwind 4 gera utilitários a partir do @theme: `--color-primary-600` vira
+ * `bg-primary-600`, `text-primary-600`, `border-primary-600`.
+ */
+@theme {
+  /* Neutros quentes — reduzem fadiga em jornada longa e evitam o cinza puro
+     de template. */
+  --color-neutral-0: #ffffff;
+  --color-neutral-25: #faf9f7;
+  --color-neutral-50: #f4f2ef;
+  --color-neutral-100: #e9e6e1;
+  --color-neutral-200: #d9d5ce;
+  --color-neutral-300: #bdb8af;
+  --color-neutral-400: #938d83;
+  --color-neutral-500: #6e6860;
+  --color-neutral-600: #524d46;
+  --color-neutral-700: #3b3732;
+  --color-neutral-900: #1a1917;
+
+  --color-primary-50: #eef0fa;
+  --color-primary-100: #dce0f3;
+  --color-primary-200: #b9c1e7;
+  --color-primary-300: #8b98d4;
+  --color-primary-400: #6070bc;
+  --color-primary-500: #43529f;
+  --color-primary-600: #33408c;
+  --color-primary-700: #2a3573;
+  --color-primary-800: #222b5c;
+  --color-primary-900: #1b2249;
+
+  --color-accent-100: #f7e7d8;
+  --color-accent-600: #b4601c;
+  --color-accent-700: #8f4b15;
+
+  /* Status: sempre com ícone e rótulo, nunca cor sozinha. */
+  --color-sucesso: #1b6e46;
+  --color-sucesso-fundo: #e4f2ea;
+  --color-atencao: #8f6206;
+  --color-atencao-fundo: #fbf0da;
+  --color-perigo: #a81f27;
+  --color-perigo-fundo: #fae8e8;
+
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --shadow-sm: 0 1px 2px rgba(26, 25, 23, 0.06);
+  --shadow-md: 0 2px 8px rgba(26, 25, 23, 0.08);
+  --shadow-lg: 0 12px 32px rgba(26, 25, 23, 0.16);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-neutral-25);
+    color: var(--color-neutral-900);
+  }
+
+  /* Foco sempre visível. Nunca `outline: none` sem substituto —
+     DESIGN_SYSTEM.md §7. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+  }
+
+  /* Coluna de dinheiro que "dança" causa erro de conferência. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

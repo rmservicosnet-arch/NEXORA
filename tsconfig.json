@@ -2,7 +2,9 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/contracts" },
     { "path": "./packages/db" },
-    { "path": "./apps/api" }
+    { "path": "./apps/api" },
+    { "path": "./apps/web" }
   ]
 }

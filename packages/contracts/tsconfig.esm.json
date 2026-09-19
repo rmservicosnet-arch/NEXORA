@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "outDir": "./dist/esm",
+    "tsBuildInfoFile": "./dist/esm/.tsbuildinfo",
+    // Os tipos saem só da build CommonJS; duplicá-los criaria duas fontes
+    // de verdade para a mesma declaração.
+    "declaration": false,
+    "declarationMap": false,
+    "composite": false
+  }
+}
