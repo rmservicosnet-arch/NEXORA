@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { ErroRequisicao } from './api/cliente';
 import { ProvedorSessao } from './auth/sessao';
 import { Shell } from './layout/Shell';
+import { Estoque } from './paginas/Estoque';
 import { Inicio } from './paginas/Inicio';
 import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
@@ -41,6 +42,7 @@ export function App() {
               <Route path="produtos" element={<Produtos />} />
               <Route path="produtos/novo" element={<NovoProduto />} />
               <Route path="produtos/:produtoId" element={<Produto />} />
+              <Route path="estoque" element={<Estoque />} />
               <Route
                 path="*"
                 element={

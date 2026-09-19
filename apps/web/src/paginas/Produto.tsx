@@ -3,8 +3,8 @@
   PERM,
   type AutorizacaoDeEnvio,
   type ImagemProduto,
-  type PaginaProdutos,
-  type ProdutoLista,
+  type ProdutoDetalhe,
+  type VariacaoDetalhe,
 } from '@estoque/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
@@ -32,14 +32,9 @@ export function Produto() {
   const podeGerenciar = pode(PERM.produto.gerenciarFotos);
   const podePublicar = pode(PERM.produto.publicarCatalogo);
 
-  // A listagem já devolve tudo o que o cabeçalho precisa. Uma rota
-  // `GET /produtos/:id` entraria quando houver campo que só ela tem.
   const produto = useQuery({
     queryKey: ['produtos', 'um', produtoId],
-    queryFn: async () => {
-      const pagina = await pedir<PaginaProdutos>(`/produtos?limite=100`);
-      return pagina.itens.find((p) => p.id === produtoId) ?? null;
-    },
+    queryFn: () => pedir<ProdutoDetalhe>(`/produtos/${produtoId}`),
   });
 
   const imagens = useQuery({
@@ -151,7 +146,8 @@ export function Produto() {
     );
   }
 
-  const p: ProdutoLista = produto.data;
+  const p: ProdutoDetalhe = produto.data;
+  const mostrarCusto = p.valorEstoque !== undefined;
 
   return (
     <>
@@ -183,11 +179,19 @@ export function Produto() {
               </h1>
               <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-neutral-500">
                 <span className="font-mono">{p.skuBase}</span>
-                {p.marca ? <span>{p.marca}</span> : null}
-                {p.categoria ? <span>{p.categoria}</span> : null}
+                {p.marca ? <span>{p.marca.nome}</span> : null}
+                {p.categoria ? <span>{p.categoria.nome}</span> : null}
                 <span>
-                  {p.totalVariacoes} {p.totalVariacoes === 1 ? 'variação' : 'variações'}
+                  {p.variacoes.length} {p.variacoes.length === 1 ? 'variação' : 'variações'}
                 </span>
+                <span className={p.temSaldoNegativo ? 'font-medium text-[--color-perigo]' : ''}>
+                  saldo {p.saldoTotal}
+                </span>
+                {p.valorEstoque !== undefined ? (
+                  <span className="font-mono text-[12.5px]">
+                    estoque R$ {p.valorEstoque}
+                  </span>
+                ) : null}
               </p>
             </div>
 
@@ -219,6 +223,34 @@ export function Produto() {
               </ul>
             </Aviso>
           ) : null}
+
+          <section className="flex flex-col gap-3 rounded-md border border-neutral-100 bg-white p-5 shadow-sm">
+            <h2 className="font-display text-[15px] font-semibold text-neutral-900">Variações</h2>
+
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px]">
+                <div className="grid grid-cols-[150px_minmax(0,1fr)_130px_100px_90px_110px] gap-2.5 border-b border-neutral-100 pb-1.5">
+                  {['SKU', 'Descrição', 'Cód. barras', 'Preço', 'Saldo', mostrarCusto ? 'Custo méd.' : ''].map(
+                    (t, i) => (
+                      <span
+                        key={t || `vazio-${String(i)}`}
+                        className={juntar(
+                          'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
+                          i >= 3 && 'text-right',
+                        )}
+                      >
+                        {t}
+                      </span>
+                    ),
+                  )}
+                </div>
+
+                {p.variacoes.map((v) => (
+                  <LinhaVariacao key={v.id} variacao={v} mostrarCusto={mostrarCusto} />
+                ))}
+              </div>
+            </div>
+          </section>
 
           <section className="flex flex-col gap-4 rounded-md border border-neutral-100 bg-white p-5 shadow-sm">
             <div className="flex items-baseline justify-between">
@@ -333,6 +365,87 @@ export function Produto() {
         </div>
       </main>
     </>
+  );
+}
+
+function LinhaVariacao({
+  variacao,
+  mostrarCusto,
+}: {
+  readonly variacao: VariacaoDetalhe;
+  readonly mostrarCusto: boolean;
+}) {
+  const saldo = Number(variacao.saldo);
+
+  return (
+    <div className="border-b border-neutral-50 py-2">
+      <div className="grid grid-cols-[150px_minmax(0,1fr)_130px_100px_90px_110px] items-center gap-2.5">
+        <span className="font-mono text-[12.5px] text-neutral-600">{variacao.sku}</span>
+
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[13.5px] text-neutral-900">{variacao.descricao}</span>
+          {variacao.status === 'INATIVO' ? (
+            <span className="shrink-0 rounded-full bg-neutral-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-neutral-500">
+              inativa
+            </span>
+          ) : null}
+        </span>
+
+        <span className="truncate font-mono text-[11.5px] text-neutral-400">
+          {variacao.codigoBarras ?? '—'}
+        </span>
+
+        <span className="tabular text-right font-mono text-[13px] text-neutral-900">
+          {variacao.precoPadrao ? `R$ ${variacao.precoPadrao}` : '—'}
+        </span>
+
+        <span
+          className={juntar(
+            'tabular text-right font-mono text-[13px] font-medium',
+            saldo < 0
+              ? 'text-[--color-perigo]'
+              : variacao.abaixoDoMinimo
+                ? 'text-[--color-atencao]'
+                : 'text-neutral-900',
+          )}
+          title={variacao.abaixoDoMinimo ? `Abaixo do mínimo (${variacao.estoqueMinimo})` : undefined}
+        >
+          {variacao.saldo}
+        </span>
+
+        {mostrarCusto ? (
+          <span className="tabular text-right font-mono text-[12.5px] text-neutral-500">
+            {variacao.custoMedio ? `R$ ${Number(variacao.custoMedio).toFixed(2)}` : '—'}
+          </span>
+        ) : (
+          <span />
+        )}
+      </div>
+
+      {/* Onde o saldo está. Sem isto, "saldo 150" não diz em qual loja ele
+          está — e transferência e contagem precisam exatamente disso. */}
+      {variacao.saldosPorLocal.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-[152px]">
+          {variacao.saldosPorLocal.map((s) => (
+            <span key={s.localId} className="text-[11.5px] text-neutral-400">
+              {s.loja} · {s.local}{' '}
+              <span
+                className={juntar(
+                  'font-mono',
+                  Number(s.quantidade) < 0 ? 'text-[--color-perigo]' : 'text-neutral-600',
+                )}
+              >
+                {s.quantidade}
+              </span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 pl-[152px] text-[11.5px] text-neutral-400">
+          Sem saldo em nenhum local
+        </p>
+      )}
+    </div>
   );
 }
 

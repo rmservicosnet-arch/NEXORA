@@ -43,6 +43,16 @@ export interface OpcoesConexao {
    * migrator de propósito. **Nunca** use na API.
    */
   readonly permitirPapelPrivilegiado?: boolean;
+  /**
+   * Conexões simultâneas do pool.
+   *
+   * O padrão do `pg` é 10 por processo, o que basta para um servidor e é
+   * demais para uma suíte de testes: sete arquivos em paralelo, cada um
+   * subindo a aplicação inteira, pedem 70 conexões de um PostgreSQL que
+   * aceita 100 — e a suíte falha com `ECONNABORTED` de vez em quando, sem
+   * relação com o que está sendo testado.
+   */
+  readonly maxConexoes?: number;
 }
 
 interface LinhaPapel {
@@ -93,7 +103,10 @@ export async function exigirPapelSemPrivilegio(prisma: PrismaClient): Promise<vo
 }
 
 export async function criarPrisma(opcoes: OpcoesConexao): Promise<PrismaClient> {
-  const adapter = new PrismaPg({ connectionString: opcoes.url });
+  const adapter = new PrismaPg({
+    connectionString: opcoes.url,
+    ...(opcoes.maxConexoes ? { max: opcoes.maxConexoes } : {}),
+  });
 
   const prisma = new PrismaClient({
     adapter,

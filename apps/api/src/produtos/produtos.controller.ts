@@ -9,6 +9,7 @@ import {
   type FiltroProdutos,
   type NovoProduto,
   type PaginaProdutos,
+  type ProdutoDetalhe,
 } from '@estoque/contracts';
 
 import type { Principal } from '../auth/dominios';
@@ -36,6 +37,17 @@ export class ProdutosController {
   @Permissoes(PERM.produto.visualizar)
   async apoio(): Promise<ApoioProduto> {
     return this.produtos.apoio();
+  }
+
+  // Depois de `apoio`: o NestJS casa as rotas na ordem de declaração, e
+  // `:id` capturaria "apoio" se viesse antes.
+  @Get(':id')
+  @Permissoes(PERM.produto.visualizar)
+  async detalhe(
+    @Param('id') id: string,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<ProdutoDetalhe> {
+    return this.produtos.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));
   }
 
   @Post()

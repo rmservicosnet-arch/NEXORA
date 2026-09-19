@@ -161,6 +161,95 @@ describe.runIf(temBanco)('listagem de produtos', () => {
   });
 });
 
+describe.runIf(temBanco)('detalhe do produto', () => {
+  it('traz variações, saldo por local e valor de estoque', async () => {
+    const sessao = await entrar(ADMIN);
+
+    const lista = await http
+      .get('/api/produtos?busca=KIM-TRC')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    const id = (lista.body.itens as ItemLista[])[0]?.id;
+
+    const detalhe = (
+      await http
+        .get(`/api/produtos/${String(id)}`)
+        .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+        .expect(200)
+    ).body as {
+      skuBase: string;
+      saldoTotal: string;
+      valorEstoque?: string;
+      variacoes: {
+        sku: string;
+        saldo: string;
+        custoMedio?: string | null;
+        abaixoDoMinimo: boolean;
+        saldosPorLocal: { loja: string; local: string; quantidade: string; custoMedio?: string }[];
+      }[];
+    };
+
+    expect(detalhe.skuBase).toBe('KIM-TRC');
+    expect(detalhe.variacoes.length).toBeGreaterThan(0);
+    expect(detalhe.valorEstoque).toBeDefined();
+
+    // O saldo do produto é a soma do saldo das variações, que por sua vez é a
+    // soma dos locais. Se as três contas não fecharem, alguma está errada.
+    const somaDasVariacoes = detalhe.variacoes.reduce((t, v) => t + Number(v.saldo), 0);
+    expect(somaDasVariacoes).toBe(Number(detalhe.saldoTotal));
+
+    for (const v of detalhe.variacoes) {
+      const somaDosLocais = v.saldosPorLocal.reduce((t, s) => t + Number(s.quantidade), 0);
+      expect(somaDosLocais).toBe(Number(v.saldo));
+      expect(v.saldosPorLocal.every((s) => s.loja.length > 0 && s.local.length > 0)).toBe(true);
+    }
+  });
+
+  it('não devolve custo — em lugar nenhum — para quem não tem a permissão', async () => {
+    const admin = await entrar(ADMIN);
+    const vendedora = await entrar(VENDEDORA);
+
+    const id = (
+      await http
+        .get('/api/produtos?busca=KIM-TRC')
+        .set('Authorization', `Bearer ${admin.tokenAcesso}`)
+        .expect(200)
+    ).body.itens[0].id as string;
+
+    const resposta = await http
+      .get(`/api/produtos/${id}`)
+      .set('Authorization', `Bearer ${vendedora.tokenAcesso}`)
+      .expect(200);
+
+    // Inclusive dentro do saldo por local, que é onde é fácil esquecer.
+    expect(resposta.text).not.toContain('custoMedio');
+    expect(resposta.text).not.toContain('valorEstoque');
+  });
+
+  it('produto de outra empresa é 404', async () => {
+    const sessao = await entrar(ADMIN);
+
+    await http
+      .get('/api/produtos/01234567-89ab-7cde-8f01-23456789abcd')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(404);
+  });
+
+  it('a rota /produtos/apoio continua sendo apoio, não um id', async () => {
+    const sessao = await entrar(ADMIN);
+
+    // `@Get(':id')` declarado antes de `@Get('apoio')` engoliria esta rota.
+    const resposta = await http
+      .get('/api/produtos/apoio')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .expect(200);
+
+    expect(resposta.body).toHaveProperty('categorias');
+    expect(resposta.body).toHaveProperty('marcas');
+  });
+});
+
 describe.runIf(temBanco)('cadastro de produto', () => {
   it('recusa quem não tem produto.criar', async () => {
     const sessao = await entrar(VENDEDORA);

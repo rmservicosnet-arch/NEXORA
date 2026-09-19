@@ -5,6 +5,7 @@ import type {
   FiltroProdutos,
   NovoProduto,
   PaginaProdutos,
+  ProdutoDetalhe,
   ProdutoLista,
 } from '@estoque/contracts';
 import { dec, type Dec } from '@estoque/core';
@@ -147,6 +148,130 @@ export class ProdutosService {
         itens,
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         total,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Detalhe
+  // -------------------------------------------------------------------------
+
+  /**
+   * Um produto, com variações e saldo por local.
+   *
+   * Existe porque a tela do produto buscava a listagem inteira e procurava o
+   * seu item nela — o que funciona enquanto a empresa tem menos produtos do
+   * que a primeira página comporta, e quebra em silêncio depois disso.
+   */
+  async detalhe(id: string, podeVerCusto: boolean): Promise<ProdutoDetalhe> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const produto = await tx.produto.findFirst({
+        where: { id },
+        include: {
+          categoria: { select: { id: true, nome: true } },
+          marca: { select: { id: true, nome: true } },
+          imagens: {
+            where: { excluidoEm: null, status: 'PRONTA' },
+            select: { id: true, principal: true },
+            orderBy: [{ principal: 'desc' }, { ordem: 'asc' }],
+          },
+          variacoes: {
+            orderBy: { sku: 'asc' },
+            include: {
+              precos: {
+                where: { tabelaPreco: { padrao: true } },
+                select: { preco: true },
+                take: 1,
+              },
+              saldos: {
+                include: {
+                  local: {
+                    select: {
+                      id: true,
+                      nome: true,
+                      loja: { select: { id: true, nome: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // 404, não 403: produto de outra empresa não existe para quem pergunta.
+      if (!produto) {
+        throw new NotFoundException({
+          codigo: 'PRODUTO_NAO_ENCONTRADO',
+          mensagem: 'Produto não encontrado.',
+        });
+      }
+
+      let saldoTotal = dec(0);
+      let valorTotal = dec(0);
+      let algumNegativo = false;
+
+      const variacoes = produto.variacoes.map((v) => {
+        let saldo = dec(0);
+        let valor = dec(0);
+
+        const saldosPorLocal = v.saldos.map((s) => {
+          const quantidade = dec(s.quantidade.toString());
+          const custo = dec(s.custoMedio.toString());
+
+          saldo = saldo.plus(quantidade);
+          valor = valor.plus(quantidade.times(custo));
+
+          return {
+            localId: s.local.id,
+            local: s.local.nome,
+            lojaId: s.local.loja.id,
+            loja: s.local.loja.nome,
+            quantidade: quantidade.toFixed(0),
+            ...(podeVerCusto ? { custoMedio: custo.toFixed(6) } : {}),
+          };
+        });
+
+        saldoTotal = saldoTotal.plus(saldo);
+        valorTotal = valorTotal.plus(valor);
+        algumNegativo = algumNegativo || saldo.isNegative();
+
+        const minimo = dec(v.estoqueMinimo.toString());
+
+        return {
+          id: v.id,
+          sku: v.sku,
+          descricao: v.descricao,
+          codigoBarras: v.codigoBarras,
+          estoqueMinimo: minimo.toFixed(0),
+          status: v.status,
+          precoPadrao: v.precos[0] ? dec(v.precos[0].preco.toString()).toFixed(2) : null,
+          saldo: saldo.toFixed(0),
+          // Mínimo zero não é alerta: significa que ninguém configurou mínimo.
+          abaixoDoMinimo: minimo.greaterThan(0) && saldo.lessThan(minimo),
+          ...(podeVerCusto
+            ? { custoMedio: saldo.isZero() ? null : valor.dividedBy(saldo).toFixed(6) }
+            : {}),
+          saldosPorLocal,
+        };
+      });
+
+      return {
+        id: produto.id,
+        skuBase: produto.skuBase,
+        nome: produto.nome,
+        descricao: produto.descricao,
+        unidade: produto.unidade,
+        status: produto.status,
+        publicadoNoCatalogo: produto.publicadoNoCatalogo,
+        categoria: produto.categoria,
+        marca: produto.marca,
+        totalFotos: produto.imagens.length,
+        imagemPrincipalId: produto.imagens.find((i) => i.principal)?.id ?? null,
+        saldoTotal: saldoTotal.toFixed(0),
+        temSaldoNegativo: algumNegativo,
+        ...(podeVerCusto ? { valorEstoque: valorTotal.toFixed(2) } : {}),
+        variacoes,
       };
     });
   }

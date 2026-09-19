@@ -112,6 +112,9 @@ o runtime.
 | Mensagem de validação do Zod em inglês | `packages/contracts/src/idioma.ts` configura pt-BR; o mesmo schema valida no navegador e na API |
 | `_count` de relação com exclusão lógica | Sempre com `where`; senão foto excluída conta como foto e o produto publica sem ter nenhuma |
 | Eleger "o primeiro" em operações paralelas | Quatro envios simultâneos disputam a capa; o índice único derruba três. Engolir o P2002 é o correto — abortar a operação inteira não |
+| Ler saldo, calcular e gravar sem travar a linha | `SELECT … FOR UPDATE` antes de todo cálculo de estoque; senão o razão deixa de encadear e nenhuma tela mostra |
+| Travar duas linhas em ordem variável | Sempre na mesma ordem de id. Transferências cruzadas viram deadlock |
+| Guardar o item buscado e reusar a foto dele | Saldo congelado no momento da busca faz o operador decidir pela quantidade errada; releia do servidor |
 
 ## Testes
 

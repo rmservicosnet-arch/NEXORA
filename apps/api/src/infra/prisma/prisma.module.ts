@@ -23,9 +23,12 @@ export const PRISMA = Symbol('PRISMA');
         // `criarPrisma` recusa conectar com papel privilegiado. Se alguém
         // apontar DATABASE_URL para o usuário de migração, a aplicação não
         // sobe — em vez de subir sem isolamento.
+        const ambiente = config.get('NODE_ENV', { infer: true });
+
         return criarPrisma({
           url: config.get('DATABASE_URL', { infer: true }),
-          registrarConsultas: config.get('NODE_ENV', { infer: true }) === 'development',
+          registrarConsultas: ambiente === 'development',
+          maxConexoes: config.get('DATABASE_POOL_MAX', { infer: true }) ?? (ambiente === 'test' ? 4 : 10),
         });
       },
     },

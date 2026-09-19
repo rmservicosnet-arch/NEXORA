@@ -21,6 +21,15 @@ export const esquemaAmbiente = z.object({
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatória'),
   DIRECT_URL: z.string().min(1, 'DIRECT_URL é obrigatória'),
+  /**
+   * Conexões do pool por processo.
+   *
+   * Sob teste o padrão cai para 4: a suíte sobe a aplicação uma vez por
+   * arquivo, em paralelo, e sete pools de dez estouram o `max_connections`
+   * do PostgreSQL. O sintoma é `ECONNABORTED` em um teste aleatório, que não
+   * tem nada a ver com o que ele testa.
+   */
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().optional(),
 
   JWT_FUNCIONARIO_SECRET: z
     .string()

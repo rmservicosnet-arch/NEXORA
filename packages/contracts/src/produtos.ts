@@ -75,6 +75,65 @@ export const paginaProdutosSchema = z.object({
 export type PaginaProdutos = z.infer<typeof paginaProdutosSchema>;
 
 // ---------------------------------------------------------------------------
+// Detalhe
+// ---------------------------------------------------------------------------
+
+export const opcaoSchema = z.object({ id: z.string(), nome: z.string() });
+export type Opcao = z.infer<typeof opcaoSchema>;
+
+const opcaoOuNulo = opcaoSchema.nullable();
+
+export const saldoPorLocalSchema = z.object({
+  localId: z.string(),
+  local: z.string(),
+  lojaId: z.string(),
+  loja: z.string(),
+  quantidade: z.string(),
+  /** Mesma regra de `custoMedio` abaixo: ausente = sem permissão. */
+  custoMedio: z.string().optional(),
+});
+export type SaldoPorLocal = z.infer<typeof saldoPorLocalSchema>;
+
+export const variacaoDetalheSchema = z.object({
+  id: z.string(),
+  sku: z.string(),
+  descricao: z.string(),
+  codigoBarras: z.string().nullable(),
+  estoqueMinimo: z.string(),
+  status: z.enum(['ATIVO', 'INATIVO']),
+  precoPadrao: z.string().nullable(),
+  saldo: z.string(),
+  /** `true` quando o saldo está abaixo do mínimo configurado. */
+  abaixoDoMinimo: z.boolean(),
+  /**
+   * Nulo quando não há saldo: o custo médio é valor ÷ saldo, e essa divisão
+   * não existe. Ausente quando falta `produto.ver_custo`.
+   */
+  custoMedio: z.string().nullable().optional(),
+  saldosPorLocal: z.array(saldoPorLocalSchema),
+});
+export type VariacaoDetalhe = z.infer<typeof variacaoDetalheSchema>;
+
+export const produtoDetalheSchema = z.object({
+  id: z.string(),
+  skuBase: z.string(),
+  nome: z.string(),
+  descricao: z.string().nullable(),
+  unidade: z.string(),
+  status: statusProdutoSchema,
+  publicadoNoCatalogo: z.boolean(),
+  categoria: opcaoOuNulo,
+  marca: opcaoOuNulo,
+  totalFotos: z.number().int(),
+  imagemPrincipalId: z.string().nullable(),
+  saldoTotal: z.string(),
+  temSaldoNegativo: z.boolean(),
+  valorEstoque: z.string().optional(),
+  variacoes: z.array(variacaoDetalheSchema),
+});
+export type ProdutoDetalhe = z.infer<typeof produtoDetalheSchema>;
+
+// ---------------------------------------------------------------------------
 // Criação
 // ---------------------------------------------------------------------------
 
@@ -125,9 +184,6 @@ export type AlteracaoProduto = z.infer<typeof alteracaoProdutoSchema>;
 // ---------------------------------------------------------------------------
 // Apoio aos formulários
 // ---------------------------------------------------------------------------
-
-export const opcaoSchema = z.object({ id: z.string(), nome: z.string() });
-export type Opcao = z.infer<typeof opcaoSchema>;
 
 export const apoioProdutoSchema = z.object({
   categorias: z.array(opcaoSchema),

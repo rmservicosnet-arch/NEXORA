@@ -38,6 +38,14 @@ const ICONE = {
       <path d="M12 12v9" />
     </>
   ),
+  movimento: (
+    <>
+      <path d="M4 8h13" />
+      <path d="M14 5l3 3-3 3" />
+      <path d="M20 16H7" />
+      <path d="M10 13l-3 3 3 3" />
+    </>
+  ),
   relatorio: (
     <>
       <path d="M4 20V10" />
@@ -62,6 +70,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Operação',
     permissoes: [PERM.estoque.visualizar],
     icone: ICONE.loja,
+  },
+  {
+    rotulo: 'Estoque',
+    para: '/estoque',
+    grupo: 'Operação',
+    permissoes: [PERM.estoque.visualizar],
+    icone: ICONE.movimento,
   },
   {
     rotulo: 'Produtos',

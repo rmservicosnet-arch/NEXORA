@@ -10,6 +10,7 @@ import { ContextoInterceptor } from './comum/contexto.interceptor';
 import { EscopoLojaGuard } from './comum/escopo-loja.guard';
 import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
+import { EstoqueModule } from './estoque/estoque.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { LojasController } from './lojas/lojas.controller';
 import { MidiaModule } from './midia/midia.module';
@@ -45,6 +46,7 @@ import { SaudeController } from './saude/saude.controller';
     ComumModule,
     AuthModule,
     ProdutosModule,
+    EstoqueModule,
     MidiaModule,
   ],
   controllers: [SaudeController, LojasController],
