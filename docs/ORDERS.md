@@ -708,7 +708,7 @@ e confere que o **pedido seguinte nasce com 96 horas**.
 - **Reenvio** de um pedido devolvido pelo cliente.
 - **`momentoCobranca = NA_CONFIRMACAO`**: hoje a cobrança é sempre no
   faturamento.
-- **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
-  ainda não é conferido.
+- **Reenvio automático** do pedido devolvido por preço vencido: hoje o cliente
+  aceita ou recusa, e não há caminho de "peça de novo pelo preço de hoje".
 - **Exigir troca no primeiro acesso.** A senha provisória continua valendo
   até o cliente decidir trocá-la (§10.8).

@@ -204,6 +204,41 @@ async function enviarPedido(itens: { variacaoId: string; quantidade: string }[])
   return corpo.pedido;
 }
 
+/**
+ * Vence o pedido empurrando `validoAte` para tras.
+ *
+ * Direto no banco: nao ha rota para "envelhecer" um pedido, e esperar 72
+ * horas nao e teste. O que se quer provar e a REGRA da confirmacao, nao o
+ * relogio.
+ */
+async function vencerPedido(pedidoId: string): Promise<void> {
+  const { Client } = await import('pg');
+  const c = new Client({ connectionString: process.env['DIRECT_URL'] });
+  await c.connect();
+  await c.query("UPDATE pedido SET valido_ate = now() - INTERVAL '1 day' WHERE id = $1", [
+    pedidoId,
+  ]);
+  await c.end();
+}
+
+/** Muda o preco na tabela DO PEDIDO, que e a que congelou o valor no envio. */
+async function mudarPrecoNaTabelaDoPedido(
+  pedidoId: string,
+  variacaoId: string,
+  preco: string,
+): Promise<void> {
+  const { Client } = await import('pg');
+  const c = new Client({ connectionString: process.env['DIRECT_URL'] });
+  await c.connect();
+  await c.query(
+    `UPDATE preco_item SET preco = $1
+      WHERE variacao_id = $2
+        AND tabela_preco_id = (SELECT tabela_preco_id FROM pedido WHERE id = $3)`,
+    [preco, variacaoId, pedidoId],
+  );
+  await c.end();
+}
+
 async function verPelaEquipe(id: string): Promise<Pedido> {
   return (
     await http.get(`/api/pedidos/${id}`).set('Authorization', `Bearer ${tokenAdmin}`).expect(200)
@@ -397,6 +432,97 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
     expect(
       contagens.comOCliente + contagens.aguardando + contagens.confirmados + contagens.encerrados,
     ).toBe(contagens.total);
+  });
+
+  /**
+   * PRECO VENCIDO — docs/ORDERS.md §5.
+   *
+   * `validoAte` era gravado no envio e nada o lia: um pedido de tres semanas
+   * confirmava pelo preco de tres semanas atras. A mesma armadilha do
+   * `expiraEm` da reserva, noutro campo.
+   *
+   * A tabela do §5 tem duas linhas, e cada uma tem o seu teste.
+   */
+  it('pedido VENCIDO com preco que SUBIU volta para o aceite do cliente', async () => {
+    const variacaoId = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId, quantidade: '2' }]);
+
+    // Vence o pedido e sobe o preco da tabela DELE, pelas rotas da equipe.
+    await vencerPedido(pedido.id);
+    await mudarPrecoNaTabelaDoPedido(pedido.id, variacaoId, '130.00');
+
+    const daEquipe = await verPelaEquipe(pedido.id);
+
+    const depois = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/confirmar`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({
+          itens: daEquipe.itens.map((i) => ({
+            itemId: i.id,
+            quantidadeConfirmada: i.quantidadeSolicitada,
+          })),
+        })
+        .expect(201)
+    ).body as Pedido;
+
+    // NAO confirmou: voltou para o cliente, com o preco novo gravado.
+    expect(depois.status).toBe('AGUARDANDO_ACEITE_CLIENTE');
+    expect(depois.resumoAlteracao).toContain('vencido');
+    expect(depois.itens[0]!.totalItem).toBe('260.00');
+  });
+
+  it('pedido VENCIDO com preco que CAIU confirma pelo menor', async () => {
+    const variacaoId = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId, quantidade: '2' }]);
+
+    await vencerPedido(pedido.id);
+    await mudarPrecoNaTabelaDoPedido(pedido.id, variacaoId, '80.00');
+
+    const daEquipe = await verPelaEquipe(pedido.id);
+
+    const depois = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/confirmar`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({
+          itens: daEquipe.itens.map((i) => ({
+            itemId: i.id,
+            quantidadeConfirmada: i.quantidadeSolicitada,
+          })),
+        })
+        .expect(201)
+    ).body as Pedido;
+
+    // Confirmou, e pelo preco MENOR: o cliente nao perde por ter esperado.
+    expect(depois.status).toBe('CONFIRMADO');
+    expect(depois.itens[0]!.totalItem).toBe('160.00');
+  });
+
+  it('pedido DENTRO do prazo confirma pelo preco congelado, mesmo com a tabela mudada', async () => {
+    const variacaoId = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId, quantidade: '2' }]);
+
+    // Sem vencer: a tabela muda e o pedido NAO acompanha.
+    await mudarPrecoNaTabelaDoPedido(pedido.id, variacaoId, '999.00');
+
+    const daEquipe = await verPelaEquipe(pedido.id);
+
+    const depois = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/confirmar`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({
+          itens: daEquipe.itens.map((i) => ({
+            itemId: i.id,
+            quantidadeConfirmada: i.quantidadeSolicitada,
+          })),
+        })
+        .expect(201)
+    ).body as Pedido;
+
+    expect(depois.status).toBe('CONFIRMADO');
+    expect(depois.itens[0]!.totalItem).toBe('200.00');
   });
 
   it('o pedido do cliente nao carrega disponivel, e o da equipe carrega', async () => {

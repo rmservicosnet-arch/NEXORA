@@ -734,6 +734,29 @@ export class PedidosService {
           });
         }
 
+        /*
+          PRECO VENCIDO — docs/ORDERS.md §5.
+
+          `validoAte` era gravado no envio e NADA o lia: um pedido de tres
+          semanas confirmava pelo preco de tres semanas atras, e ninguem
+          descobria. E a armadilha do `expiraEm` da reserva, no outro campo.
+
+          A regra da tabela do §5:
+            preco atual MENOR ou igual → confirma pelo menor. O cliente ganha.
+            preco atual MAIOR          → nao confirma sozinho: volta ao cliente.
+
+          Confirmar um pedido vencido a um preco maior sem o cliente saber e
+          cobrar algo que ele nao pediu.
+        */
+        const vencido = pedido.validoAte !== null && pedido.validoAte.getTime() < Date.now();
+
+        if (vencido) {
+          const subiu = await this.revalidarPrecoVencido(tx, contexto, pedido, principal);
+          if (subiu) {
+            return { destino: 'AGUARDANDO_ACEITE_CLIENTE' as StatusPedido, semSaldo: false };
+          }
+        }
+
         const config = await tx.tenantConfiguracao.findUnique({
           where: { tenantId: contexto.tenantId },
           select: { prazoReservaHoras: true },
@@ -908,7 +931,12 @@ export class PedidosService {
 
     await this.auditoria.registrar({
       contexto,
-      acao: semSaldo ? 'PEDIDO_CONFIRMADO_SEM_SALDO' : 'PEDIDO_CONFIRMADO',
+      acao:
+        destino === 'AGUARDANDO_ACEITE_CLIENTE'
+          ? 'PEDIDO_PRECO_VENCIDO_PARA_ACEITE'
+          : semSaldo
+            ? 'PEDIDO_CONFIRMADO_SEM_SALDO'
+            : 'PEDIDO_CONFIRMADO',
       entidade: 'pedido',
       entidadeId: id,
       atorNome: principal.nome,
@@ -917,6 +945,145 @@ export class PedidosService {
     });
 
     return this.detalhe(id, principal, true);
+  }
+
+  /**
+   * Revalida o preco de um pedido VENCIDO contra a tabela dele hoje.
+   *
+   * Devolve `true` quando algum item ficou mais caro — e, nesse caso, deixa o
+   * pedido esperando o aceite do cliente, com os precos NOVOS gravados e a
+   * diferenca visivel. Devolve `false` quando nada subiu; os que cairam ja
+   * foram aplicados, porque o cliente nao perde por ter esperado.
+   *
+   * A tabela e a DO PEDIDO, nao a padrao: e a mesma que congelou o preco no
+   * envio, e trocar de tabela aqui mostraria um numero que o cliente nunca viu.
+   */
+  private async revalidarPrecoVencido(
+    tx: ClienteEmTransacao,
+    contexto: Contexto,
+    pedido: { id: string; status: StatusPedido; tabelaPrecoId: string | null },
+    principal: Principal,
+  ): Promise<boolean> {
+    if (!pedido.tabelaPrecoId) {
+      // Sem tabela nao ha com o que comparar: o preco congelado e o unico que
+      // existe, e inventar uma revalidacao seria pior do que nao fazer.
+      return false;
+    }
+
+    const itens = await tx.pedidoItem.findMany({
+      where: { pedidoId: pedido.id, removidoEm: null },
+      select: {
+        id: true,
+        variacaoId: true,
+        precoUnitario: true,
+        quantidadeSolicitada: true,
+        quantidadeConfirmada: true,
+      },
+    });
+
+    if (itens.length === 0) return false;
+
+    const precos = await tx.precoItem.findMany({
+      where: {
+        tabelaPrecoId: pedido.tabelaPrecoId,
+        variacaoId: { in: itens.map((i) => i.variacaoId) },
+      },
+      select: { variacaoId: true, preco: true },
+    });
+
+    const hoje = new Map(precos.map((p) => [p.variacaoId, dec(p.preco.toString())]));
+
+    /*
+      A quantidade que vale aqui e a ACORDADA: o maior entre o que o cliente
+      pediu e o que ja foi confirmado. Antes da confirmacao, `confirmada` e
+      ZERO — usar so ela deixava todo total em 0,00 e o cliente receberia um
+      pedido de R$ 0,00 para aceitar.
+    */
+    const acordada = (item: {
+      quantidadeSolicitada: { toString(): string };
+      quantidadeConfirmada: { toString(): string };
+    }): Dec => {
+      const pedida = dec(item.quantidadeSolicitada.toString());
+      const confirmada = dec(item.quantidadeConfirmada.toString());
+      return confirmada.greaterThan(pedida) ? confirmada : pedida;
+    };
+
+    let subiu = false;
+    const baratearam: { id: string; preco: Dec; quantidade: Dec }[] = [];
+
+    for (const item of itens) {
+      const atual = hoje.get(item.variacaoId);
+      // Item que saiu da tabela nao tem preco novo: o congelado continua
+      // valendo, e a equipe resolve item a item se quiser.
+      if (!atual) continue;
+
+      const congelado = dec(item.precoUnitario.toString());
+
+      if (atual.greaterThan(congelado)) {
+        subiu = true;
+      } else if (atual.lessThan(congelado)) {
+        baratearam.push({ id: item.id, preco: atual, quantidade: acordada(item) });
+      }
+    }
+
+    if (!subiu) {
+      for (const b of baratearam) {
+        await tx.pedidoItem.update({
+          where: { id: b.id },
+          data: {
+            precoUnitario: b.preco.toFixed(2),
+            totalItem: b.preco.times(b.quantidade).toFixed(2),
+          },
+        });
+      }
+
+      if (baratearam.length > 0) {
+        await this.recalcularConfirmado(tx, pedido.id);
+      }
+
+      return false;
+    }
+
+    /*
+      Subiu: grava TODOS os precos de hoje — inclusive os que cairam — e manda
+      para o aceite. Aplicar so os aumentos seria escolher o pior dos dois
+      mundos para o cliente.
+    */
+    for (const item of itens) {
+      const atual = hoje.get(item.variacaoId);
+      if (!atual) continue;
+
+      await tx.pedidoItem.update({
+        where: { id: item.id },
+        data: {
+          precoUnitario: atual.toFixed(2),
+          totalItem: atual.times(acordada(item)).toFixed(2),
+        },
+      });
+    }
+
+    await this.recalcularConfirmado(tx, pedido.id);
+
+    const resumo = 'Preço vencido: a tabela mudou desde o envio e o pedido precisa do seu aceite.';
+
+    this.exigirTransicao(pedido.status, 'AGUARDANDO_ACEITE_CLIENTE');
+
+    await tx.pedido.update({
+      where: { id: pedido.id },
+      data: { status: 'AGUARDANDO_ACEITE_CLIENTE', resumoAlteracao: resumo },
+    });
+
+    await this.registrarEvento(tx, contexto, {
+      pedidoId: pedido.id,
+      deStatus: pedido.status,
+      paraStatus: 'AGUARDANDO_ACEITE_CLIENTE',
+      atorTipo: 'FUNCIONARIO',
+      atorId: principal.id,
+      atorNome: principal.nome,
+      motivo: resumo,
+    });
+
+    return true;
   }
 
   /** Devolve o pedido inteiro ao cliente, com motivo. */
@@ -1302,6 +1469,8 @@ export class PedidosService {
     localId: string;
     clienteId: string;
     tabelaPrecoId: string | null;
+    /** O prazo do preço congelado. A confirmação o LÊ — docs/ORDERS.md §5. */
+    validoAte: Date | null;
     valorSolicitado: { toString(): string };
   }> {
     const pedido = await tx.pedido.findFirst({
@@ -1313,6 +1482,7 @@ export class PedidosService {
         localId: true,
         clienteId: true,
         tabelaPrecoId: true,
+        validoAte: true,
         valorSolicitado: true,
       },
     });
