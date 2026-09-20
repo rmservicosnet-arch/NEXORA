@@ -66,9 +66,31 @@ export type ItemCatalogo = z.infer<typeof itemCatalogoSchema>;
 
 export const buscaCatalogoSchema = z.object({
   termo: z.string().trim().max(120).optional(),
+  categoriaId: z.string().uuid().optional(),
+  /** So o que a loja entrega agora. Aviso, nao teto: o resto continua pedivel. */
+  apenasDisponiveis: z.coerce.boolean().default(false),
   limite: z.coerce.number().int().min(1).max(60).default(24),
 });
 export type BuscaCatalogo = z.infer<typeof buscaCatalogoSchema>;
+
+/**
+ * O catalogo do cliente, com o que a tela precisa dizer em volta dele.
+ *
+ * A TABELA vem junto porque e ela que decide o catalogo inteiro: item sem
+ * preco nela nao existe para este cliente, e uma tela que nao diz de onde vem
+ * o preco deixa o cliente sem como perguntar.
+ *
+ * As CATEGORIAS sao as que ele realmente tem — filtro que oferece uma
+ * categoria vazia e pior do que filtro nenhum.
+ */
+export const catalogoPortalSchema = z.object({
+  tabela: z.string(),
+  categorias: z.array(z.object({ id: z.string(), nome: z.string() })),
+  itens: z.array(itemCatalogoSchema),
+  /** Quantos itens a tabela tem no total, antes de busca e categoria. */
+  totalNaTabela: z.number().int(),
+});
+export type CatalogoPortal = z.infer<typeof catalogoPortalSchema>;
 
 export const novoPedidoSchema = z.object({
   itens: z

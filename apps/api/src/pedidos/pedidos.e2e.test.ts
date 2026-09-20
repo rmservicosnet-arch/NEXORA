@@ -68,6 +68,13 @@ interface Pedido {
   eventos: { paraStatus: string; ator: string | null; motivo: string | null }[];
 }
 
+interface Catalogo {
+  tabela: string;
+  categorias: { id: string; nome: string }[];
+  itens: ItemCatalogo[];
+  totalNaTabela: number;
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const resposta = await http
     .post(rota)
@@ -230,13 +237,85 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
       .set('Authorization', `Bearer ${tokenCliente}`)
       .expect(200);
 
-    const itens = resposta.body as ItemCatalogo[];
-    expect(itens.length).toBeGreaterThan(0);
+    const catalogo = resposta.body as Catalogo;
+    expect(catalogo.itens.length).toBeGreaterThan(0);
 
     // `disponivel` e booleano, e a palavra "quantidade" nao aparece no corpo.
-    expect(itens.every((i) => typeof i.disponivel === 'boolean')).toBe(true);
+    expect(catalogo.itens.every((i) => typeof i.disponivel === 'boolean')).toBe(true);
     expect(resposta.text).not.toContain('quantidade');
     expect(resposta.text).not.toContain('saldo');
+  });
+
+  /**
+   * A tabela decide o catalogo inteiro.
+   *
+   * Item sem preco nela nao existe para este cliente. Sem o nome dela na
+   * resposta, a tela nao tem como dizer de onde vem o preco — e o cliente nao
+   * sabe o que perguntar quando falta alguma coisa.
+   */
+  it('o catalogo diz de qual tabela vem o preco', async () => {
+    await itemPublicado('80.00', '10');
+
+    const catalogo = (
+      await http
+        .get('/api/portal/pedidos/catalogo?limite=10')
+        .set('Authorization', `Bearer ${tokenCliente}`)
+        .expect(200)
+    ).body as Catalogo;
+
+    expect(catalogo.tabela.length).toBeGreaterThan(0);
+    expect(catalogo.totalNaTabela).toBeGreaterThanOrEqual(catalogo.itens.length);
+  });
+
+  /** Pilula que abre em nada e pior do que pilula nenhuma. */
+  it('as categorias oferecidas tem item de verdade', async () => {
+    await itemPublicado('80.00', '10');
+
+    const catalogo = (
+      await http
+        .get('/api/portal/pedidos/catalogo?limite=60')
+        .set('Authorization', `Bearer ${tokenCliente}`)
+        .expect(200)
+    ).body as Catalogo;
+
+    for (const c of catalogo.categorias) {
+      const recorte = (
+        await http
+          .get(`/api/portal/pedidos/catalogo?limite=60&categoriaId=${c.id}`)
+          .set('Authorization', `Bearer ${tokenCliente}`)
+          .expect(200)
+      ).body as Catalogo;
+
+      expect(recorte.itens.length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * "So pronta entrega" e escolha do CLIENTE, nao recorte da loja: sob
+   * encomenda continua pedivel quando o filtro esta desligado.
+   */
+  it('o filtro de pronta entrega devolve so o que tem saldo', async () => {
+    await itemPublicado('80.00', '10');
+
+    const so = (
+      await http
+        .get('/api/portal/pedidos/catalogo?limite=60&apenasDisponiveis=true')
+        .set('Authorization', `Bearer ${tokenCliente}`)
+        .expect(200)
+    ).body as Catalogo;
+
+    expect(so.itens.every((i) => i.disponivel)).toBe(true);
+
+    const todos = (
+      await http
+        .get('/api/portal/pedidos/catalogo?limite=60')
+        .set('Authorization', `Bearer ${tokenCliente}`)
+        .expect(200)
+    ).body as Catalogo;
+
+    expect(so.itens.length).toBeLessThanOrEqual(todos.itens.length);
+    // O total da tabela nao muda com filtro: ele descreve a tabela, nao a busca.
+    expect(so.totalNaTabela).toBe(todos.totalNaTabela);
   });
 
   it('o pedido do cliente nao carrega disponivel, e o da equipe carrega', async () => {

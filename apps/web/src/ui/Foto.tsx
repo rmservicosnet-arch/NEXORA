@@ -16,6 +16,7 @@ export function Foto({
   alt,
   className,
   raiz = '/midia',
+  seFalhar,
 }: {
   readonly imagemId: string;
   readonly alt: string;
@@ -26,6 +27,15 @@ export function Foto({
    * alcança imagem de produto publicado.
    */
   readonly raiz?: '/midia' | '/portal/midia';
+  /**
+   * O que desenhar quando os bytes não vierem.
+   *
+   * Sem isto, a falha aparece em vermelho — e é assim que deve ser nas telas
+   * da equipe: foto quebrada é problema dela, e silêncio seria pior. No
+   * catálogo do CLIENTE a mesma caixa vira uma parede de erros numa loja, por
+   * um defeito que não é dele; ali o item apenas não tem foto para mostrar.
+   */
+  readonly seFalhar?: React.ReactNode;
 }) {
   const [endereco, setEndereco] = useState<string | null>(null);
 
@@ -54,6 +64,10 @@ export function Foto({
       setEndereco(null);
     };
   }, [consulta.data]);
+
+  if (consulta.isError && seFalhar !== undefined) {
+    return <>{seFalhar}</>;
+  }
 
   if (consulta.isError) {
     return (

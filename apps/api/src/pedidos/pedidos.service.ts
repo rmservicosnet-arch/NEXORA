@@ -15,6 +15,7 @@ import type {
   FiltroPedidos,
   AjusteQuantidadeItem,
   InclusaoItem,
+  CatalogoPortal,
   ItemCatalogo,
   NovoPedido,
   PaginaPedidos,
@@ -95,7 +96,7 @@ export class PedidosService {
    * como booleano. Nunca quantidade — nem aqui, nem em lugar nenhum do
    * portal. docs/ORDERS.md §7.
    */
-  async catalogo(busca: BuscaCatalogo, principal: Principal): Promise<ItemCatalogo[]> {
+  async catalogo(busca: BuscaCatalogo, principal: Principal): Promise<CatalogoPortal> {
     return comEscopoAtual(this.prisma, async (tx) => {
       const { tabelaPrecoId, local } = await this.contextoDoCliente(tx, principal);
 
@@ -108,10 +109,46 @@ export class PedidosService {
         });
       }
 
+      /*
+        A tabela e as categorias que ESTE cliente tem.
+
+        A tela precisa dizer de onde vem o preco: item sem preco na tabela dele
+        nao existe no catalogo, e sem esse nome o cliente nao sabe o que
+        perguntar para a loja. As categorias sao as que ele realmente tem —
+        uma pilula que abre em nada e pior do que pilula nenhuma.
+      */
+      const visivel = {
+        status: 'ATIVO' as const,
+        publicadoNoCatalogo: true,
+        variacoes: {
+          some: { status: 'ATIVO' as const, precos: { some: { tabelaPrecoId } } },
+        },
+      };
+
+      const [tabela, categorias, totalNaTabela] = await Promise.all([
+        tx.tabelaPreco.findFirst({ where: { id: tabelaPrecoId }, select: { nome: true } }),
+        tx.categoria.findMany({
+          where: { produtos: { some: visivel } },
+          select: { id: true, nome: true },
+          orderBy: { nome: 'asc' },
+        }),
+        tx.variacao.count({
+          where: {
+            status: 'ATIVO',
+            produto: { status: 'ATIVO', publicadoNoCatalogo: true },
+            precos: { some: { tabelaPrecoId } },
+          },
+        }),
+      ]);
+
       const variacoes = await tx.variacao.findMany({
         where: {
           status: 'ATIVO',
-          produto: { status: 'ATIVO', publicadoNoCatalogo: true },
+          produto: {
+            status: 'ATIVO',
+            publicadoNoCatalogo: true,
+            ...(busca.categoriaId ? { categoriaId: busca.categoriaId } : {}),
+          },
           ...(busca.termo
             ? {
                 OR: [
@@ -123,7 +160,12 @@ export class PedidosService {
             : {}),
         },
         orderBy: { sku: 'asc' },
-        take: busca.limite,
+        /*
+          Um a mais do que o pedido quando o filtro de disponibilidade esta
+          ligado: a disponibilidade so se sabe depois de calcular item a item,
+          e cortar antes devolveria menos linhas do que cabem na pagina.
+        */
+        take: busca.apenasDisponiveis ? busca.limite * 3 : busca.limite,
         include: {
           produto: {
             select: {
@@ -150,6 +192,17 @@ export class PedidosService {
         }
 
         const disponivel = await this.disponivel(tx, v.id, local.id);
+        const prontaEntrega = disponivel.greaterThan(0);
+
+        // "Sob encomenda" continua pedivel: o filtro e escolha do cliente, e a
+        // loja decide o que consegue atender. Esconder seria decidir por ele.
+        if (busca.apenasDisponiveis && !prontaEntrega) {
+          continue;
+        }
+
+        if (itens.length >= busca.limite) {
+          break;
+        }
 
         itens.push({
           variacaoId: v.id,
@@ -159,11 +212,16 @@ export class PedidosService {
           imagemPrincipalId: v.produto.imagens[0]?.id ?? null,
           preco: dec(preco.preco.toString()).toFixed(2),
           // Booleano, nao numero.
-          disponivel: disponivel.greaterThan(0),
+          disponivel: prontaEntrega,
         });
       }
 
-      return itens;
+      return {
+        tabela: tabela?.nome ?? 'Padrão',
+        categorias,
+        itens,
+        totalNaTabela,
+      };
     });
   }
 

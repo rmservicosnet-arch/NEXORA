@@ -19,7 +19,7 @@ import {
   type FiltroPedidos,
   type AjusteQuantidadeItem,
   type InclusaoItem,
-  type ItemCatalogo,
+  type CatalogoPortal,
   type NovoPedido,
   type PaginaPedidos,
   type Pedido,
@@ -158,7 +158,7 @@ export class PortalPedidosController {
   async catalogo(
     @Query(new ZodPipe(buscaCatalogoSchema)) busca: BuscaCatalogo,
     @PrincipalAtual() principal: Principal,
-  ): Promise<ItemCatalogo[]> {
+  ): Promise<CatalogoPortal> {
     return this.pedidos.catalogo(busca, principal);
   }
 

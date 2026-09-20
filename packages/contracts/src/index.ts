@@ -109,6 +109,7 @@ export {
 export {
   aceitePedidoSchema,
   buscaCatalogoSchema,
+  catalogoPortalSchema,
   confirmacaoPedidoSchema,
   contagensPedidosSchema,
   devolucaoPedidoSchema,
@@ -131,6 +132,7 @@ export {
   statusPedidoSchema,
   type AceitePedido,
   type BuscaCatalogo,
+  type CatalogoPortal,
   type ConfirmacaoPedido,
   type ContagensPedidos,
   type DevolucaoPedido,
