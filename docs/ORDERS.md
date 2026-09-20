@@ -640,6 +640,31 @@ troca a senha ou está se protegendo de um acesso indevido, ou acabou de usar
 uma provisória; nos dois casos, sessão antiga sobrevivente é o que não se
 quer. A mesma rota existe para o funcionário, em `/auth/senha`.
 
+### 10.9 Configurações: dez campos, nenhum editável
+
+`TenantConfiguracao` tem dez campos. O sistema lia seis — `modoCheckout`
+decidia se o carrinho do cliente vira venda ou pedido, `prazoReservaHoras`
+decidia quando o estoque reservado volta para a prateleira,
+`permitirSaldoNegativo` decidia se o balcão aceita vender o que não tem — e
+**nenhum era editável pela aplicação**. Só o seed os definia.
+
+Existe agora `GET`/`PATCH /configuracao`, atrás de `configuracao.visualizar`
+e `configuracao.editar`, e a tela `/configuracoes`.
+
+**A resposta declara o que ainda não funciona.** `momentoCobranca` e
+`pushDetalhado` existem no banco, são graváveis, e nenhum código os consulta
+— a cobrança é sempre no faturamento (§10.3) e não há envio de notificação
+nenhum. Eles vêm em `semEfeito`, e a tela os mostra desabilitados com o selo
+"ainda sem efeito".
+
+Oferecer uma chave que não faz nada é pior do que não oferecer: a pessoa
+configura, confia, e o comportamento não muda — e só descobre quando o
+dinheiro não bate. Esconder também não serve, porque o campo volta a parecer
+esquecido. Mostrar e dizer a verdade é o que sobra.
+
+O teste não confere que o `PATCH` devolveu 200: muda a validade para 96 horas
+e confere que o **pedido seguinte nasce com 96 horas**.
+
 ### O que ainda não existe
 
 - **Notificação** de pedido novo, alterado ou aguardando aceite. O modelo está

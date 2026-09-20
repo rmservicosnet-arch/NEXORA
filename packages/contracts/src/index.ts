@@ -60,6 +60,18 @@ export {
   type TabelaPreco,
 } from './tabelas.js';
 
+export {
+  alteracaoConfiguracaoSchema,
+  configuracaoEmpresaSchema,
+  modoCaixaSchema,
+  modoCheckoutConfigSchema,
+  momentoCobrancaSchema,
+  type AlteracaoConfiguracao,
+  type ConfiguracaoEmpresa,
+  type ModoCaixa,
+  type MomentoCobranca,
+} from './configuracao.js';
+
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {

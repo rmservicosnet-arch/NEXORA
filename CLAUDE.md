@@ -144,6 +144,7 @@ o runtime.
 | "Fora da tela" contado sem perguntar se dá para rolar | Tabela larga tem conteúdo à direita de propósito. O defeito é o que está fora E sem ancestral que role: some sem aviso |
 | Aba cujo rótulo, contagem e consulta discordam | "Aguardando confirmação" consultava `apenasFila`, que inclui confirmado; o número ao lado contava só os aguardando. Cada aba lista EXATAMENTE o que a contagem dela conta |
 | Vários recortes do mesmo campo espalhados no `where` | `status`, `statusEm` e `apenasFila` como spreads: o último sobrescreve o anterior em silêncio. Resolva num só lugar |
+| Chave de configuração que não faz nada | Pior do que não existir: a pessoa configura, confia, e nada muda. Declare em `semEfeito` e desabilite na tela — esconder faz o campo parecer esquecido |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |
