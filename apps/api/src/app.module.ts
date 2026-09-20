@@ -22,6 +22,7 @@ import { MidiaModule } from './midia/midia.module';
 import { ProdutosModule } from './produtos/produtos.module';
 import { SaudeController } from './saude/saude.controller';
 import { VendasModule } from './vendas/vendas.module';
+import { VisaoGeralModule } from './visao-geral/visao-geral.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { VendasModule } from './vendas/vendas.module';
     ClientesModule,
     ConfiguracoesModule,
     VendasModule,
+    VisaoGeralModule,
     PedidosModule,
     MidiaModule,
   ],

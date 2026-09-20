@@ -72,6 +72,19 @@ export {
   type MomentoCobranca,
 } from './configuracao.js';
 
+export {
+  filtroVisaoGeralSchema,
+  itemNegativoSchema,
+  pontoDoDiaSchema,
+  vendaRecenteSchema,
+  visaoGeralSchema,
+  type FiltroVisaoGeral,
+  type ItemNegativo,
+  type PontoDoDia,
+  type VendaRecente,
+  type VisaoGeral,
+} from './visao-geral.js';
+
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {
