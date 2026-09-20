@@ -428,6 +428,67 @@ export class AuthService {
     }).catch(() => undefined);
   }
 
+  /**
+   * Troca a senha do próprio dono da sessão.
+   *
+   * Serve aos dois domínios: a tabela muda, a regra não.
+   *
+   * Exige a senha atual mesmo já havendo sessão válida. Sem isso, uma aba
+   * esquecida aberta no balcão vira troca de senha por quem passar ali — e o
+   * dono perde a conta sem nunca ter digitado nada.
+   *
+   * Depois da troca, TODA sessão daquele principal cai, inclusive esta. Quem
+   * troca a senha ou está se protegendo de um acesso indevido, ou acabou de
+   * usar uma provisória; nos dois casos, sessão antiga sobrevivente é
+   * exatamente o que não se quer.
+   */
+  async trocarSenha(principal: Principal, senhaAtual: string, novaSenha: string): Promise<void> {
+    if (senhaAtual === novaSenha) {
+      throw new UnauthorizedException({
+        codigo: 'SENHA_IGUAL_A_ATUAL',
+        mensagem: 'A nova senha precisa ser diferente da atual.',
+      });
+    }
+
+    const contexto = this.contextoDe(principal);
+    const cliente = principal.dominio === DOMINIO_CLIENTE;
+
+    await comEscopo(this.prisma, contexto, async (tx) => {
+      const atual = cliente
+        ? await tx.clienteAcesso.findUnique({
+            where: { id: principal.id },
+            select: { senhaHash: true },
+          })
+        : await tx.usuario.findUnique({
+            where: { id: principal.id },
+            select: { senhaHash: true },
+          });
+
+      if (!atual || !(await conferirSenha(atual.senhaHash, senhaAtual))) {
+        throw new UnauthorizedException({
+          codigo: 'SENHA_ATUAL_INCORRETA',
+          mensagem: 'A senha atual não confere.',
+        });
+      }
+
+      const senhaHash = await gerarHashSenha(novaSenha);
+
+      if (cliente) {
+        await tx.clienteAcesso.update({ where: { id: principal.id }, data: { senhaHash } });
+        await tx.sessaoRefresh.updateMany({
+          where: { clienteAcessoId: principal.id, revogadoEm: null },
+          data: { revogadoEm: new Date(), motivoRevogacao: 'SENHA_TROCADA' },
+        });
+      } else {
+        await tx.usuario.update({ where: { id: principal.id }, data: { senhaHash } });
+        await tx.sessaoRefresh.updateMany({
+          where: { usuarioId: principal.id, revogadoEm: null },
+          data: { revogadoEm: new Date(), motivoRevogacao: 'SENHA_TROCADA' },
+        });
+      }
+    });
+  }
+
   contextoDe(principal: Principal): Contexto {
     return {
       tenantId: principal.tenantId,

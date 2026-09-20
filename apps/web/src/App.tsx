@@ -25,6 +25,7 @@ import { PortalCatalogo } from './paginas/portal/Catalogo';
 import { PortalEntrar } from './paginas/portal/Entrar';
 import { PortalMeuPedido } from './paginas/portal/MeuPedido';
 import { PortalMeusPedidos } from './paginas/portal/MeusPedidos';
+import { PortalSenha } from './paginas/portal/Senha';
 import { EstadoVazio } from './ui/Estados';
 
 const cliente = new QueryClient({
@@ -61,6 +62,7 @@ function AreaDoPortal() {
           <Route path="carrinho" element={<PortalCarrinho />} />
           <Route path="pedidos" element={<PortalMeusPedidos />} />
           <Route path="pedidos/:pedidoId" element={<PortalMeuPedido />} />
+          <Route path="senha" element={<PortalSenha />} />
         </Route>
       </Routes>
     </ProvedorSessaoPortal>

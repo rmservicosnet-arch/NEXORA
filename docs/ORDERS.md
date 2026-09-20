@@ -593,17 +593,61 @@ violação de chave.
 O teste que prova a criação não é "a rota devolveu 201": é entrar no portal
 com a senha gerada e carregar o catálogo.
 
+### 10.6 Expiração: o prazo que ninguém lia
+
+`expiraEm` era gravado em toda reserva desde o início, e nenhuma consulta o
+consultava. Uma reserva ATIVA de pedido que ninguém confirmou nem cancelou
+prendia a mercadoria **para sempre**: passados os sete dias do padrão, o
+catálogo dizia "sob encomenda" para item que estava na prateleira.
+
+O filtro entrou no **cálculo**, não só numa rotina: `disponivel_no_local`
+ignora reserva vencida. A resposta fica certa mesmo que nenhuma rotina rode.
+
+`npm run expirar` arruma o *dado* — marca reservas como `EXPIRADA` e pedidos
+vencidos como `EXPIRADO`, com linha na `pedido_evento` para o cliente não ver
+o status mudar sem explicação. Roda por cron, de hora em hora. **Não** é um
+agendador dentro da API: com duas instâncias no ar, um `setInterval` em cada
+uma roda a rotina duas vezes e as duas disputam as mesmas linhas.
+
+### 10.7 Duas decisões certas somando uma errada
+
+`estoque_reserva` tem política RESTRICTIVE que devolve zero linhas quando
+`app.cliente_id` está definido — em todo o portal. Está certo: reserva revela
+quantidade, e §7 diz que o cliente vê apenas disponível ou não.
+
+`disponivel` era `saldo − reservas`. No portal, virava `saldo − 0`. O catálogo
+anunciava **"pronta entrega" para item inteiramente reservado** por pedidos já
+confirmados de outros clientes.
+
+A conferência da equipe nunca foi afetada — ela roda como funcionário, onde as
+reservas aparecem. Nunca houve compromisso de estoque a descoberto; o defeito
+era informar mal quem compra.
+
+A saída não foi abrir a tabela. `disponivel_no_local` é `SECURITY DEFINER` e
+devolve **um número**: o cliente não enumera reserva nenhuma, não descobre de
+quem são nem quantas existem — recebe a mesma resposta que a equipe receberia.
+Como a função ignora o RLS por definição, o `tenant_id` é filtrado à mão
+dentro dela, em cada subconsulta.
+
+### 10.8 O cliente troca a própria senha
+
+`POST /portal/auth/senha`, com a senha atual exigida **mesmo havendo sessão
+válida**: sessão prova que alguém entrou, não que é o dono agora — e uma aba
+esquecida aberta no balcão viraria troca de senha por quem passasse ali.
+
+A troca derruba todas as sessões daquele acesso, inclusive a que trocou. Quem
+troca a senha ou está se protegendo de um acesso indevido, ou acabou de usar
+uma provisória; nos dois casos, sessão antiga sobrevivente é o que não se
+quer. A mesma rota existe para o funcionário, em `/auth/senha`.
+
 ### O que ainda não existe
 
 - **Notificação** de pedido novo, alterado ou aguardando aceite. O modelo está
   em [NOTIFICATIONS.md](NOTIFICATIONS.md); nada dispara ainda.
-- **Expiração automática** de reserva e de pedido. `expiraEm` e `validoAte` são
-  gravados, mas nenhuma rotina os varre. Ver §4.
 - **Reenvio** de um pedido devolvido pelo cliente.
 - **`momentoCobranca = NA_CONFIRMACAO`**: hoje a cobrança é sempre no
   faturamento.
 - **Revalidação de preço vencido** na confirmação (§5): `validoAte` é gravado e
   ainda não é conferido.
-- **Troca de senha pelo próprio cliente.** Ele recebe uma provisória e ela
-  continua valendo; não há "alterar minha senha" no portal, nem exigência de
-  troca no primeiro acesso.
+- **Exigir troca no primeiro acesso.** A senha provisória continua valendo
+  até o cliente decidir trocá-la (§10.8).

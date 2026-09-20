@@ -134,6 +134,10 @@ o runtime.
 | Senha de terceiro digitada por quem cadastra | O servidor gera, mostra uma vez e guarda só o hash. Poder mostrar de novo significa ter guardado |
 | Teste procurando a palavra "senha" no JSON | Um e-mail com ela derruba o teste sem nada ter vazado. Procure `senhaHash` e `$argon2` |
 | "Sem ponto de corte" lido como "quebra no celular" | Tabela larga dentro de `overflow-x-auto` rola e não vaza. Meça `scrollWidth` contra `innerWidth` no navegador antes de afirmar |
+| Cálculo que soma tabela escondida pelo RLS | `estoque_reserva` é invisível ao portal, e `saldo − reservas` virou `saldo − 0`: o catálogo anunciava item todo reservado. Use `disponivel_no_local`, função `SECURITY DEFINER` que devolve só o número |
+| `SECURITY DEFINER` sem filtro de tenant | A função ignora o RLS por definição. O `tenant_id` tem de ser filtrado à mão, em cada subconsulta, ou ela vira o vazamento que o RLS impede |
+| Agendador dentro da API | Duas instâncias no ar rodam a rotina duas vezes e disputam as mesmas linhas. Quem agenda é o sistema operacional: `npm run expirar` por cron |
+| Prazo gravado que ninguém lê | `expiraEm` existia desde o início e nada o consultava: reserva vencida prendia estoque para sempre. O filtro vai no CÁLCULO, não só na rotina de limpeza |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

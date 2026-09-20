@@ -195,7 +195,10 @@ async function main(): Promise<void> {
   // a aplicação se RECUSA a iniciar se o papel conectado tiver BYPASSRLS ou
   // for dono das tabelas. Ver docs/TENANCY.md §2.
   await admin.query(`ALTER ROLE ${identificador(migrator.usuario)} CREATEDB BYPASSRLS`);
-  ok(`"${migrator.usuario}" com CREATEDB e BYPASSRLS`, 'identidade de migração, nunca da aplicação');
+  ok(
+    `"${migrator.usuario}" com CREATEDB e BYPASSRLS`,
+    'identidade de migração, nunca da aplicação',
+  );
 
   const bancoExiste = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [banco]);
 

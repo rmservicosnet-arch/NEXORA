@@ -19,3 +19,16 @@ export const esquemaRenovacao = z.object({
 });
 
 export type RenovacaoDto = z.infer<typeof esquemaRenovacao>;
+
+/**
+ * Troca de senha pelo próprio dono.
+ *
+ * Exige a senha atual mesmo havendo sessão válida: uma aba esquecida aberta
+ * no balcão não pode virar troca de senha por quem passar por ali.
+ */
+export const esquemaTrocaDeSenha = z.object({
+  senhaAtual: z.string().min(1, 'Informe a senha atual'),
+  novaSenha: z.string().min(10, 'A nova senha precisa ter ao menos 10 caracteres'),
+});
+
+export type TrocaDeSenhaDto = z.infer<typeof esquemaTrocaDeSenha>;

@@ -85,9 +85,7 @@ async function main(): Promise<void> {
           const deveTer = new Set(def.permissoes);
 
           const aAdicionar = [...deveTer].filter((c) => !temAgora.has(c));
-          const aRemover = atuais
-            .map((a) => a.permissaoChave)
-            .filter((c) => !deveTer.has(c));
+          const aRemover = atuais.map((a) => a.permissaoChave).filter((c) => !deveTer.has(c));
 
           for (const permissaoChave of aAdicionar) {
             await tx.perfilPermissao.create({

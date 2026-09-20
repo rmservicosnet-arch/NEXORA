@@ -17,7 +17,14 @@ import { ExigeDominio, PrincipalAtual, Publico } from '../comum/decoradores';
 import { ZodPipe } from '../comum/zod.pipe';
 import type { Ambiente } from '../configuracao';
 import { AuthService, type Sessao } from './auth.service';
-import { esquemaEntrada, esquemaRenovacao, type EntradaDto, type RenovacaoDto } from './auth.dto';
+import {
+  esquemaEntrada,
+  esquemaRenovacao,
+  esquemaTrocaDeSenha,
+  type EntradaDto,
+  type RenovacaoDto,
+  type TrocaDeSenhaDto,
+} from './auth.dto';
 import { DOMINIO_CLIENTE, DOMINIO_FUNCIONARIO, type Dominio, type Principal } from './dominios';
 
 interface RespostaSessao {
@@ -48,6 +55,21 @@ abstract class AuthControllerBase {
     protected readonly auth: AuthService,
     protected readonly config: ConfigService<Ambiente, true>,
   ) {}
+
+  /**
+   * Troca a senha do dono da sessão.
+   *
+   * Mora na base porque a regra não muda entre os domínios — e as duas rotas
+   * continuam separadas, cada uma no seu controller, como tudo aqui.
+   *
+   * Limpa o cookie: a troca derruba todas as sessões daquele principal,
+   * inclusive esta. Deixar o cookie na máquina faria o próximo carregamento
+   * tentar renovar com um refresh já revogado.
+   */
+  protected async trocar(principal: Principal, dto: TrocaDeSenhaDto, res: Response): Promise<void> {
+    await this.auth.trocarSenha(principal, dto.senhaAtual, dto.novaSenha);
+    res.clearCookie(this.nomeDoCookie, { path: '/' });
+  }
 
   protected responder(sessao: Sessao, dto: { canal: string }, res: Response): RespostaSessao {
     const corpo: RespostaSessao = {
@@ -154,6 +176,24 @@ export class AuthController extends AuthControllerBase {
   }
 
   /** Quem sou eu. O front usa para montar o menu conforme as permissões. */
+
+  /**
+   * Trocar a própria senha.
+   *
+   * Não é `@Publico()`: precisa de sessão. E precisa da senha atual mesmo
+   * assim — sessão prova que alguém entrou, não que é o dono de novo.
+   */
+  @Post('senha')
+  @HttpCode(204)
+  @Throttle({ padrao: { limit: 5, ttl: 60_000 } })
+  async trocarSenha(
+    @Body(new ZodPipe(esquemaTrocaDeSenha)) dto: TrocaDeSenhaDto,
+    @PrincipalAtual() principal: Principal,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.trocar(principal, dto, res);
+  }
+
   @Get('eu')
   eu(@PrincipalAtual() principal: Principal): RespostaSessao['usuario'] {
     return {
@@ -218,6 +258,23 @@ export class PortalAuthController extends AuthControllerBase {
       await this.auth.sair(token, this.dominio);
     }
     res.clearCookie(this.nomeDoCookie, { path: '/' });
+  }
+
+  /**
+   * Trocar a própria senha.
+   *
+   * Não é `@Publico()`: precisa de sessão. E precisa da senha atual mesmo
+   * assim — sessão prova que alguém entrou, não que é o dono de novo.
+   */
+  @Post('senha')
+  @HttpCode(204)
+  @Throttle({ padrao: { limit: 5, ttl: 60_000 } })
+  async trocarSenha(
+    @Body(new ZodPipe(esquemaTrocaDeSenha)) dto: TrocaDeSenhaDto,
+    @PrincipalAtual() principal: Principal,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.trocar(principal, dto, res);
   }
 
   @Get('eu')

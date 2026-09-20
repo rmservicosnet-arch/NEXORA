@@ -28,9 +28,20 @@ function Barra() {
       <div className="flex h-[54px] items-center gap-3 px-4">
         <Marca compacto />
         <div className="flex-1" />
-        <span className="hidden truncate text-[12.5px] text-neutral-500 sm:block">
-          {cliente?.nome}
-        </span>
+        {/* O nome é o caminho para a conta: um item a mais na barra de abas
+            competiria com Catálogo, Carrinho e Meus pedidos, que é onde o
+            cliente realmente vai. */}
+        <NavLink
+          to="/portal/senha"
+          className={({ isActive }) =>
+            juntar(
+              'max-w-[150px] truncate text-[12.5px] no-underline',
+              isActive ? 'font-semibold text-primary-700' : 'text-neutral-500 hover:underline',
+            )
+          }
+        >
+          {cliente?.nome ?? 'Minha conta'}
+        </NavLink>
         <button
           type="button"
           onClick={() => void sair()}

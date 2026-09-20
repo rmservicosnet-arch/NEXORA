@@ -7,6 +7,7 @@ import { Marca } from '../../layout/Marca';
 import { Aviso } from '../../ui/Aviso';
 import { Botao } from '../../ui/Botao';
 import { Campo } from '../../ui/Campo';
+import { RECADO } from './Senha';
 
 export function PortalEntrar() {
   const { cliente, restaurando, entrar } = useSessaoPortal();
@@ -16,6 +17,17 @@ export function PortalEntrar() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  // Quem acabou de trocar a senha chega aqui deslogado de propósito; sem
+  // isto a tela parece uma sessão que caiu sozinha. Lido uma vez e apagado.
+  const [recado] = useState(() => {
+    try {
+      const guardado = sessionStorage.getItem(RECADO);
+      sessionStorage.removeItem(RECADO);
+      return guardado;
+    } catch {
+      return null;
+    }
+  });
   const [enviando, setEnviando] = useState(false);
 
   if (restaurando) {
@@ -60,6 +72,8 @@ export function PortalEntrar() {
             Monte seu pedido e acompanhe a confirmação da loja.
           </p>
         </div>
+
+        {recado ? <Aviso tom="sucesso">{recado}</Aviso> : null}
 
         {erro ? (
           <Aviso tom="perigo" titulo="Não foi possível entrar">

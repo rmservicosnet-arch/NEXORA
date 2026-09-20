@@ -926,24 +926,31 @@ export class PedidosService {
    * ao confirmar. O saldo fisico continua sendo o de `saldo_estoque`: reserva
    * nao e movimentacao. docs/ORDERS.md §4.
    */
+  /**
+   * Disponivel = saldo − reservas ativas nao vencidas, no local.
+   *
+   * Passa por `disponivel_no_local`, funcao SQL, e nao por duas consultas do
+   * Prisma. O motivo e o RLS: `estoque_reserva` tem politica RESTRICTIVE que
+   * devolve ZERO linhas quando `app.cliente_id` esta definido — ou seja, em
+   * todo o portal. A decisao esta certa (reserva revela quantidade, e o
+   * cliente so ve disponivel/indisponivel), mas com ela `saldo − reservas`
+   * virava `saldo − 0`, e o catalogo anunciava "pronta entrega" para item
+   * inteiramente reservado.
+   *
+   * A funcao e `SECURITY DEFINER` e devolve so um NUMERO: o cliente nao
+   * enumera reserva nenhuma, so recebe a mesma resposta que a equipe receberia.
+   * O filtro de tenant e feito dentro dela, a mao — ver a migracao.
+   */
   private async disponivel(
     tx: ClienteEmTransacao,
     variacaoId: string,
     localId: string,
   ): Promise<Dec> {
-    const saldo = await tx.saldoEstoque.findFirst({
-      where: { variacaoId, localId },
-      select: { quantidade: true },
-    });
+    const linhas = await tx.$queryRaw<{ disponivel: string }[]>`
+      SELECT disponivel_no_local(${variacaoId}::uuid, ${localId}::uuid)::text AS disponivel
+    `;
 
-    const reservado = await tx.estoqueReserva.aggregate({
-      where: { variacaoId, localId, status: 'ATIVA' },
-      _sum: { quantidade: true },
-    });
-
-    return dec((saldo?.quantidade ?? 0).toString()).minus(
-      dec((reservado._sum.quantidade ?? 0).toString()),
-    );
+    return dec(linhas[0]?.disponivel ?? '0');
   }
 
   private async contextoDoCliente(
