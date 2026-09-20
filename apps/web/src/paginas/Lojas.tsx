@@ -28,6 +28,9 @@ export function Lojas() {
   const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState('');
   const [localPadrao, setLocalPadrao] = useState('Balcão');
+  /** Vazio = estoque próprio. Preenchido = compartilha o daquela loja. */
+  const [compartilharCom, setCompartilharCom] = useState('');
+  const [mostrarInativas, setMostrarInativas] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const consulta = useQuery({
@@ -39,12 +42,15 @@ export function Lojas() {
     mutationFn: () =>
       pedir<{ id: string }>('/lojas', {
         method: 'POST',
-        body: { nome: nome.trim(), localPadrao: localPadrao.trim() || 'Balcão' },
+        body: compartilharCom
+          ? { nome: nome.trim(), compartilharCom }
+          : { nome: nome.trim(), localPadrao: localPadrao.trim() || 'Balcão' },
       }),
     onSuccess: async () => {
       setCriando(false);
       setNome('');
       setLocalPadrao('Balcão');
+      setCompartilharCom('');
       setErro(null);
       await fila.invalidateQueries({ queryKey: ['lojas'] });
     },
@@ -53,7 +59,10 @@ export function Lojas() {
     },
   });
 
-  const lojas = consulta.data ?? [];
+  const todas = consulta.data ?? [];
+  const inativas = todas.filter((l) => l.status === 'INATIVO').length;
+  // Loja desativada continua existindo — mas não é o que se vem ver aqui.
+  const lojas = mostrarInativas ? todas : todas.filter((l) => l.status === 'ATIVO');
   const podeCriar = pode(PERM.loja.criar);
 
   return (
@@ -70,12 +79,26 @@ export function Lojas() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 sm:p-6">
-        <div>
-          <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">Lojas</h1>
-          <p className="mt-0.5 text-[13.5px] text-neutral-500">
-            {lojas.length} {lojas.length === 1 ? 'loja' : 'lojas'} · você vê apenas aquelas às quais
-            tem vínculo · permissão diz o que você pode fazer, vínculo diz onde
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">Lojas</h1>
+            <p className="mt-0.5 text-[13.5px] text-neutral-500">
+              {lojas.length} {lojas.length === 1 ? 'loja' : 'lojas'} · você vê apenas aquelas às
+              quais tem vínculo · permissão diz o que você pode fazer, vínculo diz onde
+            </p>
+          </div>
+
+          {inativas > 0 ? (
+            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-neutral-600">
+              <input
+                type="checkbox"
+                checked={mostrarInativas}
+                onChange={(e) => setMostrarInativas(e.target.checked)}
+                className="size-3.5"
+              />
+              Mostrar {inativas} {inativas === 1 ? 'desativada' : 'desativadas'}
+            </label>
+          ) : null}
         </div>
 
         {erro ? (
@@ -86,23 +109,93 @@ export function Lojas() {
 
         {criando ? (
           <section className="flex flex-col gap-3 rounded-md border border-neutral-100 bg-white p-4 shadow-sm">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Campo
-                rotulo="Nome da loja"
-                value={nome}
-                autoFocus
-                onChange={(e) => setNome(e.target.value)}
-                placeholder="Loja Shopping"
-                ajuda="O código sai do nome: Loja Shopping vira LOJA_SHOPPING."
-              />
+            <Campo
+              rotulo="Nome da loja"
+              value={nome}
+              autoFocus
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Loja Shopping"
+              ajuda="O código sai do nome: Loja Shopping vira LOJA_SHOPPING."
+              className="max-w-[420px]"
+            />
+
+            {/*
+              Estoque próprio ou compartilhado é decisão de quem abre a loja.
+              Compartilhar não copia nem transfere nada: a mercadoria continua
+              onde está, e as duas lojas vendem do mesmo lugar.
+            */}
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={compartilharCom === ''}
+                onClick={() => setCompartilharCom('')}
+                className={juntar(
+                  'rounded-lg border p-3.5 text-left',
+                  compartilharCom === ''
+                    ? 'border-primary-600 bg-primary-50'
+                    : 'border-neutral-200 bg-white hover:bg-neutral-25',
+                )}
+              >
+                <span className="block text-[13.5px] font-semibold text-neutral-900">
+                  Estoque próprio
+                </span>
+                <span className="mt-1 block text-[12px] leading-[17px] text-neutral-500">
+                  A loja nasce com um local seu, e o saldo dela é dela.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={compartilharCom !== ''}
+                disabled={lojas.length === 0}
+                onClick={() => setCompartilharCom(lojas[0]?.id ?? '')}
+                className={juntar(
+                  'rounded-lg border p-3.5 text-left disabled:opacity-60',
+                  compartilharCom !== ''
+                    ? 'border-primary-600 bg-primary-50'
+                    : 'border-neutral-200 bg-white hover:bg-neutral-25',
+                )}
+              >
+                <span className="block text-[13.5px] font-semibold text-neutral-900">
+                  Estoque compartilhado
+                </span>
+                <span className="mt-1 block text-[12px] leading-[17px] text-neutral-500">
+                  Vende do estoque de outra loja. Nada é transferido.
+                </span>
+              </button>
+            </div>
+
+            {compartilharCom === '' ? (
               <Campo
                 rotulo="Local padrão de venda"
                 value={localPadrao}
                 onChange={(e) => setLocalPadrao(e.target.value)}
                 placeholder="Balcão"
                 ajuda="Nasce junto com a loja: é dele que o PDV baixa o estoque."
+                className="max-w-[420px]"
               />
-            </div>
+            ) : (
+              <label className="flex max-w-[420px] flex-col gap-1.5">
+                <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                  Vende do estoque de
+                </span>
+                <select
+                  value={compartilharCom}
+                  onChange={(e) => setCompartilharCom(e.target.value)}
+                  className="h-[42px] rounded-md border border-neutral-200 bg-white px-3 text-[14px]"
+                >
+                  {lojas.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nome}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[12px] text-neutral-500">
+                  O PDV da loja nova baixa do local de venda desta aqui. O saldo é o mesmo para as
+                  duas — vender numa reduz o da outra.
+                </span>
+              </label>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Botao
@@ -162,8 +255,9 @@ export function Lojas() {
             <Informacao />
           </span>
           <span className="text-[12.5px] leading-[18px] text-primary-800">
-            Cada loja tem um local padrão de venda: é dele que o PDV baixa o estoque. Sem esse
-            local, a venda não sabe de onde tirar a mercadoria.
+            Cada loja tem um local padrão de venda: é dele que o PDV baixa o estoque. Ele pode ser
+            próprio ou compartilhado com outra loja — compartilhado, o saldo é o mesmo para as duas,
+            e vender numa reduz o da outra.
           </span>
         </div>
       </main>
@@ -179,6 +273,7 @@ function CartaoLoja({ loja }: { readonly loja: LojaPainel }) {
       className={juntar(
         'flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm',
         loja.variacoesNegativas > 0 ? 'border-[#f0c9cb]' : 'border-neutral-100',
+        loja.status === 'INATIVO' && 'opacity-60',
       )}
     >
       <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-100 px-4 py-3.5">
@@ -189,7 +284,10 @@ function CartaoLoja({ loja }: { readonly loja: LojaPainel }) {
           <p className="truncate font-display text-[15px] font-semibold text-neutral-900">
             {loja.nome}
           </p>
-          <p className="font-mono text-[11px] text-neutral-400">{loja.codigo}</p>
+          <p className="font-mono text-[11px] text-neutral-400">
+            {loja.codigo}
+            {loja.status === 'INATIVO' ? ' · desativada' : ''}
+          </p>
         </div>
         <span
           className={juntar(
@@ -246,6 +344,14 @@ function CartaoLoja({ loja }: { readonly loja: LojaPainel }) {
               <span className="min-w-0 flex-1 truncate text-[12.5px] text-neutral-700">
                 {o.nome}
               </span>
+              {o.compartilhado ? (
+                <span
+                  className="shrink-0 rounded-full bg-[var(--color-atencao-fundo)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-atencao)]"
+                  title={`Local da ${o.dono ?? 'outra loja'}`}
+                >
+                  de {o.dono ?? 'outra loja'}
+                </span>
+              ) : null}
               {o.padraoVenda ? (
                 <span className="shrink-0 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
                   venda

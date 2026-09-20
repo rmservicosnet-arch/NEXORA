@@ -38,7 +38,14 @@ interface LojaPainel {
   nome: string;
   codigo: string;
   status: string;
-  locais: { id: string; nome: string; padraoVenda: boolean; itens: number }[];
+  locais: {
+    id: string;
+    nome: string;
+    padraoVenda: boolean;
+    itens: number;
+    compartilhado: boolean;
+    dono: string | null;
+  }[];
   caixaAberto: number | null;
   vendasHoje: string;
   variacoesNegativas: number;
@@ -145,6 +152,63 @@ describe.runIf(temBanco)('abrir loja', () => {
       .set('Authorization', `Bearer ${tokenVendedora}`)
       .send({ nome: 'Loja da vendedora' })
       .expect(403);
+  });
+});
+
+describe.runIf(temBanco)('estoque compartilhado', () => {
+  /**
+   * Compartilhar não copia nem transfere: a loja nova passa a vender do
+   * local da outra. O saldo é o mesmo para as duas — é o caso do depósito
+   * central atendendo três lojas.
+   */
+  it('a loja nova vende do local da outra, sem local próprio', async () => {
+    const origem = (await painel()).find((l) => l.locais.some((o) => o.padraoVenda));
+    expect(origem).toBeDefined();
+
+    const localDaOrigem = origem!.locais.find((o) => o.padraoVenda)!;
+
+    const criada = await http
+      .post('/api/lojas')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nome: `Loja Compartilhada ${sufixo()}`, compartilharCom: origem!.id })
+      .expect(201);
+
+    const { id } = criada.body as { id: string };
+    abertas.push(id);
+
+    const nova = (await painel()).find((l) => l.id === id);
+
+    expect(nova?.locais).toHaveLength(1);
+    // É o MESMO local: mesmo id, marcado como de outra loja.
+    expect(nova?.locais[0]?.id).toBe(localDaOrigem.id);
+    expect(nova?.locais[0]?.compartilhado).toBe(true);
+    expect(nova?.locais[0]?.dono).toBe(origem!.nome);
+    expect(nova?.locais[0]?.padraoVenda).toBe(true);
+
+    // E o saldo é o mesmo, porque a mercadoria não saiu do lugar.
+    expect(nova?.locais[0]?.itens).toBe(localDaOrigem.itens);
+  });
+
+  it('recusa compartilhar de quem não tem local de venda', async () => {
+    const semLocal = await http
+      .post('/api/lojas')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nome: `Loja Base ${sufixo()}` })
+      .expect(201);
+    const base = (semLocal.body as { id: string }).id;
+    abertas.push(base);
+
+    // A base tem local. Desativá-la não é o ponto: o ponto é que uma loja
+    // sem local de venda não tem o que emprestar — e o erro diz isso.
+    const inexistente = '00000000-0000-7000-8000-000000000000';
+
+    const recusa = await http
+      .post('/api/lojas')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nome: `Loja Órfã ${sufixo()}`, compartilharCom: inexistente })
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('LOJA_SEM_LOCAL_PADRAO');
   });
 });
 

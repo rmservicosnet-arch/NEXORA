@@ -23,6 +23,12 @@ export const localDaLojaSchema = z.object({
   padraoVenda: z.boolean(),
   /** Quantas variacoes tem saldo diferente de zero aqui. */
   itens: z.number().int(),
+  /**
+   * `true` quando o local e de OUTRA loja e esta apenas o usa. O dono
+   * aparece em `dono`; a mercadoria esta la, nao aqui.
+   */
+  compartilhado: z.boolean(),
+  dono: z.string().nullable(),
 });
 export type LocalDaLoja = z.infer<typeof localDaLojaSchema>;
 
@@ -49,6 +55,13 @@ export type LojaPainel = z.infer<typeof lojaPainelSchema>;
  */
 export const novaLojaSchema = z.object({
   nome: z.string().trim().min(2).max(120),
+  /**
+   * Compartilhar o estoque de outra loja em vez de abrir um local proprio.
+   *
+   * Um deposito central atendendo tres lojas e o caso: a loja nova vende dali
+   * sem que a mercadoria precise ser transferida.
+   */
+  compartilharCom: z.string().uuid().optional(),
   /** Sem ele, sai do nome: "Loja Shopping" vira LOJA_SHOPPING. */
   codigo: z
     .string()

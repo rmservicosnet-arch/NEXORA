@@ -474,10 +474,25 @@ export class EstoqueService {
 
   /** O local padrão de venda da loja. É onde o PDV baixa por omissão. */
   async localPadraoDaLoja(tx: ClienteEmTransacao, lojaId: string): Promise<LocalResolvido> {
-    const local = await tx.localEstoque.findFirst({
+    const proprio = await tx.localEstoque.findFirst({
       where: { lojaId, padraoVenda: true, status: 'ATIVO' },
       include: { loja: { select: { id: true, nome: true } } },
     });
+
+    /**
+     * Sem local proprio, a loja pode vender de um local COMPARTILHADO — um
+     * deposito central, por exemplo. O vinculo diz qual, e ele vale como
+     * padrao de venda dela. Ver docs/STOCK.md.
+     */
+    const local =
+      proprio ??
+      (
+        await tx.localEstoqueLoja.findFirst({
+          where: { lojaId, padraoVenda: true, local: { status: 'ATIVO' } },
+          include: { local: { include: { loja: { select: { id: true, nome: true } } } } },
+        })
+      )?.local ??
+      null;
 
     if (!local) {
       throw new ConflictException({

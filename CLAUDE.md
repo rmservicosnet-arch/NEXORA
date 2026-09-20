@@ -162,6 +162,8 @@ o runtime.
 | Barra de gráfico com altura em % dentro de `items-end` | O pai desliga o `stretch`, a porcentagem vira `auto` e o gráfico fica vazio. O trilho precisa de `h-full` |
 | Grade de altura definida com `grid-auto-rows: auto` | A linha é ESTICADA para caber: 60 cartões viraram faixas de 34px, com o conteúdo cortado pelo `overflow-hidden` de cada um. Altura de linha explícita e `content-start` |
 | Página que rola pelo CORPO | O menu lateral sobe junto e some. O shell trava a altura na tela; quem rola é a região de dentro |
+| `prisma migrate dev` interrompido | A conexão órfã segura `pg_advisory_lock` e toda migração seguinte expira. Encerre o backend `idle` que a detém; `migrate deploy` é o comando não interativo |
+| Tela que lista tudo, inclusive o desativado | 19 lojas de teste inativas empurraram as três de verdade para fora da tela. Filtre por ativo e ofereça "mostrar desativadas" |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

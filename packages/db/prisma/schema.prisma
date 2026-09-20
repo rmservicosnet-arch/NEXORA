@@ -346,6 +346,7 @@ model Loja {
   alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
   locais         LocalEstoque[]
+  locaisUsados   LocalEstoqueLoja[]
   acessosUsuario UsuarioLojaAcesso[]
   vendas         Venda[]
   pedidos        Pedido[]
@@ -373,6 +374,9 @@ model LocalEstoque {
   movimentos MovimentoEstoque[]
   reservas   EstoqueReserva[]
   vendas     Venda[]            @relation("VendaLocal")
+
+  /// Outras lojas que tambem vendem deste local. Ver docs/STOCK.md.
+  lojasQueUsam LocalEstoqueLoja[]
   pedidos    Pedido[]           @relation("PedidoLocal")
 
   @@unique([tenantId, lojaId, codigo])
@@ -575,6 +579,30 @@ model UsuarioPerfil {
 
 /// Tenant não é o único escopo: um vendedor da Loja Centro não movimenta o
 /// estoque da Loja Shopping. Ver docs/TENANCY.md §3.
+/// Local de estoque usado por OUTRA loja.
+///
+/// O dono continua sendo `local_estoque.loja_id` — e onde a mercadoria esta.
+/// Esta tabela diz quais outras lojas tambem vendem dali, e qual delas usa o
+/// local como padrao de venda. Um deposito central atendendo tres lojas e o
+/// caso que motivou isto: antes, a unica saida era transferir o dia inteiro.
+model LocalEstoqueLoja {
+  localId String       @map("local_id") @db.Uuid
+  local   LocalEstoque @relation(fields: [localId], references: [id], onDelete: Cascade)
+  lojaId  String       @map("loja_id") @db.Uuid
+  loja    Loja         @relation(fields: [lojaId], references: [id], onDelete: Cascade)
+
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Esta loja vende a partir deste local. Uma por loja, por indice parcial.
+  padraoVenda Boolean @default(false) @map("padrao_venda")
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@id([localId, lojaId])
+  @@index([tenantId, lojaId])
+  @@map("local_estoque_loja")
+}
+
 model UsuarioLojaAcesso {
   usuarioId String  @map("usuario_id") @db.Uuid
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)

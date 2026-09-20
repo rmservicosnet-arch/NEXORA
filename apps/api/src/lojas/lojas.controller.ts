@@ -123,15 +123,41 @@ export class LojasController {
         select: { id: true },
       });
 
-      await tx.localEstoque.create({
-        data: {
-          tenantId: contexto.tenantId,
-          lojaId: loja.id,
-          nome: dados.localPadrao,
-          codigo: codigoDe(dados.localPadrao).slice(0, 30),
-          padraoVenda: true,
-        },
-      });
+      if (dados.compartilharCom) {
+        // Estoque compartilhado: a loja nova nao ganha local proprio, ela
+        // passa a vender do local de venda da outra. A mercadoria continua
+        // onde esta — e essa e a diferenca para transferir.
+        const emprestado = await tx.localEstoque.findFirst({
+          where: { lojaId: dados.compartilharCom, padraoVenda: true, status: 'ATIVO' },
+          select: { id: true },
+        });
+
+        if (!emprestado) {
+          throw new ConflictException({
+            codigo: 'LOJA_SEM_LOCAL_PADRAO',
+            mensagem: 'A loja escolhida nao tem local padrao de venda para compartilhar.',
+          });
+        }
+
+        await tx.localEstoqueLoja.create({
+          data: {
+            tenantId: contexto.tenantId,
+            localId: emprestado.id,
+            lojaId: loja.id,
+            padraoVenda: true,
+          },
+        });
+      } else {
+        await tx.localEstoque.create({
+          data: {
+            tenantId: contexto.tenantId,
+            lojaId: loja.id,
+            nome: dados.localPadrao,
+            codigo: codigoDe(dados.localPadrao).slice(0, 30),
+            padraoVenda: true,
+          },
+        });
+      }
 
       await tx.usuarioLojaAcesso.create({
         data: { tenantId: contexto.tenantId, lojaId: loja.id, usuarioId: principal.id },
@@ -195,6 +221,22 @@ export class LojasController {
             orderBy: [{ padraoVenda: 'desc' }, { nome: 'asc' }],
             select: { id: true, nome: true, codigo: true, padraoVenda: true },
           },
+          // Locais de OUTRAS lojas que esta tambem usa.
+          locaisUsados: {
+            where: { local: { status: 'ATIVO' } },
+            orderBy: { padraoVenda: 'desc' },
+            select: {
+              padraoVenda: true,
+              local: {
+                select: {
+                  id: true,
+                  nome: true,
+                  codigo: true,
+                  loja: { select: { nome: true } },
+                },
+              },
+            },
+          },
         },
       });
 
@@ -209,7 +251,29 @@ export class LojasController {
 
       return Promise.all(
         minhas.map(async (loja) => {
-          const idsDosLocais = loja.locais.map((o) => o.id);
+          const proprios = loja.locais.map((o) => ({
+            id: o.id,
+            nome: o.nome,
+            codigo: o.codigo,
+            padraoVenda: o.padraoVenda,
+            compartilhado: false,
+            dono: null as string | null,
+          }));
+
+          const emprestados = loja.locaisUsados.map((u) => ({
+            id: u.local.id,
+            nome: u.local.nome,
+            codigo: u.local.codigo,
+            padraoVenda: u.padraoVenda,
+            compartilhado: true,
+            dono: u.local.loja.nome,
+          }));
+
+          const todos = [...proprios, ...emprestados];
+
+          // O saldo negativo e as contagens somam o que a loja VENDE — o
+          // compartilhado entra, porque e de la que o PDV dela baixa.
+          const idsDosLocais = todos.map((o) => o.id);
 
           const [caixa, vendas, negativos, porLocal] = await Promise.all([
             tx.caixa.findFirst({
@@ -235,11 +299,8 @@ export class LojasController {
             nome: loja.nome,
             codigo: loja.codigo,
             status: loja.status === 'INATIVO' ? ('INATIVO' as const) : ('ATIVO' as const),
-            locais: loja.locais.map((o) => ({
-              id: o.id,
-              nome: o.nome,
-              codigo: o.codigo,
-              padraoVenda: o.padraoVenda,
+            locais: todos.map((o) => ({
+              ...o,
               itens: porLocal.find((g) => g.localId === o.id)?._count._all ?? 0,
             })),
             caixaAberto: caixa?.numero ?? null,
