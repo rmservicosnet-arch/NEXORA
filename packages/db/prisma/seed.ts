@@ -164,6 +164,9 @@ async function limparEmpresa(prisma: PrismaClient, tenantId: string): Promise<vo
   await prisma.movimentoCaixa.deleteMany(onde);
   await prisma.caixa.deleteMany(onde);
 
+  await prisma.baixaTitulo.deleteMany(onde);
+  await prisma.tituloFinanceiro.deleteMany(onde);
+
   await prisma.compraItem.deleteMany(onde);
   await prisma.compra.deleteMany(onde);
 
@@ -1099,6 +1102,148 @@ async function main(): Promise<void> {
     });
     passo(`Carteira da Academia Ippon — saldo ${saldo.toFixed(2)} (limite 5.000,00)`);
   }
+
+  // --- Contas a pagar e a receber -------------------------------------------
+
+  /*
+    Titulos COM VENCIMENTO.
+
+    Os a pagar nascem das notas RECEBIDAS (a mercadoria ja entrou, o dinheiro
+    ainda nao saiu) e de despesa fixa lancada a mao. Os a receber sao do
+    revendedor — e o saldo dele continua sendo o da CARTEIRA: o titulo so
+    acrescenta a data.
+
+    Um vencido, um que vence hoje e alguns a vencer, porque e assim que a tela
+    fica util: sem atraso nenhum, os quatro indicadores sao zero e ninguem ve
+    para que serve.
+  */
+  const emDias = (dias: number): Date => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() + dias);
+    return d;
+  };
+
+  const notaRecebida = async (numero: string) =>
+    prisma.compra.findFirst({
+      where: { tenantId, numeroNota: numero },
+      select: { id: true, fornecedorId: true, valorTotal: true },
+    });
+
+  const tatames = await notaRecebida('18431');
+  const protetores = await notaRecebida('18376');
+
+  let titulosCriados = 0;
+
+  if (tatames) {
+    /* Vencido E com baixa parcial: o "em aberto" tem de descontar o que ja
+       foi pago, senao a tela cobra um dinheiro que ja saiu. */
+    const titulo = await prisma.tituloFinanceiro.create({
+      data: {
+        tenantId,
+        tipo: 'PAGAR',
+        origem: 'COMPRA',
+        lojaId: lojaIds[0] ?? '',
+        fornecedorId: tatames.fornecedorId,
+        compraId: tatames.id,
+        descricao: 'Tatames EVA — parcela única',
+        vencimento: emDias(-4),
+        valor: tatames.valorTotal.toFixed(2),
+        valorPago: '1500.00',
+      },
+    });
+
+    await prisma.baixaTitulo.create({
+      data: {
+        tenantId,
+        tituloId: titulo.id,
+        valor: '1500.00',
+        pagoEm: emDias(-2),
+        forma: 'TRANSFERENCIA',
+        observacao: 'Acordo com o fornecedor: metade agora, metade na semana que vem',
+        atorId: adminId,
+      },
+    });
+    titulosCriados += 1;
+  }
+
+  if (protetores) {
+    const titulo = await prisma.tituloFinanceiro.create({
+      data: {
+        tenantId,
+        tipo: 'PAGAR',
+        origem: 'COMPRA',
+        lojaId: lojaIds[0] ?? '',
+        fornecedorId: protetores.fornecedorId,
+        compraId: protetores.id,
+        descricao: 'Protetores bucais — parcela única',
+        vencimento: emDias(-11),
+        valor: protetores.valorTotal.toFixed(2),
+        valorPago: protetores.valorTotal.toFixed(2),
+        status: 'PAGO',
+      },
+    });
+
+    await prisma.baixaTitulo.create({
+      data: {
+        tenantId,
+        tituloId: titulo.id,
+        valor: protetores.valorTotal.toFixed(2),
+        pagoEm: emDias(-11),
+        forma: 'BOLETO',
+        atorId: adminId,
+      },
+    });
+    titulosCriados += 1;
+  }
+
+  // Despesa fixa: nao vem de nota nenhuma, e a tela diz "lancado a mao".
+  const despesas = [
+    { descricao: 'Aluguel — Loja Centro', valor: '4800.00', dias: 0 },
+    { descricao: 'Energia elétrica — Loja Centro', valor: '1240.00', dias: 5 },
+    { descricao: 'Contador — honorários do mês', valor: '980.00', dias: 12 },
+    { descricao: 'Internet e telefonia', valor: '389.90', dias: -1 },
+  ];
+
+  for (const d of despesas) {
+    await prisma.tituloFinanceiro.create({
+      data: {
+        tenantId,
+        tipo: 'PAGAR',
+        origem: 'MANUAL',
+        lojaId: lojaIds[0] ?? '',
+        descricao: d.descricao,
+        vencimento: emDias(d.dias),
+        valor: d.valor,
+      },
+    });
+    titulosCriados += 1;
+  }
+
+  // A receber do revendedor. O saldo dele continua na carteira.
+  const aReceber = [
+    { descricao: 'Venda a prazo — pedido de setembro', valor: '2480.00', dias: -3 },
+    { descricao: 'Venda a prazo — reposição de kimonos', valor: '3150.00', dias: 8 },
+    { descricao: 'Venda a prazo — faixas e protetores', valor: '930.00', dias: 21 },
+  ];
+
+  for (const r of aReceber) {
+    await prisma.tituloFinanceiro.create({
+      data: {
+        tenantId,
+        tipo: 'RECEBER',
+        origem: 'MANUAL',
+        lojaId: lojaIds[0] ?? '',
+        clienteId: academia.id,
+        descricao: r.descricao,
+        vencimento: emDias(r.dias),
+        valor: r.valor,
+      },
+    });
+    titulosCriados += 1;
+  }
+
+  passo(`${titulosCriados} títulos financeiros (1 vencido com baixa parcial, 1 vence hoje)`);
 
   await prisma.$disconnect();
 

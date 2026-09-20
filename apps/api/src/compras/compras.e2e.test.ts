@@ -69,6 +69,16 @@ let lojaId: string;
 let localId: string;
 let fornecedorId: string;
 
+/**
+ * O que este arquivo criou.
+ *
+ * O teste NAO pode degradar o ambiente que usa: quarenta notas "T7X2K9" na
+ * tela de Compras sao ruido que some com a tela de verdade. Rascunho se
+ * apaga; recebida se ESTORNA, porque o razao e imutavel e o estorno e o
+ * caminho legitimo — a nota fica, com o saldo de volta ao que era.
+ */
+const criadas: string[] = [];
+
 /** Sufixo aleatório: SKU e número de nota fixos dão 409 na segunda execução. */
 function sufixo(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -78,12 +88,16 @@ function autenticado(metodo: 'get' | 'post' | 'put' | 'delete', rota: string) {
   return http[metodo](rota).set('Authorization', `Bearer ${token}`);
 }
 
-async function novoRascunho(itens: { variacaoId: string; quantidade: string; custoUnitario: string }[]) {
+async function novoRascunho(
+  itens: { variacaoId: string; quantidade: string; custoUnitario: string }[],
+) {
   const resposta = await autenticado('post', '/api/compras')
     .send({ lojaId, localId, fornecedorId, numeroNota: `T${sufixo()}`, itens })
     .expect(201);
 
-  return resposta.body as Compra;
+  const compra = resposta.body as Compra;
+  criadas.push(compra.id);
+  return compra;
 }
 
 async function itemComSaldo(): Promise<ItemParaComprar> {
@@ -115,18 +129,20 @@ beforeAll(async () => {
     ).body as { tokenAcesso: string }
   ).tokenAcesso;
 
-  const lojas = (
-    await autenticado('get', '/api/lojas/painel').expect(200)
-  ).body as { id: string; status: string; locais: { id: string }[] }[];
+  const lojas = (await autenticado('get', '/api/lojas/painel').expect(200)).body as {
+    id: string;
+    status: string;
+    locais: { id: string }[];
+  }[];
 
   const loja = lojas.find((l) => l.status === 'ATIVO' && l.locais.length > 0);
   if (!loja) throw new Error('seed sem loja com local');
   lojaId = loja.id;
   localId = loja.locais[0]!.id;
 
-  const fornecedores = (
-    await autenticado('get', '/api/compras/fornecedores').expect(200)
-  ).body as { id: string }[];
+  const fornecedores = (await autenticado('get', '/api/compras/fornecedores').expect(200)).body as {
+    id: string;
+  }[];
 
   if (fornecedores.length === 0) throw new Error('seed sem fornecedor');
   fornecedorId = fornecedores[0]!.id;
@@ -134,9 +150,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app) {
+    for (const id of criadas) {
+      const compra = (await autenticado('get', `/api/compras/${id}`)).body as Compra | undefined;
+      if (!compra?.status) continue;
+
+      if (compra.status === 'RASCUNHO') {
+        await autenticado('delete', `/api/compras/${id}`);
+      } else if (compra.status === 'RECEBIDA') {
+        await autenticado('post', `/api/compras/${id}/estornar`).send({
+          motivo: 'Limpeza do teste de ponta a ponta',
+        });
+      }
+    }
+
     await app.close();
   }
-});
+}, 60_000);
 
 describe.runIf(temBanco)('compras', () => {
   it('a busca devolve saldo e custo do destino — NUNCA preço de venda', async () => {
@@ -183,16 +212,14 @@ describe.runIf(temBanco)('compras', () => {
       { variacaoId: item.variacaoId, quantidade: '5', custoUnitario: '80.00' },
     ]);
 
-    const detalhe = (
-      await autenticado('get', `/api/compras/${rascunho.id}`).expect(200)
-    ).body as Compra;
+    const detalhe = (await autenticado('get', `/api/compras/${rascunho.id}`).expect(200))
+      .body as Compra;
 
     expect(detalhe.itens[0]!.saldoAtual).toBe(item.saldoAtual);
     expect(detalhe.itens[0]!.custoMedioAntes).toBeNull();
 
-    const recebida = (
-      await autenticado('post', `/api/compras/${rascunho.id}/receber`).expect(201)
-    ).body as Compra;
+    const recebida = (await autenticado('post', `/api/compras/${rascunho.id}/receber`).expect(201))
+      .body as Compra;
 
     expect(recebida.status).toBe('RECEBIDA');
     expect(recebida.itens[0]!.custoMedioAntes).not.toBeNull();
@@ -210,9 +237,8 @@ describe.runIf(temBanco)('compras', () => {
       { variacaoId: item.variacaoId, quantidade: '10', custoUnitario: '100.00' },
     ]);
 
-    const recebida = (
-      await autenticado('post', `/api/compras/${rascunho.id}/receber`).expect(201)
-    ).body as Compra;
+    const recebida = (await autenticado('post', `/api/compras/${rascunho.id}/receber`).expect(201))
+      .body as Compra;
 
     const esperado = (saldo * medio + 10 * 100) / (saldo + 10);
 
@@ -227,7 +253,7 @@ describe.runIf(temBanco)('compras', () => {
     const item = await itemComSaldo();
     const numeroNota = `DUP${sufixo()}`;
 
-    await autenticado('post', '/api/compras')
+    const primeira = await autenticado('post', '/api/compras')
       .send({
         lojaId,
         localId,
@@ -236,6 +262,8 @@ describe.runIf(temBanco)('compras', () => {
         itens: [{ variacaoId: item.variacaoId, quantidade: '1', custoUnitario: '10.00' }],
       })
       .expect(201);
+
+    criadas.push((primeira.body as Compra).id);
 
     const repetida = await autenticado('post', '/api/compras')
       .send({
@@ -322,8 +350,9 @@ describe.runIf(temBanco)('compras', () => {
 
     expect(pagina.itens.length).toBe(1);
     expect(pagina.contagens.total).toBeGreaterThan(1);
-    expect(pagina.contagens.rascunhos + pagina.contagens.recebidas + pagina.contagens.estornadas)
-      .toBe(pagina.contagens.total);
+    expect(
+      pagina.contagens.rascunhos + pagina.contagens.recebidas + pagina.contagens.estornadas,
+    ).toBe(pagina.contagens.total);
   });
 
   it('o cliente do portal não enxerga compra nenhuma', async () => {
@@ -338,9 +367,6 @@ describe.runIf(temBanco)('compras', () => {
 
     // Token do OUTRO domínio numa rota da equipe dá 401, não 403: falha na
     // autenticação, não na permissão. É o desenho do ADR-009.
-    await http
-      .get('/api/compras')
-      .set('Authorization', `Bearer ${tokenCliente}`)
-      .expect(401);
+    await http.get('/api/compras').set('Authorization', `Bearer ${tokenCliente}`).expect(401);
   });
 });

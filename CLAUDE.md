@@ -203,6 +203,8 @@ o runtime.
 | Módulo que grava dinheiro por conta própria | A baixa de título chama o CAIXA e a CARTEIRA em vez de lançar sozinha. Cada um com as suas regras e a sua auditoria — senão viram dois lugares onde saldo muda |
 | Indicador financeiro somando o valor cheio | "Em aberto" tem de somar `valor − pago`: um título de 9.600 com 4.743 pagos pesa 4.856, não 9.600. Somar o cheio mostra dívida que já não existe |
 | Estado de painel que não remonta ao trocar de linha | Abrir outro título não desmonta o componente: a rota é a mesma. O valor digitado para o anterior ficava no seguinte — o estado carrega o id do dono |
+| Módulo novo sem cenário no seed | Compras, Contas e Caixa nasceram com a tela certa e a base vazia — e o que aparecia era o lixo dos próprios testes. Tela nova pede dado de seed junto, senão só o e2e a preenche |
+| Teste de e2e que cria e não limpa, de novo | 46 notas "T7X2K9" e 36 "título de teste" empurraram os de verdade para fora da primeira página. `afterAll` apaga rascunho, ESTORNA recebida e CANCELA título — pelas ações do domínio, nunca por `delete` escondido |
 
 ## Testes
 

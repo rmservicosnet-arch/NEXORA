@@ -61,7 +61,18 @@ let token: string;
 let fornecedorId: string;
 let clienteId: string;
 
-function autenticado(metodo: 'get' | 'post', rota: string) {
+/**
+ * O que este arquivo criou.
+ *
+ * "Titulo vencido de teste" na tela de Contas empurra os titulos de verdade
+ * para fora da primeira pagina. Em aberto se CANCELA — que e a acao do
+ * dominio, nao um `delete` escondido. Titulo com baixa fica: a baixa ja
+ * moveu carteira e caixa, e apagar isso seria mentir sobre dinheiro que se
+ * moveu.
+ */
+const criados: string[] = [];
+
+function autenticado(metodo: 'get' | 'post' | 'put' | 'delete', rota: string) {
   return http[metodo](rota).set('Authorization', `Bearer ${token}`);
 }
 
@@ -73,8 +84,11 @@ function emDias(dias: number): string {
 }
 
 async function novoTitulo(corpo: Record<string, unknown>): Promise<Titulo[]> {
-  return (await autenticado('post', '/api/financeiro/titulos').send(corpo).expect(201))
+  const titulos = (await autenticado('post', '/api/financeiro/titulos').send(corpo).expect(201))
     .body as Titulo[];
+
+  criados.push(...titulos.map((t) => t.id));
+  return titulos;
 }
 
 beforeAll(async () => {
@@ -96,8 +110,9 @@ beforeAll(async () => {
     ).body as { tokenAcesso: string }
   ).tokenAcesso;
 
-  const fornecedores = (await autenticado('get', '/api/compras/fornecedores').expect(200))
-    .body as { id: string }[];
+  const fornecedores = (await autenticado('get', '/api/compras/fornecedores').expect(200)).body as {
+    id: string;
+  }[];
   if (fornecedores.length === 0) throw new Error('seed sem fornecedor');
   fornecedorId = fornecedores[0]!.id;
 
@@ -110,9 +125,15 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app) {
+    for (const id of criados) {
+      await autenticado('post', `/api/financeiro/titulos/${id}/cancelar`).send({
+        motivo: 'Limpeza do teste de ponta a ponta',
+      });
+    }
+
     await app.close();
   }
-});
+}, 60_000);
 
 describe.runIf(temBanco)('contas', () => {
   it('vencido é DERIVADO de hoje, não uma coluna que alguém precisa virar', async () => {
@@ -331,15 +352,17 @@ describe.runIf(temBanco)('contas', () => {
       valor: '1000.00',
     });
 
-    const antes = (await autenticado('get', '/api/financeiro/titulos?tipo=PAGAR&limite=1').expect(200))
-      .body as Pagina;
+    const antes = (
+      await autenticado('get', '/api/financeiro/titulos?tipo=PAGAR&limite=1').expect(200)
+    ).body as Pagina;
 
     await autenticado('post', `/api/financeiro/titulos/${titulo!.id}/baixar`)
       .send({ valor: '400.00', pagoEm: emDias(0), forma: 'PIX' })
       .expect(201);
 
-    const depois = (await autenticado('get', '/api/financeiro/titulos?tipo=PAGAR&limite=1').expect(200))
-      .body as Pagina;
+    const depois = (
+      await autenticado('get', '/api/financeiro/titulos?tipo=PAGAR&limite=1').expect(200)
+    ).body as Pagina;
 
     // A página tem 1 item; o resumo conta muitos mais.
     expect(depois.itens.length).toBe(1);
