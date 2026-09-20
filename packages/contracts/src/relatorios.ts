@@ -126,3 +126,117 @@ export const relatorioVendasSchema = z.object({
   ranking: z.array(linhaRankingSchema),
 });
 export type RelatorioVendas = z.infer<typeof relatorioVendasSchema>;
+
+// ---------------------------------------------------------------------------
+// Giro, cobertura e encalhe
+// ---------------------------------------------------------------------------
+
+export const filtroGiroSchema = z.object({
+  dias: z.coerce.number().int().min(7).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  categoriaId: z.string().uuid().optional(),
+  /** `parado` inverte a ordem: do que menos girou para o que mais girou. */
+  ordem: z.enum(['giro', 'parado']).default('giro'),
+  limite: z.coerce.number().int().min(1).max(200).default(60),
+});
+export type FiltroGiro = z.infer<typeof filtroGiroSchema>;
+
+export const linhaGiroSchema = z.object({
+  variacaoId: z.string(),
+  sku: z.string(),
+  produto: z.string(),
+  descricaoVariacao: z.string(),
+  categoria: z.string().nullable(),
+  /** Saldo somado dos locais visiveis pelo filtro. */
+  saldo: z.string(),
+  /** Unidades que SAIRAM por venda no periodo. */
+  vendidas: z.string(),
+  /** `vendidas / saldo`. Nulo quando nao ha saldo para girar. */
+  giro: z.string().nullable(),
+  /** Dias que o saldo cobre no ritmo do periodo. Nulo sem venda. */
+  cobertura: z.string().nullable(),
+  /** Dias desde o ultimo movimento. Nulo quando nunca se moveu. */
+  diasParado: z.number().int().nullable(),
+  /**
+   * `saldo x custo medio`. NAO e "valor parado": o item pode ter girado bem.
+   * O que esta parado de fato e o `valorEncalhado` do resumo.
+   */
+  valorEmEstoque: z.string().optional(),
+});
+export type LinhaGiro = z.infer<typeof linhaGiroSchema>;
+
+export const relatorioGiroSchema = z.object({
+  dias: z.number().int(),
+  /** Quantas variacoes nao tiveram NENHUMA saida por venda no periodo. */
+  semVenda: z.number().int(),
+  /** Quantas nao tiveram movimento nenhum — encalhe de verdade. */
+  semMovimento: z.number().int(),
+  valorEncalhado: z.string().optional(),
+  itens: z.array(linhaGiroSchema),
+});
+export type RelatorioGiro = z.infer<typeof relatorioGiroSchema>;
+
+// ---------------------------------------------------------------------------
+// Transferencias e inventario
+// ---------------------------------------------------------------------------
+
+export const filtroMovimentoRelatorioSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroMovimentoRelatorio = z.infer<typeof filtroMovimentoRelatorioSchema>;
+
+export const linhaTransferenciaSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  sku: z.string(),
+  produto: z.string(),
+  descricaoVariacao: z.string(),
+  quantidade: z.string(),
+  /** A saida SEMPRE tem local. O destino e que pode nao existir ainda. */
+  origem: z.string(),
+  destino: z.string().nullable(),
+  /** `true` quando a saida existe e a entrada ainda nao. */
+  emTransito: z.boolean(),
+  ator: z.string().nullable(),
+});
+export type LinhaTransferencia = z.infer<typeof linhaTransferenciaSchema>;
+
+export const relatorioTransferenciasSchema = z.object({
+  dias: z.number().int(),
+  enviadas: z.number().int(),
+  recebidas: z.number().int(),
+  emTransito: z.number().int(),
+  itens: z.array(linhaTransferenciaSchema),
+});
+export type RelatorioTransferencias = z.infer<typeof relatorioTransferenciasSchema>;
+
+export const linhaInventarioSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  sku: z.string(),
+  produto: z.string(),
+  descricaoVariacao: z.string(),
+  local: z.string(),
+  loja: z.string(),
+  /** Positiva quando o contado era MAIOR que o sistema. */
+  diferenca: z.string(),
+  saldoAntes: z.string(),
+  saldoDepois: z.string(),
+  /** Efeito no patrimonio: `diferenca × custo`. */
+  valor: z.string().optional(),
+  justificativa: z.string().nullable(),
+  ator: z.string().nullable(),
+});
+export type LinhaInventario = z.infer<typeof linhaInventarioSchema>;
+
+export const relatorioInventarioSchema = z.object({
+  dias: z.number().int(),
+  contagens: z.number().int(),
+  sobras: z.number().int(),
+  faltas: z.number().int(),
+  efeitoLiquido: z.string().optional(),
+  itens: z.array(linhaInventarioSchema),
+});
+export type RelatorioInventario = z.infer<typeof relatorioInventarioSchema>;

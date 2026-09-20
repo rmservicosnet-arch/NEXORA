@@ -1,10 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  FiltroGiro,
+  FiltroMovimentoRelatorio,
   FiltroPosicao,
   FiltroVendasRelatorio,
   LinhaPosicao,
   LinhaRanking,
+  LinhaTransferencia,
   PosicaoEstoque,
+  RelatorioGiro,
+  RelatorioInventario,
+  RelatorioTransferencias,
   RelatorioVendas,
 } from '@estoque/contracts';
 import { dec, type Dec } from '@estoque/core';
@@ -259,6 +265,447 @@ export class RelatoriosService {
         ranking,
       };
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Giro, cobertura e encalhe
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quanto cada item girou — e há quanto tempo o que não girou está parado.
+   *
+   * Giro e encalhe são a mesma consulta vista dos dois lados: ordenada pelo
+   * maior giro, responde "o que puxa a loja"; invertida, responde "onde o
+   * dinheiro está dormindo". Separar em dois relatórios seria manter duas
+   * consultas que precisam concordar — e elas divergiriam.
+   */
+  async giro(filtro: FiltroGiro, podeVerCusto: boolean): Promise<RelatorioGiro> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const condicoes = ["v.status = 'ATIVO'"];
+      const parametros: unknown[] = [filtro.dias];
+
+      if (filtro.lojaId) {
+        parametros.push(filtro.lojaId);
+        condicoes.push(`lj.id = $${parametros.length}::uuid`);
+      }
+      if (filtro.categoriaId) {
+        parametros.push(filtro.categoriaId);
+        condicoes.push(`p.categoria_id = $${parametros.length}::uuid`);
+      }
+
+      const onde = condicoes.join(' AND ');
+
+      /*
+        `parado` inverte a leitura: do que menos girou para o maior valor
+        dormindo. É o relatório "Sem movimento" do índice, mesma consulta.
+      */
+      const ordem =
+        filtro.ordem === 'parado'
+          ? 'ORDER BY vendidas ASC, valor_parado DESC'
+          : 'ORDER BY giro DESC NULLS LAST, vendidas DESC';
+
+      const base = `
+        WITH saldos AS (
+          SELECT s.variacao_id,
+                 sum(s.quantidade) AS saldo,
+                 sum(s.quantidade * s.custo_medio) AS valor
+            FROM saldo_estoque s
+            JOIN local_estoque l ON l.id = s.local_id
+            JOIN loja lj ON lj.id = l.loja_id
+            JOIN variacao v ON v.id = s.variacao_id
+            JOIN produto p ON p.id = v.produto_id
+           WHERE ${onde}
+           GROUP BY s.variacao_id
+        ),
+        vendas AS (
+          SELECT m.variacao_id, sum(m.quantidade) AS vendidas
+            FROM movimento_estoque m
+           WHERE m.tipo = 'SAIDA_VENDA'
+             AND m.criado_em > now() - ($1::int || ' days')::interval
+           GROUP BY m.variacao_id
+        )`;
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          variacao_id: string;
+          sku: string;
+          produto: string;
+          descricao: string;
+          categoria: string | null;
+          saldo: string;
+          vendidas: string;
+          giro: string | null;
+          dias_parado: number | null;
+          valor_parado: string;
+        }[]
+      >(
+        `
+        ${base},
+        ultimo AS (
+          SELECT m.variacao_id, max(m.criado_em) AS em
+            FROM movimento_estoque m
+           GROUP BY m.variacao_id
+        )
+        SELECT v.id AS variacao_id,
+               v.sku,
+               p.nome AS produto,
+               v.descricao,
+               c.nome AS categoria,
+               s.saldo::text,
+               coalesce(ve.vendidas, 0)::text AS vendidas,
+               CASE WHEN s.saldo > 0
+                    THEN (coalesce(ve.vendidas, 0) / s.saldo)::text
+               END AS giro,
+               CASE WHEN u.em IS NOT NULL
+                    THEN floor(extract(epoch FROM now() - u.em) / 86400)::int
+               END AS dias_parado,
+               GREATEST(s.valor, 0)::text AS valor_parado
+          FROM saldos s
+          JOIN variacao v ON v.id = s.variacao_id
+          JOIN produto p ON p.id = v.produto_id
+          LEFT JOIN categoria c ON c.id = p.categoria_id
+          LEFT JOIN vendas ve ON ve.variacao_id = s.variacao_id
+          LEFT JOIN ultimo u ON u.variacao_id = s.variacao_id
+         ${ordem}
+         LIMIT ${String(filtro.limite)}
+        `,
+        ...parametros,
+      );
+
+      /*
+        O resumo conta o CONJUNTO inteiro, não a página. Somar a página daria
+        "3 sem venda" numa loja com trezentos itens parados.
+      */
+      const resumo = await tx.$queryRawUnsafe<
+        { sem_venda: bigint; sem_movimento: bigint; encalhado: string }[]
+      >(
+        `
+        ${base},
+        movidos AS (
+          SELECT DISTINCT m.variacao_id
+            FROM movimento_estoque m
+           WHERE m.criado_em > now() - ($1::int || ' days')::interval
+        )
+        SELECT count(*) FILTER (WHERE ve.variacao_id IS NULL) AS sem_venda,
+               count(*) FILTER (WHERE mo.variacao_id IS NULL) AS sem_movimento,
+               coalesce(
+                 sum(GREATEST(s.valor, 0)) FILTER (WHERE mo.variacao_id IS NULL),
+                 0
+               )::text AS encalhado
+          FROM saldos s
+          LEFT JOIN vendas ve ON ve.variacao_id = s.variacao_id
+          LEFT JOIN movidos mo ON mo.variacao_id = s.variacao_id
+        `,
+        ...parametros,
+      );
+
+      const r = resumo[0];
+
+      return {
+        dias: filtro.dias,
+        semVenda: Number(r?.sem_venda ?? 0),
+        semMovimento: Number(r?.sem_movimento ?? 0),
+        ...(podeVerCusto ? { valorEncalhado: dec(r?.encalhado ?? '0').toFixed(2) } : {}),
+        itens: linhas.map((l) => {
+          const saldo = dec(l.saldo);
+          const vendidas = dec(l.vendidas);
+
+          return {
+            variacaoId: l.variacao_id,
+            sku: l.sku,
+            produto: l.produto,
+            descricaoVariacao: l.descricao,
+            categoria: l.categoria,
+            saldo: saldo.toFixed(0),
+            vendidas: vendidas.toFixed(0),
+            giro: l.giro === null ? null : dec(l.giro).toFixed(2),
+            /*
+              Cobertura em dias: quantos dias o saldo aguenta no ritmo do
+              período. Sem venda não há ritmo — e "infinito" não é cobertura,
+              é a ausência dela. Nulo, e a tela escreve "sem giro".
+            */
+            cobertura:
+              vendidas.greaterThan(0) && saldo.greaterThan(0)
+                ? saldo.dividedBy(vendidas.dividedBy(filtro.dias)).toFixed(0)
+                : null,
+            diasParado: l.dias_parado,
+            ...(podeVerCusto ? { valorEmEstoque: dec(l.valor_parado).toFixed(2) } : {}),
+          };
+        }),
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Transferências
+  // -------------------------------------------------------------------------
+
+  /**
+   * O que saiu de um local para outro.
+   *
+   * A transferência é DOIS movimentos — uma saída e uma entrada, ligadas pelo
+   * mesmo documento. Em trânsito é a saída que ainda não tem a entrada par:
+   * mercadoria que deixou um lugar e não chegou no outro.
+   */
+  async transferencias(filtro: FiltroMovimentoRelatorio): Promise<RelatorioTransferencias> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const parametros: unknown[] = [filtro.dias];
+      let recorte = '';
+
+      if (filtro.lojaId) {
+        parametros.push(filtro.lojaId);
+        recorte = `AND lj.id = $${parametros.length}::uuid`;
+      }
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          id: string;
+          em: Date;
+          sku: string;
+          produto: string;
+          descricao: string;
+          quantidade: string;
+          origem: string;
+          destino: string | null;
+          ator_id: string | null;
+        }[]
+      >(
+        `
+        SELECT m.id,
+               m.criado_em AS em,
+               v.sku,
+               p.nome AS produto,
+               v.descricao,
+               m.quantidade::text,
+               (lj.nome || ' · ' || l.nome) AS origem,
+               (
+                 SELECT lj2.nome || ' · ' || l2.nome
+                   FROM movimento_estoque e
+                   JOIN local_estoque l2 ON l2.id = e.local_id
+                   JOIN loja lj2 ON lj2.id = l2.loja_id
+                  WHERE e.tipo = 'ENTRADA_TRANSFERENCIA'
+                    AND e.documento_id = m.documento_id
+                    AND e.variacao_id = m.variacao_id
+                  LIMIT 1
+               ) AS destino,
+               m.ator_id
+          FROM movimento_estoque m
+          JOIN variacao v ON v.id = m.variacao_id
+          JOIN produto p ON p.id = v.produto_id
+          JOIN local_estoque l ON l.id = m.local_id
+          JOIN loja lj ON lj.id = l.loja_id
+         WHERE m.tipo = 'SAIDA_TRANSFERENCIA'
+           AND m.criado_em > now() - ($1::int || ' days')::interval
+           ${recorte}
+         ORDER BY m.criado_em DESC
+         LIMIT ${String(filtro.limite)}
+        `,
+        ...parametros,
+      );
+
+      /*
+        O resumo conta o PERÍODO inteiro, não a página. Contar `itens.length`
+        faria "80 enviadas" em qualquer loja que passasse do limite — e o
+        número de em trânsito, que é o que importa, vinha capado junto.
+      */
+      const resumo = await tx.$queryRawUnsafe<{ enviadas: bigint; recebidas: bigint }[]>(
+        `
+        SELECT count(*) AS enviadas,
+               count(*) FILTER (
+                 WHERE EXISTS (
+                   SELECT 1 FROM movimento_estoque e
+                    WHERE e.tipo = 'ENTRADA_TRANSFERENCIA'
+                      AND e.documento_id = m.documento_id
+                      AND e.variacao_id = m.variacao_id
+                 )
+               ) AS recebidas
+          FROM movimento_estoque m
+          JOIN local_estoque l ON l.id = m.local_id
+          JOIN loja lj ON lj.id = l.loja_id
+         WHERE m.tipo = 'SAIDA_TRANSFERENCIA'
+           AND m.criado_em > now() - ($1::int || ' days')::interval
+           ${recorte}
+        `,
+        ...parametros,
+      );
+
+      const nomes = await this.nomesDosAtores(
+        tx,
+        linhas.map((l) => l.ator_id),
+      );
+
+      const itens: LinhaTransferencia[] = linhas.map((l) => ({
+        id: l.id,
+        em: l.em.toISOString(),
+        sku: l.sku,
+        produto: l.produto,
+        descricaoVariacao: l.descricao,
+        quantidade: dec(l.quantidade).toFixed(0),
+        origem: l.origem,
+        destino: l.destino,
+        emTransito: l.destino === null,
+        ator: this.nomeDoAtor(l.ator_id, nomes),
+      }));
+
+      const enviadas = Number(resumo[0]?.enviadas ?? 0);
+      const recebidas = Number(resumo[0]?.recebidas ?? 0);
+
+      return {
+        dias: filtro.dias,
+        enviadas,
+        recebidas,
+        emTransito: enviadas - recebidas,
+        itens,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Divergências de inventário
+  // -------------------------------------------------------------------------
+
+  /**
+   * O que a contagem encontrou de diferente do sistema.
+   *
+   * Sobra e falta não se compensam: somar as duas daria "quase zero" numa loja
+   * onde metade do estoque está no lugar errado. São contadas separadamente, e
+   * o efeito líquido vem à parte.
+   */
+  async inventario(
+    filtro: FiltroMovimentoRelatorio,
+    podeVerCusto: boolean,
+  ): Promise<RelatorioInventario> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const parametros: unknown[] = [filtro.dias];
+      let recorte = '';
+
+      if (filtro.lojaId) {
+        parametros.push(filtro.lojaId);
+        recorte = `AND lj.id = $${parametros.length}::uuid`;
+      }
+
+      // A quantidade é sempre positiva; o sinal mora em `sentido`.
+      const diferenca = `(CASE WHEN m.sentido = 'ENTRADA' THEN m.quantidade ELSE -m.quantidade END)`;
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          id: string;
+          em: Date;
+          sku: string;
+          produto: string;
+          descricao: string;
+          local: string;
+          loja: string;
+          diferenca: string;
+          saldo_anterior: string;
+          saldo_posterior: string;
+          valor: string;
+          justificativa: string | null;
+          ator_id: string | null;
+        }[]
+      >(
+        `
+        SELECT m.id,
+               m.criado_em AS em,
+               v.sku,
+               p.nome AS produto,
+               v.descricao,
+               l.nome AS local,
+               lj.nome AS loja,
+               ${diferenca}::text AS diferenca,
+               m.saldo_anterior::text,
+               m.saldo_posterior::text,
+               (${diferenca} * m.custo_unitario)::text AS valor,
+               m.justificativa,
+               m.ator_id
+          FROM movimento_estoque m
+          JOIN variacao v ON v.id = m.variacao_id
+          JOIN produto p ON p.id = v.produto_id
+          JOIN local_estoque l ON l.id = m.local_id
+          JOIN loja lj ON lj.id = l.loja_id
+         WHERE m.tipo IN ('ENTRADA_INVENTARIO', 'SAIDA_INVENTARIO')
+           AND m.criado_em > now() - ($1::int || ' days')::interval
+           ${recorte}
+         ORDER BY m.criado_em DESC
+         LIMIT ${String(filtro.limite)}
+        `,
+        ...parametros,
+      );
+
+      const resumo = await tx.$queryRawUnsafe<
+        { contagens: bigint; sobras: bigint; faltas: bigint; liquido: string }[]
+      >(
+        `
+        SELECT count(*) AS contagens,
+               count(*) FILTER (WHERE m.sentido = 'ENTRADA') AS sobras,
+               count(*) FILTER (WHERE m.sentido = 'SAIDA') AS faltas,
+               coalesce(sum(${diferenca} * m.custo_unitario), 0)::text AS liquido
+          FROM movimento_estoque m
+          JOIN local_estoque l ON l.id = m.local_id
+          JOIN loja lj ON lj.id = l.loja_id
+         WHERE m.tipo IN ('ENTRADA_INVENTARIO', 'SAIDA_INVENTARIO')
+           AND m.criado_em > now() - ($1::int || ' days')::interval
+           ${recorte}
+        `,
+        ...parametros,
+      );
+
+      const r = resumo[0];
+      const nomes = await this.nomesDosAtores(
+        tx,
+        linhas.map((l) => l.ator_id),
+      );
+
+      return {
+        dias: filtro.dias,
+        contagens: Number(r?.contagens ?? 0),
+        sobras: Number(r?.sobras ?? 0),
+        faltas: Number(r?.faltas ?? 0),
+        ...(podeVerCusto ? { efeitoLiquido: dec(r?.liquido ?? '0').toFixed(2) } : {}),
+        itens: linhas.map((l) => ({
+          id: l.id,
+          em: l.em.toISOString(),
+          sku: l.sku,
+          produto: l.produto,
+          descricaoVariacao: l.descricao,
+          local: l.local,
+          loja: l.loja,
+          diferenca: dec(l.diferenca).toFixed(0),
+          saldoAntes: dec(l.saldo_anterior).toFixed(0),
+          saldoDepois: dec(l.saldo_posterior).toFixed(0),
+          ...(podeVerCusto ? { valor: dec(l.valor).toFixed(2) } : {}),
+          justificativa: l.justificativa,
+          ator: this.nomeDoAtor(l.ator_id, nomes),
+        })),
+      };
+    });
+  }
+
+  /**
+   * O nome de quem movimentou, numa consulta para a página inteira.
+   *
+   * `movimento_estoque.ator_id` é uuid sem chave estrangeira — o razão é
+   * append-only e não pode depender de uma linha que alguém apague. Devolver o
+   * id já encheu uma coluna "Usuário" de uuid.
+   */
+  private async nomesDosAtores(
+    tx: ClienteEmTransacao,
+    ids: (string | null)[],
+  ): Promise<Map<string, string>> {
+    const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
+    if (unicos.length === 0) return new Map();
+
+    const usuarios = await tx.usuario.findMany({
+      where: { id: { in: unicos } },
+      select: { id: true, nome: true },
+    });
+    return new Map(usuarios.map((u) => [u.id, u.nome]));
+  }
+
+  /** Sem ator o movimento veio da rotina; sem nome resolvido, some. */
+  private nomeDoAtor(id: string | null, nomes: Map<string, string>): string | null {
+    if (id === null) return 'Sistema';
+    return nomes.get(id) ?? null;
   }
 
   /**

@@ -1,11 +1,18 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import {
+  filtroGiroSchema,
+  filtroMovimentoRelatorioSchema,
   filtroPosicaoSchema,
   filtroVendasRelatorioSchema,
   PERM,
+  type FiltroGiro,
+  type FiltroMovimentoRelatorio,
   type FiltroPosicao,
   type FiltroVendasRelatorio,
   type PosicaoEstoque,
+  type RelatorioGiro,
+  type RelatorioInventario,
+  type RelatorioTransferencias,
   type RelatorioVendas,
 } from '@estoque/contracts';
 
@@ -41,5 +48,38 @@ export class RelatoriosController {
     @PrincipalAtual() principal: Principal,
   ): Promise<RelatorioVendas> {
     return this.relatorios.vendas(filtro, principal.permissoes.has(PERM.relatorio.verCusto));
+  }
+
+  /**
+   * Giro e "sem movimento" são a mesma rota.
+   *
+   * `ordem=parado` inverte a leitura. Duas rotas seriam duas consultas que
+   * precisariam concordar sobre o que é girar.
+   */
+  @Get('giro')
+  @Permissoes(PERM.relatorio.visualizar)
+  async giro(
+    @Query(new ZodPipe(filtroGiroSchema)) filtro: FiltroGiro,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<RelatorioGiro> {
+    return this.relatorios.giro(filtro, principal.permissoes.has(PERM.relatorio.verCusto));
+  }
+
+  /** Transferência não tem custo na tela: quem move não muda o patrimônio. */
+  @Get('transferencias')
+  @Permissoes(PERM.relatorio.visualizar)
+  async transferencias(
+    @Query(new ZodPipe(filtroMovimentoRelatorioSchema)) filtro: FiltroMovimentoRelatorio,
+  ): Promise<RelatorioTransferencias> {
+    return this.relatorios.transferencias(filtro);
+  }
+
+  @Get('inventario')
+  @Permissoes(PERM.relatorio.visualizar)
+  async inventario(
+    @Query(new ZodPipe(filtroMovimentoRelatorioSchema)) filtro: FiltroMovimentoRelatorio,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<RelatorioInventario> {
+    return this.relatorios.inventario(filtro, principal.permissoes.has(PERM.relatorio.verCusto));
   }
 }

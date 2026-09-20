@@ -64,6 +64,51 @@ interface Vendas {
   ranking: { nome: string; valor: string; participacao: string; margem?: string | null }[];
 }
 
+interface Giro {
+  dias: number;
+  semVenda: number;
+  semMovimento: number;
+  valorEncalhado?: string;
+  itens: {
+    sku: string;
+    saldo: string;
+    vendidas: string;
+    giro: string | null;
+    cobertura: string | null;
+    diasParado: number | null;
+    valorEmEstoque?: string;
+  }[];
+}
+
+interface Transferencias {
+  dias: number;
+  enviadas: number;
+  recebidas: number;
+  emTransito: number;
+  itens: {
+    quantidade: string;
+    origem: string;
+    destino: string | null;
+    emTransito: boolean;
+    ator: string | null;
+  }[];
+}
+
+interface Inventario {
+  dias: number;
+  contagens: number;
+  sobras: number;
+  faltas: number;
+  efeitoLiquido?: string;
+  itens: {
+    diferenca: string;
+    saldoAntes: string;
+    saldoDepois: string;
+    valor?: string;
+    ator: string | null;
+  }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -328,5 +373,169 @@ describe.runIf(temBanco)('permissões', () => {
       .get('/api/relatorios/vendas')
       .set('Authorization', `Bearer ${tokenCliente}`)
       .expect(401);
+  });
+});
+
+describe.runIf(temBanco)('giro e cobertura', () => {
+  it('cobertura é nula sem venda — "infinito" não é cobertura', async () => {
+    const r = await http
+      .get('/api/relatorios/giro?dias=30&limite=60')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const g = r.body as Giro;
+
+    for (const i of g.itens) {
+      if (Number(i.vendidas) === 0) expect(i.cobertura).toBeNull();
+      if (Number(i.saldo) <= 0) expect(i.giro).toBeNull();
+    }
+  });
+
+  /**
+   * O resumo conta o CONJUNTO, não a página. Se contasse a página, pedir 10
+   * linhas devolveria "no máximo 10 sem venda" numa loja com centenas.
+   */
+  it('o resumo não muda com o tamanho da página', async () => {
+    const pequena = await http
+      .get('/api/relatorios/giro?dias=30&limite=5')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+    const grande = await http
+      .get('/api/relatorios/giro?dias=30&limite=200')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const a = pequena.body as Giro;
+    const b = grande.body as Giro;
+
+    expect(a.semVenda).toBe(b.semVenda);
+    expect(a.semMovimento).toBe(b.semMovimento);
+    expect(a.valorEncalhado).toBe(b.valorEncalhado);
+    expect(a.itens).toHaveLength(5);
+  });
+
+  /** Sem movimento nenhum é subconjunto de sem venda: quem se moveu pode não ter vendido. */
+  it('sem movimento nunca passa de sem venda', async () => {
+    const r = await http
+      .get('/api/relatorios/giro?dias=30')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const g = r.body as Giro;
+    expect(g.semMovimento).toBeLessThanOrEqual(g.semVenda);
+  });
+
+  it('`ordem=parado` começa pelo que menos saiu', async () => {
+    const r = await http
+      .get('/api/relatorios/giro?dias=30&ordem=parado&limite=30')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const g = r.body as Giro;
+    const vendidas = g.itens.map((i) => Number(i.vendidas));
+    for (let i = 1; i < vendidas.length; i += 1) {
+      expect(vendidas[i]).toBeGreaterThanOrEqual(vendidas[i - 1]!);
+    }
+  });
+
+  it('a vendedora não recebe valor parado', async () => {
+    const r = await http
+      .get('/api/relatorios/giro?dias=30&limite=10')
+      .set('Authorization', `Bearer ${tokenVendedora}`)
+      .expect(200);
+
+    const g = r.body as Giro;
+    expect(g.valorEncalhado).toBeUndefined();
+    expect(JSON.stringify(g)).not.toContain('valorEmEstoque');
+  });
+});
+
+describe.runIf(temBanco)('transferências', () => {
+  /** Em trânsito é a saída sem a entrada par. Somadas, dão o total enviado. */
+  it('enviadas = recebidas + em trânsito', async () => {
+    const r = await http
+      .get('/api/relatorios/transferencias?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const t = r.body as Transferencias;
+    expect(t.recebidas + t.emTransito).toBe(t.enviadas);
+    // O resumo conta o período; a lista é uma página dele.
+    expect(t.itens.length).toBeLessThanOrEqual(t.enviadas);
+  });
+
+  it('a origem nunca falta e o destino confirma o trânsito', async () => {
+    const r = await http
+      .get('/api/relatorios/transferencias?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Transferencias).itens) {
+      expect(i.origem).toBeTruthy();
+      expect(i.emTransito).toBe(i.destino === null);
+      expect(Number(i.quantidade)).toBeGreaterThan(0);
+    }
+  });
+
+  /** O razão guarda `ator_id`; a tela espera gente. */
+  it('o ator vem como nome, nunca como uuid', async () => {
+    const r = await http
+      .get('/api/relatorios/transferencias?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Transferencias).itens) {
+      if (i.ator !== null) {
+        expect(i.ator).not.toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
+      }
+    }
+  });
+});
+
+describe.runIf(temBanco)('divergências de inventário', () => {
+  it('sobra e falta somam as contagens, sem se compensarem', async () => {
+    const r = await http
+      .get('/api/relatorios/inventario?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const i = r.body as Inventario;
+    expect(i.sobras + i.faltas).toBe(i.contagens);
+  });
+
+  /** O sinal mora em `sentido`; a quantidade gravada é sempre positiva. */
+  it('a diferença carrega o sinal e bate com os saldos', async () => {
+    const r = await http
+      .get('/api/relatorios/inventario?dias=365&limite=50')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const l of (r.body as Inventario).itens) {
+      expect(Number(l.saldoDepois) - Number(l.saldoAntes)).toBeCloseTo(Number(l.diferenca), 0);
+    }
+  });
+
+  it('a vendedora não recebe o efeito no patrimônio', async () => {
+    const r = await http
+      .get('/api/relatorios/inventario?dias=365&limite=10')
+      .set('Authorization', `Bearer ${tokenVendedora}`)
+      .expect(200);
+
+    const i = r.body as Inventario;
+    expect(i.efeitoLiquido).toBeUndefined();
+    expect(JSON.stringify(i.itens)).not.toContain('"valor"');
+  });
+
+  it('recusa período fora do intervalo', async () => {
+    await http
+      .get('/api/relatorios/inventario?dias=0')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+  });
+
+  it('sem sessão não devolve número nenhum', async () => {
+    await http.get('/api/relatorios/giro').expect(401);
+    await http.get('/api/relatorios/transferencias').expect(401);
+    await http.get('/api/relatorios/inventario').expect(401);
   });
 });

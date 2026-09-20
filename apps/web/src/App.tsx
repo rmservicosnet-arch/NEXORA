@@ -24,6 +24,9 @@ import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { RelatorioEstoque } from './paginas/RelatorioEstoque';
+import { RelatorioGiroTela } from './paginas/RelatorioGiro';
+import { RelatorioInventarioTela } from './paginas/RelatorioInventario';
+import { RelatorioTransferenciasTela } from './paginas/RelatorioTransferencias';
 import { RelatorioVendas } from './paginas/RelatorioVendas';
 import { Relatorios } from './paginas/Relatorios';
 import { TabelasPreco } from './paginas/TabelasPreco';
@@ -158,6 +161,9 @@ function AreaDaEquipe() {
           <Route path="relatorios" element={<Relatorios />} />
           <Route path="relatorios/estoque" element={<RelatorioEstoque />} />
           <Route path="relatorios/vendas" element={<RelatorioVendas />} />
+          <Route path="relatorios/giro" element={<RelatorioGiroTela />} />
+          <Route path="relatorios/transferencias" element={<RelatorioTransferenciasTela />} />
+          <Route path="relatorios/inventario" element={<RelatorioInventarioTela />} />
           <Route
             path="*"
             element={

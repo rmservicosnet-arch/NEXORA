@@ -167,6 +167,9 @@ o runtime.
 | `ORDER BY` por coluna não qualificada | O PostgreSQL prefere o nome de SAÍDA: `ORDER BY valor` com `valor::text` no SELECT ordena TEXTO. Qualifique (`b.valor`) quando houver cast |
 | Curva ABC classificada pela página | A acumulada só significa algo contra o conjunto inteiro. Janela sobre tudo, `LIMIT` depois — e o teste compara as letras de uma página de 5 com as da de 200 |
 | Margem calculada com custo zero | Dá 100% e parece lucro. Custo zero é item que nunca teve entrada com custo: a margem é nula, não cheia |
+| Rótulo de coluna mais forte do que a conta | "Valor parado" mostrava `saldo × custo` de QUALQUER item, inclusive o que girou bem. Quem lê decide pelo rótulo, não pela fórmula |
+| Resumo de relatório contado sobre a página | Pedir 10 linhas devolvia "no máximo 10 em trânsito". Indicador conta o conjunto; a lista é uma página dele |
+| Cobertura de estoque escrita como "infinita" | Sem venda não há ritmo: é ausência de giro, não excesso de cobertura. Nulo, e a tela escreve "sem giro" |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

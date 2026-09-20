@@ -6,7 +6,7 @@ import {
 } from '@estoque/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { Botao } from '../ui/Botao';
@@ -30,6 +30,13 @@ const RECORTES: { chave: Recorte; nome: string }[] = [
   { chave: 'negativos', nome: 'Saldo negativo' },
 ];
 
+/** O mesmo relatório, com o nome que o índice deu a cada recorte. */
+const TITULOS: Record<Recorte, string> = {
+  todos: 'Posição de estoque',
+  abaixoDoMinimo: 'Abaixo do mínimo',
+  negativos: 'Saldo negativo',
+};
+
 /**
  * Posição de estoque.
  *
@@ -41,7 +48,24 @@ export function RelatorioEstoque() {
   const [lojaId, setLojaId] = useState('');
   const [localId, setLocalId] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
-  const [recorte, setRecorte] = useState<Recorte>('todos');
+
+  /**
+   * O recorte vem da URL.
+   *
+   * "Saldo negativo" e "Abaixo do mínimo" são itens próprios do índice de
+   * relatórios, e é este relatório que os responde. Link direto para o
+   * recorte é melhor do que três telas consultando a mesma coisa.
+   */
+  const [parametrosUrl, setParametrosUrl] = useSearchParams();
+  const daUrl = parametrosUrl.get('recorte') as Recorte | null;
+  const recorte: Recorte = daUrl && RECORTES.some((r) => r.chave === daUrl) ? daUrl : 'todos';
+
+  function setRecorte(nova: Recorte) {
+    const limpos = new URLSearchParams(parametrosUrl);
+    if (nova === 'todos') limpos.delete('recorte');
+    else limpos.set('recorte', nova);
+    setParametrosUrl(limpos, { replace: true });
+  }
 
   const lojas = useQuery({
     queryKey: ['lojas', 'painel'],
@@ -126,7 +150,7 @@ export function RelatorioEstoque() {
           Relatórios
         </Link>
         <span className="text-neutral-300">/</span>
-        <span className="text-[13.5px] font-medium text-neutral-900">Posição de estoque</span>
+        <span className="text-[13.5px] font-medium text-neutral-900">{TITULOS[recorte]}</span>
 
         <div className="flex-1" />
 
@@ -146,7 +170,7 @@ export function RelatorioEstoque() {
         <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
-              Posição de estoque
+              {TITULOS[recorte]}
             </h1>
             <p className="mt-0.5 text-[13.5px] text-neutral-500">
               {dados ? (
