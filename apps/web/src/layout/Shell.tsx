@@ -21,6 +21,13 @@ interface ItemMenu {
 }
 
 const ICONE = {
+  venda: (
+    <>
+      <path d="M4 6h16v13H4z" />
+      <path d="M4 10h16" />
+      <path d="M9 14h6" />
+    </>
+  ),
   painel: (
     <>
       <rect x="3" y="3" width="7" height="8" rx="1.5" />
@@ -154,6 +161,14 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Operação',
     permissoes: [PERM.venda.criar],
     icone: ICONE.caixaRegistradora,
+  },
+
+  {
+    rotulo: 'Vendas',
+    para: '/vendas',
+    grupo: 'Operação',
+    permissoes: [PERM.venda.criar],
+    icone: ICONE.venda,
   },
   {
     rotulo: 'Pedidos',

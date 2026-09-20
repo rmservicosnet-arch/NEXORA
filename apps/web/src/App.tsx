@@ -10,6 +10,8 @@ import { Caixa } from './paginas/Caixa';
 import { Compras } from './paginas/Compras';
 import { Contas } from './paginas/Contas';
 import { Fornecedores } from './paginas/Fornecedores';
+import { Vendas } from './paginas/Vendas';
+import { VendaDetalhe } from './paginas/VendaDetalhe';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -150,6 +152,8 @@ function AreaDaEquipe() {
           <Route path="configuracoes" element={<Configuracoes />} />
           <Route path="compras" element={<Compras />} />
           <Route path="fornecedores" element={<Fornecedores />} />
+          <Route path="vendas" element={<Vendas />} />
+          <Route path="vendas/:id" element={<VendaDetalhe />} />
           <Route path="financeiro" element={<Contas />} />
           <Route path="estoque" element={<Estoque />} />
           <Route path="caixa" element={<Caixa />} />

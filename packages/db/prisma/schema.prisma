@@ -1342,6 +1342,10 @@ model Venda {
   /// espalharia a mesma fórmula por vários lugares.
   troco Decimal @default(0) @db.Decimal(14, 2)
 
+  /// Quanto desta venda já voltou, em dinheiro. Cache dos itens, atualizado
+  /// pela devolução na mesma transação — como `carteira.saldo` é do razão.
+  valorDevolvido Decimal @default(0) @map("valor_devolvido") @db.Decimal(14, 2)
+
   /// Caixa em que esta venda entrou.
   ///
   /// Nulo quando a venda não teve dinheiro: cartão e PIX vão para a

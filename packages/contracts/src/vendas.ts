@@ -182,6 +182,13 @@ export const vendaSchema = z.object({
   total: z.string(),
   /** Quanto o cliente entregou a mais em dinheiro. */
   troco: z.string(),
+  /**
+   * Quanto desta venda já voltou, em dinheiro.
+   *
+   * O faturamento dela é `total − valorDevolvido`: devolver dois de dez não
+   * apaga a venda, diminui o que ela faturou.
+   */
+  valorDevolvido: z.string(),
   concluidaEm: z.string().nullable(),
   canceladaEm: z.string().nullable(),
   motivoCancelamento: z.string().nullable(),
@@ -241,8 +248,30 @@ export type FiltroVendas = z.infer<typeof filtroVendasSchema>;
 export const paginaVendasSchema = z.object({
   itens: z.array(vendaSchema),
   proximoCursor: z.string().nullable(),
-  /** Soma das vendas concluídas no filtro. */
+  /**
+   * Faturado LÍQUIDO no filtro, sobre o conjunto — nunca sobre a página.
+   *
+   * Cancelada não entra; devolvida entra pelo que ficou. Somar o total cheio
+   * de uma venda com devolução mostraria faturamento que voltou para a
+   * prateleira.
+   */
   totalVendido: z.string(),
+  /** O bruto e o que voltou, para a tela poder explicar a diferença. */
+  totalBruto: z.string(),
+  totalDevolvido: z.string(),
+  /**
+   * Os recortes que a tela oferece — e eles PARTICIONAM `total`.
+   *
+   * `RASCUNHO` fica fora da lista e da conta: o PDV é venda imediata e nada
+   * cria rascunho. No dia em que criar, ele ganha pílula própria em vez de
+   * sumir dentro de outro número.
+   */
+  contagens: z.object({
+    total: z.number().int(),
+    concluidas: z.number().int(),
+    comDevolucao: z.number().int(),
+    canceladas: z.number().int(),
+  }),
 });
 export type PaginaVendas = z.infer<typeof paginaVendasSchema>;
 

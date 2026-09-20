@@ -88,6 +88,24 @@ export class VendasController {
     return this.vendas.devolver(id, dados, principal);
   }
 
+  /**
+   * A PREVIA da devolucao: a mesma conta, sem gravar nada.
+   *
+   * A tela mostra para onde o dinheiro vai antes de alguem confirmar, e o
+   * numero tem de ser o mesmo que a devolucao vai produzir — por isso a
+   * previa roda o servico de verdade e desfaz no fim, em vez de repetir a
+   * regra no navegador.
+   */
+  @Post(':id/devolucoes/previa')
+  @Permissoes(PERM.venda.devolver)
+  async previaDevolucao(
+    @Param('id') id: string,
+    @Body(new ZodPipe(devolucaoVendaSchema)) dados: DevolucaoVenda,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<ResultadoDevolucao> {
+    return this.vendas.devolver(id, dados, principal, true);
+  }
+
   @Post(':id/cancelar')
   @Permissoes(PERM.venda.cancelar)
   async cancelar(

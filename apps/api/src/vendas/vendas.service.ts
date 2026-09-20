@@ -560,6 +560,7 @@ export class VendasService {
     id: string,
     dados: DevolucaoVenda,
     principal: Principal,
+    simular = false,
   ): Promise<ResultadoDevolucao> {
     const contexto = exigirContexto();
 
@@ -824,13 +825,45 @@ export class VendasService {
             .greaterThanOrEqualTo(dec(i.quantidade.toString()));
         });
 
+        /*
+          SIMULACAO: a tela precisa mostrar PARA ONDE VAI O DINHEIRO antes de
+          alguem confirmar, e uma previa calculada no navegador seria a regra
+          de dinheiro escrita duas vezes — a segunda envelhecendo em silencio.
+
+          Entao a previa roda ESTA funcao inteira e desfaz no fim. O que a
+          tela mostra e literalmente o que vai acontecer, porque e o mesmo
+          codigo, contra os mesmos dados, no mesmo instante. As recusas
+          (`CAIXA_FECHADO`, `DEVOLUCAO_SEM_DESTINO`) sobem do jeito normal e
+          aparecem antes de a pessoa apertar o botao.
+        */
+        if (simular) {
+          throw new SimulacaoConcluida();
+        }
+
         await tx.venda.update({
           where: { id: venda.id },
-          data: { status: tudoVoltou ? 'DEVOLVIDA_TOTAL' : 'DEVOLVIDA_PARCIAL' },
+          data: {
+            status: tudoVoltou ? 'DEVOLVIDA_TOTAL' : 'DEVOLVIDA_PARCIAL',
+            // Cache do que os itens dizem, atualizado na MESMA transacao: e o
+            // que deixa a listagem somar faturado liquido sem dividir item a
+            // item dentro de um agregado com filtro dinamico.
+            valorDevolvido: dec(venda.valorDevolvido.toString()).plus(valorDevolvido).toFixed(2),
+          },
         });
       },
       { tempoLimiteMs: 30_000 },
-    );
+    ).catch((erro: unknown) => {
+      // O unico erro que NAO e erro: ele existe para desfazer a simulacao.
+      if (!(erro instanceof SimulacaoConcluida)) throw erro;
+    });
+
+    if (simular) {
+      return {
+        venda: await this.detalhe(id, principal.permissoes.has(PERM.produto.verCusto)),
+        valorDevolvido: valorDevolvido.toFixed(2),
+        destinos,
+      };
+    }
 
     await this.auditoria.registrar({
       contexto,
@@ -881,9 +914,11 @@ export class VendasService {
   ): Promise<PaginaVendas> {
     return comEscopoAtual(this.prisma, async (tx) => {
       const onde = {
+        // RASCUNHO fica de fora: o PDV e venda imediata e nada cria rascunho.
+        // Deixa-lo entrar quebraria a soma das pilulas sem ninguem ver.
+        status: filtro.status ?? { not: 'RASCUNHO' as const },
         ...(filtro.lojaId ? { lojaId: filtro.lojaId } : {}),
         ...(filtro.clienteId ? { clienteId: filtro.clienteId } : {}),
-        ...(filtro.status ? { status: filtro.status } : {}),
         // Quem não tem `venda.ver_todas` vê apenas as próprias. O filtro por
         // vendedor que ele mandar não amplia isso.
         ...(principal.permissoes.has(PERM.venda.verTodas)
@@ -912,15 +947,40 @@ export class VendasService {
       const temMais = linhas.length > filtro.limite;
       const pagina = temMais ? linhas.slice(0, filtro.limite) : linhas;
 
-      const soma = await tx.venda.aggregate({
-        where: { ...onde, status: 'CONCLUIDA' },
-        _sum: { total: true },
-      });
+      /*
+        Os numeros do topo contam o CONJUNTO, nunca a pagina — e o faturado e
+        LIQUIDO: `total - valorDevolvido`. Somar so as CONCLUIDA, como antes,
+        fazia uma venda com devolucao parcial sumir inteira do faturamento,
+        inclusive a parte que ficou com o cliente.
+      */
+      const [soma, porStatus] = await Promise.all([
+        tx.venda.aggregate({
+          where: { ...onde, status: { notIn: ['CANCELADA', 'RASCUNHO'] } },
+          _sum: { total: true, valorDevolvido: true },
+        }),
+        tx.venda.groupBy({ by: ['status'], where: onde, _count: { _all: true } }),
+      ]);
+
+      const quantos = (...status: string[]) =>
+        porStatus
+          .filter((g) => status.includes(g.status))
+          .reduce((total, g) => total + g._count._all, 0);
+
+      const bruto = dec((soma._sum.total ?? 0).toString());
+      const devolvido = dec((soma._sum.valorDevolvido ?? 0).toString());
 
       return {
         itens: pagina.map((v) => this.paraContrato(v, podeVerCusto)),
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
-        totalVendido: dec((soma._sum.total ?? 0).toString()).toFixed(2),
+        totalVendido: bruto.minus(devolvido).toFixed(2),
+        totalBruto: bruto.toFixed(2),
+        totalDevolvido: devolvido.toFixed(2),
+        contagens: {
+          total: quantos('CONCLUIDA', 'DEVOLVIDA_PARCIAL', 'DEVOLVIDA_TOTAL', 'CANCELADA'),
+          concluidas: quantos('CONCLUIDA'),
+          comDevolucao: quantos('DEVOLVIDA_PARCIAL', 'DEVOLVIDA_TOTAL'),
+          canceladas: quantos('CANCELADA'),
+        },
       };
     });
   }
@@ -1310,6 +1370,7 @@ export class VendasService {
       acrescimo: dec(v.acrescimo.toString()).toFixed(2),
       total: total.toFixed(2),
       troco: recebido.minus(total).toFixed(2),
+      valorDevolvido: dec(v.valorDevolvido.toString()).toFixed(2),
       concluidaEm: v.concluidaEm?.toISOString() ?? null,
       canceladaEm: v.canceladaEm?.toISOString() ?? null,
       motivoCancelamento: v.motivoCancelamento,
@@ -1349,6 +1410,20 @@ export class VendasService {
 }
 
 /** O Decimal do Prisma. Só precisamos de 	oString() — dec faz o resto. */
+/**
+ * Desfaz a transacao de uma previa de devolucao.
+ *
+ * Nao e uma falha: e o jeito de rodar a operacao INTEIRA — com as travas, as
+ * conferencias e a cascata do dinheiro — e nao gravar nada. Uma previa
+ * calculada por fora seria a regra escrita duas vezes.
+ */
+class SimulacaoConcluida extends Error {
+  constructor() {
+    super('simulacao');
+    this.name = 'SimulacaoConcluida';
+  }
+}
+
 interface Numerico {
   toString(): string;
 }
@@ -1366,6 +1441,7 @@ interface VendaComRelacoes {
   desconto: Numerico;
   acrescimo: Numerico;
   total: Numerico;
+  valorDevolvido: Numerico;
   concluidaEm: Date | null;
   canceladaEm: Date | null;
   motivoCancelamento: string | null;

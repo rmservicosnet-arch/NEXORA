@@ -486,4 +486,119 @@ describe.runIf(temBanco)('devolução parcial', () => {
     expect(depois.status).toBe('CONCLUIDA');
     expect(depois.itens[0]!.quantidadeDevolvida).toBe('0.000000');
   });
+
+  /*
+    A PREVIA roda o mesmo codigo e desfaz no fim. Se ela divergisse da
+    devolucao, a tela estaria prometendo um destino e o servidor escolhendo
+    outro — que e o pior jeito de mover dinheiro.
+  */
+  it('a prévia diz exatamente o que a devolução faz, e não grava nada', async () => {
+    const variacaoId = await itemAbastecido();
+    const clienteId = await cliente(false);
+
+    const criada = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '4', precoUnitario: '45.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '180.00' }],
+        })
+        .expect(201)
+    ).body as VendaCriada;
+
+    vendasAPrazo.push(criada.venda.numero);
+
+    const detalhe = (await autenticado('get', `/api/vendas/${criada.venda.id}`).expect(200))
+      .body as Venda;
+
+    const corpo = {
+      motivo: 'Conferindo o destino antes de confirmar',
+      itens: [{ itemId: detalhe.itens[0]!.id, quantidade: '2' }],
+    };
+
+    const previa = (
+      await autenticado('post', `/api/vendas/${criada.venda.id}/devolucoes/previa`)
+        .send(corpo)
+        .expect(201)
+    ).body as Devolucao;
+
+    // Nada gravado: a venda continua intacta depois da prévia.
+    const intacta = (await autenticado('get', `/api/vendas/${criada.venda.id}`).expect(200))
+      .body as Venda & { status: string };
+
+    expect(intacta.status).toBe('CONCLUIDA');
+    expect(intacta.itens[0]!.quantidadeDevolvida).toBe('0.000000');
+
+    const real = (
+      await autenticado('post', `/api/vendas/${criada.venda.id}/devolucoes`).send(corpo).expect(201)
+    ).body as Devolucao;
+
+    expect(previa.valorDevolvido).toBe(real.valorDevolvido);
+    expect(previa.destinos).toEqual(real.destinos);
+  });
+
+  /*
+    A LISTAGEM, que e a tela nova.
+
+    `totalVendido` somava so as CONCLUIDA: uma venda com devolucao parcial
+    sumia inteira do faturamento, inclusive a parte que ficou com o cliente.
+    E as pilulas precisam de contagens que FECHEM com o total, senao o numero
+    ao lado de "Todas" manda procurar linhas que recorte nenhum mostra.
+  */
+  it('a lista soma faturado LÍQUIDO e as contagens fecham com o total', async () => {
+    const variacaoId = await itemAbastecido();
+    const clienteId = await cliente(false);
+
+    const criada = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '10', precoUnitario: '30.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '300.00' }],
+        })
+        .expect(201)
+    ).body as VendaCriada;
+
+    vendasAPrazo.push(criada.venda.numero);
+
+    const detalhe = (await autenticado('get', `/api/vendas/${criada.venda.id}`).expect(200))
+      .body as Venda;
+
+    await autenticado('post', `/api/vendas/${criada.venda.id}/devolucoes`)
+      .send({
+        motivo: 'Três unidades voltaram no dia seguinte',
+        itens: [{ itemId: detalhe.itens[0]!.id, quantidade: '3' }],
+      })
+      .expect(201);
+
+    const lista = (await autenticado('get', '/api/vendas?limite=100').expect(200)).body as {
+      itens: { id: string; valorDevolvido: string; status: string }[];
+      totalVendido: string;
+      totalBruto: string;
+      totalDevolvido: string;
+      contagens: {
+        total: number;
+        concluidas: number;
+        comDevolucao: number;
+        canceladas: number;
+      };
+    };
+
+    // O líquido é o bruto menos o que voltou — a conta que o rótulo promete.
+    expect(Number(lista.totalVendido)).toBeCloseTo(
+      Number(lista.totalBruto) - Number(lista.totalDevolvido),
+      2,
+    );
+
+    // E os recortes PARTICIONAM: sem buraco e sem sobreposição.
+    const { total, concluidas, comDevolucao, canceladas } = lista.contagens;
+    expect(concluidas + comDevolucao + canceladas).toBe(total);
+
+    const minha = lista.itens.find((v) => v.id === criada.venda.id);
+    expect(minha).toBeDefined();
+    expect(minha!.status).toBe('DEVOLVIDA_PARCIAL');
+    expect(minha!.valorDevolvido).toBe('90.00');
+  });
 });
