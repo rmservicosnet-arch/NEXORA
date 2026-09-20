@@ -190,6 +190,9 @@ o runtime.
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 | Formato de resposta trocado e só o teste do módulo atualizado | O catálogo virou objeto e três arquivos de e2e continuaram chamando `.find` nele. Ao mudar o corpo de uma rota, procure a ROTA em todos os testes, não o tipo |
 | Pilha de avisos idênticos no topo da lista | Sessenta e nove faixas âmbar não chamam atenção para nada — é a parede de avisos de novo. Acima de um, um aviso só, com o número e o caminho até eles |
+| Item de flex com `overflow:hidden` numa linha curta demais | `line-clamp` e `truncate` ligam `overflow:hidden`, e isso anula o `min-height:auto` que impediria o encolhimento: três linhas de texto viraram 3px, sem erro nenhum. Altura de linha é PISO (`minmax(h,auto)`), e todo texto leva `shrink-0` |
+| `flex-1 min-w-0` numa linha `flex-wrap` | Não quebra: esmaga. O nome do produto virou uma letra no celular enquanto os controles seguiam na mesma linha. Quem precisa de duas linhas pede grade com posição explícita |
+| Recortes que não particionam o total ao lado deles | "Todos 1462" com quatro pílulas somando 1166: cancelado e expirado não cabiam em nenhuma. Ou a soma fecha, ou "Todos" não mostra número |
 
 ## Testes
 

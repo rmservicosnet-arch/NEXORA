@@ -197,7 +197,12 @@ export class AuthService {
 
     if (payload.aud === DOMINIO_CLIENTE) {
       const acesso = await comEscopo(this.prisma, contexto, async (tx) =>
-        tx.clienteAcesso.findUnique({ where: { id: payload.sub } }),
+        // O nome da empresa vem no mesmo `findUnique`: um join, nao uma ida a
+        // mais ao banco numa consulta que roda a CADA requisicao do portal.
+        tx.clienteAcesso.findUnique({
+          where: { id: payload.sub },
+          include: { cliente: { select: { nome: true } } },
+        }),
       );
 
       if (!acesso || acesso.status !== 'ATIVO') {
@@ -209,6 +214,7 @@ export class AuthService {
         dominio: DOMINIO_CLIENTE,
         tenantId: acesso.tenantId,
         clienteId: acesso.clienteId,
+        empresa: acesso.cliente.nome,
         nome: acesso.nome,
         email: acesso.email,
         // O portal tem exatamente uma permissão. Tudo o mais é negado por

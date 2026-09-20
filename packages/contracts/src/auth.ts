@@ -48,6 +48,8 @@ export const usuarioSessaoSchema = z.object({
   nome: z.string(),
   email: z.string(),
   dominio: dominioSchema,
+  /** So no portal: a empresa em nome de quem a pessoa compra. */
+  empresa: z.string().optional(),
   permissoes: z.array(z.string()),
   lojaIds: z.array(z.string()),
 });

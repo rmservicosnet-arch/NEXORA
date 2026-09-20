@@ -73,11 +73,13 @@ interface PaginaPedidos {
   proximoCursor: string | null;
   naFila: number;
   contagens: {
+    total: number;
     aguardando: number;
     comOCliente: number;
     confirmados: number;
     devolvidos: number;
     faturados: number;
+    encerrados: number;
   };
 }
 
@@ -349,6 +351,10 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
       { campo: 'confirmados', status: ['CONFIRMADO', 'CONFIRMADO_PARCIALMENTE'] },
       { campo: 'faturados', status: ['FATURADO', 'CONCLUIDO'] },
       { campo: 'devolvidos', status: ['DEVOLVIDO', 'RECUSADO'] },
+      {
+        campo: 'encerrados',
+        status: ['FATURADO', 'CONCLUIDO', 'DEVOLVIDO', 'RECUSADO', 'CANCELADO', 'EXPIRADO'],
+      },
     ] as const;
 
     for (const recorte of recortes) {
@@ -372,6 +378,26 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
       }
     }
   }, 120_000);
+
+  /**
+   * As quatro pilulas da tela do cliente PARTICIONAM o total.
+   *
+   * "Todos" mostra um numero ao lado, e quem soma as outras quatro espera
+   * chegar nele. Cancelado e expirado nao cabiam em recorte nenhum ate
+   * `encerrados` existir: a soma dava menos e a tela mentia sem erro nenhum.
+   */
+  it('esperando voce + na loja + confirmados + encerrados fecham o total', async () => {
+    const { contagens } = (
+      await http
+        .get('/api/portal/pedidos?limite=1')
+        .set('Authorization', `Bearer ${tokenCliente}`)
+        .expect(200)
+    ).body as PaginaPedidos;
+
+    expect(
+      contagens.comOCliente + contagens.aguardando + contagens.confirmados + contagens.encerrados,
+    ).toBe(contagens.total);
+  });
 
   it('o pedido do cliente nao carrega disponivel, e o da equipe carrega', async () => {
     const variacaoId = await itemPublicado('50.00', '10');

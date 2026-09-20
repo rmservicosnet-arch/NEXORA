@@ -318,11 +318,23 @@ export type FiltroPedidos = z.infer<typeof filtroPedidosSchema>;
  * que muda com o `limite` — e uma aba "Faturados 30" que na verdade sao 240.
  */
 export const contagensPedidosSchema = z.object({
+  /** Tudo menos rascunho — o mesmo conjunto que a listagem sem recorte abre. */
+  total: z.number().int(),
   aguardando: z.number().int(),
   comOCliente: z.number().int(),
   confirmados: z.number().int(),
   devolvidos: z.number().int(),
   faturados: z.number().int(),
+  /**
+   * O que acabou, de qualquer jeito: faturado, concluido, devolvido, recusado,
+   * cancelado e expirado.
+   *
+   * Existe para a tela do CLIENTE, onde os quatro recortes precisam PARTICIONAR
+   * o total: esperando voce + na loja + confirmados + encerrados = todos. Sem
+   * ele, cancelado e expirado nao caem em pilula nenhuma e a soma nao fecha com
+   * o numero de "Todos".
+   */
+  encerrados: z.number().int(),
 });
 export type ContagensPedidos = z.infer<typeof contagensPedidosSchema>;
 

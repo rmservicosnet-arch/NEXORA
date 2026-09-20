@@ -42,6 +42,14 @@ export interface Principal {
   readonly dominio: Dominio;
   readonly tenantId: string;
   readonly clienteId?: string;
+  /**
+   * A razao social do cliente. So no portal.
+   *
+   * `nome` e a PESSOA que entrou; esta e a empresa em nome de quem ela compra.
+   * Um professor pode responder por mais de uma academia, e a tela precisa
+   * dizer em qual delas ele esta.
+   */
+  readonly empresa?: string;
   readonly nome: string;
   readonly email: string;
   readonly permissoes: ReadonlySet<string>;

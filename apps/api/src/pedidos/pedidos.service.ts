@@ -77,6 +77,22 @@ const NA_FILA: readonly StatusPedido[] = [
   'CONFIRMADO_PARCIALMENTE',
 ];
 
+/**
+ * O que acabou, de qualquer jeito.
+ *
+ * Lista explicita, nunca "tudo o que nao esta nas outras": status novo entra
+ * aqui por decisao de alguem. A tela do cliente PARTICIONA o total com quatro
+ * recortes, e o teste que soma os quatro contra `total` derruba quem esquecer.
+ */
+const ENCERRADOS: readonly StatusPedido[] = [
+  'FATURADO',
+  'CONCLUIDO',
+  'DEVOLVIDO',
+  'RECUSADO',
+  'CANCELADO',
+  'EXPIRADO',
+];
+
 @Injectable()
 export class PedidosService {
   constructor(
@@ -1077,15 +1093,18 @@ export class PedidosService {
        * aba "Faturados 30" que na verdade sao 240. E o escopo do RLS ja
        * limita a empresa; `count` aqui conta o que a pessoa pode ver.
        */
-      const [aguardando, comOCliente, confirmados, devolvidos, faturados] = await Promise.all([
-        tx.pedido.count({ where: { status: 'AGUARDANDO_CONFIRMACAO' } }),
-        tx.pedido.count({ where: { status: 'AGUARDANDO_ACEITE_CLIENTE' } }),
-        tx.pedido.count({
-          where: { status: { in: ['CONFIRMADO', 'CONFIRMADO_PARCIALMENTE'] } },
-        }),
-        tx.pedido.count({ where: { status: { in: ['DEVOLVIDO', 'RECUSADO'] } } }),
-        tx.pedido.count({ where: { status: { in: ['FATURADO', 'CONCLUIDO'] } } }),
-      ]);
+      const [total, aguardando, comOCliente, confirmados, devolvidos, faturados, encerrados] =
+        await Promise.all([
+          tx.pedido.count({ where: { NOT: { status: 'RASCUNHO' } } }),
+          tx.pedido.count({ where: { status: 'AGUARDANDO_CONFIRMACAO' } }),
+          tx.pedido.count({ where: { status: 'AGUARDANDO_ACEITE_CLIENTE' } }),
+          tx.pedido.count({
+            where: { status: { in: ['CONFIRMADO', 'CONFIRMADO_PARCIALMENTE'] } },
+          }),
+          tx.pedido.count({ where: { status: { in: ['DEVOLVIDO', 'RECUSADO'] } } }),
+          tx.pedido.count({ where: { status: { in: ['FATURADO', 'CONCLUIDO'] } } }),
+          tx.pedido.count({ where: { status: { in: [...ENCERRADOS] } } }),
+        ]);
 
       const itens: Pedido[] = [];
       for (const p of pagina) {
@@ -1096,7 +1115,15 @@ export class PedidosService {
         itens,
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         naFila,
-        contagens: { aguardando, comOCliente, confirmados, devolvidos, faturados },
+        contagens: {
+          total,
+          aguardando,
+          comOCliente,
+          confirmados,
+          devolvidos,
+          faturados,
+          encerrados,
+        },
       };
     });
   }

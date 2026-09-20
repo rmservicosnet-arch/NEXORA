@@ -1,7 +1,7 @@
 import type { CatalogoPortal, ExtratoCarteira, ResultadoCheckout } from '@estoque/contracts';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../../api/cliente';
 import { useCarrinho, type ItemCarrinho } from '../../portal/carrinho';
@@ -15,6 +15,10 @@ function brl(v: string | number): string {
   return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
 
+/** A mesma grade no cabeçalho e em cada linha. Uma declaração, não duas. */
+const GRADE =
+  'lg:grid lg:grid-cols-[64px_minmax(0,1fr)_112px_128px_112px_44px] lg:items-center lg:gap-3.5';
+
 export function PortalCarrinho() {
   const { itens, definirQuantidade, remover, esvaziar } = useCarrinho();
   const navegar = useNavigate();
@@ -22,6 +26,7 @@ export function PortalCarrinho() {
 
   const [observacao, setObservacao] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  const [confirmandoEsvaziar, setConfirmandoEsvaziar] = useState(false);
 
   /**
    * Relê cada item do servidor.
@@ -58,6 +63,7 @@ export function PortalCarrinho() {
     };
   });
 
+  const tabela = frescos.find((c) => c.data)?.data?.tabela ?? null;
   const sumidos = linhas.filter((l) => !l.carregando && !l.atual);
   const total = linhas.reduce(
     (soma, l) => soma + Number(l.preco ?? l.item.precoVisto) * l.item.quantidade,
@@ -127,11 +133,17 @@ export function PortalCarrinho() {
 
   return (
     <>
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-[22px] font-bold text-neutral-900">Carrinho</h1>
-        <p className="text-[13px] text-neutral-500">
-          {itens.length} {itens.length === 1 ? 'item' : 'itens'} · {unidades}{' '}
-          {unidades === 1 ? 'unidade' : 'unidades'}
+      <div className="flex flex-col gap-[3px]">
+        <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">Carrinho</h1>
+        <p className="text-[13.5px] text-neutral-500">
+          {itens.length} {itens.length === 1 ? 'item' : 'itens'}
+          {tabela ? (
+            <>
+              {' '}
+              · preços da sua tabela{' '}
+              <strong className="font-semibold text-neutral-900">{tabela}</strong>
+            </>
+          ) : null}
         </p>
       </div>
 
@@ -153,8 +165,22 @@ export function PortalCarrinho() {
         onde o cliente monta o pedido. Numa coluna só, o total e o botão
         ficavam depois de rolar a lista inteira.
       */}
-      <div className="flex flex-col items-start gap-4 lg:flex-row">
-        <section className="w-full flex-1 rounded-md border border-neutral-100 bg-white p-4 shadow-sm lg:w-auto">
+      <div className="flex flex-col items-start gap-[18px] lg:flex-row">
+        <section className="w-full min-w-0 flex-1 overflow-hidden rounded-lg border border-neutral-100 bg-white">
+          <div
+            className={juntar(
+              'hidden border-b border-neutral-100 bg-neutral-50 px-4 py-2.5',
+              GRADE,
+            )}
+          >
+            <span />
+            <Coluna>Item</Coluna>
+            <Coluna alinhamento="right">Unitário</Coluna>
+            <Coluna alinhamento="center">Quantidade</Coluna>
+            <Coluna alinhamento="right">Total</Coluna>
+            <span />
+          </div>
+
           {linhas.map(({ item, atual, preco, disponivel, mudouDePreco }) => (
             <Linha
               key={item.variacaoId}
@@ -167,60 +193,139 @@ export function PortalCarrinho() {
               aoRemover={() => remover(item.variacaoId)}
             />
           ))}
+
+          <div className="flex items-center gap-2.5 border-t border-neutral-100 px-4 py-3">
+            <Link to="/portal" className="text-[12.5px] font-medium">
+              ← Continuar escolhendo
+            </Link>
+            <span className="flex-1" />
+            {/*
+              Dois toques para esvaziar: o carrinho pode ter vinte linhas
+              montadas ao longo de dias, e um toque errado ao lado do "Enviar"
+              apagaria tudo sem volta.
+            */}
+            <button
+              type="button"
+              onClick={() => {
+                if (confirmandoEsvaziar) {
+                  esvaziar();
+                  setConfirmandoEsvaziar(false);
+                } else {
+                  setConfirmandoEsvaziar(true);
+                }
+              }}
+              onBlur={() => setConfirmandoEsvaziar(false)}
+              className={juntar(
+                'h-8 rounded-md border px-3 text-[12.5px]',
+                confirmandoEsvaziar
+                  ? 'border-[var(--color-perigo)] font-semibold text-[var(--color-perigo)]'
+                  : 'border-neutral-100 text-neutral-500 hover:border-neutral-200',
+              )}
+            >
+              {confirmandoEsvaziar ? 'Esvaziar mesmo?' : 'Esvaziar carrinho'}
+            </button>
+          </div>
         </section>
 
-        <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-[360px]">
-          <section className="flex flex-col gap-3 rounded-md border border-neutral-100 bg-white p-4 shadow-sm">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                Observação para a loja
-              </span>
-              <textarea
-                value={observacao}
-                onChange={(e) => setObservacao(e.target.value)}
-                rows={2}
-                maxLength={400}
-                placeholder="Prazo, quem vai retirar, o que for útil"
-                className="rounded-md border border-neutral-200 px-3 py-2 text-[13.5px]"
-              />
-            </label>
+        <aside className="flex w-full shrink-0 flex-col gap-3.5 lg:w-[368px]">
+          <section className="rounded-lg border border-neutral-100 bg-white p-4">
+            <h2 className="font-display text-[14px] font-semibold text-neutral-900">Resumo</h2>
 
-            <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-              <span className="text-[13px] text-neutral-500">Total</span>
-              <span className="font-mono text-[19px] font-semibold text-neutral-900">
+            <div className="mt-3 flex items-baseline justify-between pb-[9px]">
+              <span className="text-[13px] text-neutral-500">
+                {unidades} {unidades === 1 ? 'unidade' : 'unidades'} em {itens.length}{' '}
+                {itens.length === 1 ? 'item' : 'itens'}
+              </span>
+              <span className="font-mono text-[13.5px] text-neutral-700">R$ {brl(total)}</span>
+            </div>
+
+            <div className="flex items-center justify-between border-t-2 border-neutral-900 pt-[11px]">
+              <span className="font-display text-[15px] font-bold text-neutral-900">
+                Total do pedido
+              </span>
+              <span className="font-display text-[26px] font-bold leading-8 text-neutral-900">
                 R$ {brl(total)}
               </span>
             </div>
 
-            <Botao
-              variante="primario"
-              tamanho="pdv"
-              carregando={enviar.isPending}
-              disabled={sumidos.length > 0}
-              onClick={() => {
-                setErro(null);
-                enviar.mutate();
-              }}
+            {/*
+              O prazo do congelamento sai da configuração da loja e só existe
+              depois que o pedido nasce: escrever uma data aqui seria inventar
+              uma que ninguém gravou. O que é verdade agora é QUANDO congela.
+            */}
+            <p className="mt-2.5 text-[11.5px] leading-4 text-neutral-500">
+              O preço é{' '}
+              <strong className="font-semibold text-neutral-700">congelado no envio</strong>. Depois
+              disso, mudança na tabela não reescreve o seu pedido.
+            </p>
+          </section>
+
+          <section className="rounded-lg border border-neutral-100 bg-white p-4">
+            <label
+              htmlFor="observacao-pedido"
+              className="block text-[12px] font-semibold uppercase tracking-[0.04em] text-neutral-500"
             >
-              Enviar pedido
-            </Botao>
+              Observação para a loja
+            </label>
+            <textarea
+              id="observacao-pedido"
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              rows={3}
+              maxLength={400}
+              placeholder="Prazo, tamanho alternativo, quem retira…"
+              className="mt-[7px] w-full resize-none rounded-lg border border-neutral-200 px-2.5 py-[9px] text-[12.5px]"
+            />
+
+            <div className="mt-3">
+              <Botao
+                variante="primario"
+                tamanho="pdv"
+                carregando={enviar.isPending}
+                disabled={sumidos.length > 0}
+                onClick={() => {
+                  setErro(null);
+                  enviar.mutate();
+                }}
+              >
+                Enviar pedido
+              </Botao>
+            </div>
 
             {/*
-          Dizer o que vai acontecer ANTES de acontecer. O pedido não reserva
-          estoque e o valor pode mudar na confirmação — descobrir isso depois é
-          o que vira telefonema.
-        */}
-            <p className="text-center text-[12px] leading-[18px] text-neutral-500">
-              Enviar <strong className="font-semibold text-neutral-700">não reserva estoque</strong>
-              . A loja confere item a item e confirma. Se o valor subir, você decide se aceita antes
-              de qualquer cobrança.
+              Dizer o que vai acontecer ANTES de acontecer. O pedido não reserva
+              estoque e o valor pode mudar na confirmação — descobrir isso
+              depois é o que vira telefonema.
+            */}
+            <p className="mt-2.5 flex gap-[7px] text-[11.5px] leading-4 text-neutral-500">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                className="mt-px shrink-0 text-neutral-400"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v5" />
+                <path d="M12 8h.01" />
+              </svg>
+              <span>
+                Enviar{' '}
+                <strong className="font-semibold text-neutral-700">não reserva estoque</strong>. A
+                loja confere item a item e pode confirmar em parte — você vê o que foi atendido
+                antes de qualquer cobrança.
+              </span>
             </p>
           </section>
 
           {carteira.data ? (
-            <section className="rounded-md border border-neutral-100 bg-neutral-25 p-4">
+            <section className="rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-[13px]">
               <p className="text-[12px] font-semibold text-neutral-700">Sua carteira</p>
-              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <div className="mt-[5px] flex items-baseline justify-between gap-3">
                 <span className="text-[12.5px] text-neutral-500">Saldo</span>
                 <span
                   className={juntar(
@@ -234,7 +339,7 @@ export function PortalCarrinho() {
                   {brl(Math.abs(Number(carteira.data.carteira.saldo)))}
                 </span>
               </div>
-              <p className="mt-1.5 text-[11.5px] leading-[16px] text-neutral-500">
+              <p className="mt-1.5 text-[11.5px] leading-4 text-neutral-500">
                 {Number(carteira.data.carteira.saldo) < 0
                   ? 'Saldo negativo é o que você deve à loja. O pagamento é combinado com ela no faturamento.'
                   : 'Saldo positivo é crédito seu na loja.'}
@@ -247,11 +352,31 @@ export function PortalCarrinho() {
   );
 }
 
+function Coluna({
+  children,
+  alinhamento,
+}: {
+  readonly children: React.ReactNode;
+  readonly alinhamento?: 'right' | 'center';
+}) {
+  return (
+    <span
+      className={juntar(
+        'text-[10.5px] font-semibold uppercase tracking-[0.05em] text-neutral-500',
+        alinhamento === 'right' && 'text-right',
+        alinhamento === 'center' && 'text-center',
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 function SemFotoMini() {
   return (
     <svg
-      width="20"
-      height="20"
+      width="26"
+      height="26"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -289,11 +414,19 @@ function Linha({
   return (
     <div
       className={juntar(
-        'flex flex-wrap items-center gap-3 border-b border-neutral-50 py-3 last:border-0',
+        /*
+          No celular uma grade de tres colunas e duas linhas: foto a esquerda
+          ocupando as duas, item e lixeira em cima, quantidade e total embaixo.
+          Com `flex-wrap` o bloco do item tinha `flex-1 min-w-0` e ENCOLHIA em
+          vez de empurrar os controles para a linha de baixo — o nome do
+          produto virava uma letra so.
+        */
+        'grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-b border-neutral-50 px-4 py-3 last:border-0',
+        GRADE,
         sumiu && 'opacity-60',
       )}
     >
-      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-50">
+      <span className="col-start-1 row-span-2 row-start-1 flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-neutral-50 lg:col-start-auto lg:row-span-1 lg:row-start-auto">
         {item.imagemPrincipalId ? (
           <Foto
             imagemId={item.imagemPrincipalId}
@@ -306,81 +439,120 @@ function Linha({
         ) : (
           <SemFotoMini />
         )}
-      </div>
+      </span>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] text-neutral-900">{item.produto}</p>
-        <p className="truncate text-[11.5px] text-neutral-500">
-          {item.descricaoVariacao} · <span className="font-mono">{item.sku}</span>
+      <div className="col-start-2 row-start-1 min-w-0 lg:col-start-auto lg:row-start-auto">
+        <p className="truncate text-[13.5px] text-neutral-900">
+          {item.produto} <span className="text-neutral-500">· {item.descricaoVariacao}</span>
         </p>
+        <p className="mt-0.5 truncate font-mono text-[10.5px] text-neutral-400">{item.sku}</p>
 
         {/*
           Disponibilidade por linha, relida do servidor: o carrinho sobrevive
           dias no navegador, e "pronta entrega" de três dias atrás não diz
           nada sobre hoje.
+
+          "Sob encomenda" não é selo, é frase com ícone: o cliente precisa
+          saber que aquele item depende de um prazo que a loja ainda vai dar.
         */}
-        {disponivel !== null ? (
-          <span
-            className={juntar(
-              'mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10.5px] font-semibold',
-              disponivel
-                ? 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]'
-                : 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
-            )}
-          >
-            {disponivel ? 'pronta entrega' : 'sob encomenda'}
+        {disponivel === true ? (
+          <span className="mt-1 inline-block rounded-full bg-[var(--color-sucesso-fundo)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--color-sucesso)]">
+            pronta entrega
           </span>
         ) : null}
+        {disponivel === false ? (
+          <p className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-atencao)]">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4.5" />
+              <path d="M12 16h.01" />
+            </svg>
+            sob encomenda — a loja confirma o prazo
+          </p>
+        ) : null}
+
         {mudouDePreco ? (
-          <p className="text-[11.5px] font-medium text-[var(--color-atencao)]">
+          <p className="text-[11px] font-medium text-[var(--color-atencao)]">
             preço atualizado: era R$ {brl(item.precoVisto)}
           </p>
         ) : null}
         {sumiu ? (
-          <p className="text-[11.5px] font-medium text-[var(--color-perigo)]">
+          <p className="text-[11px] font-medium text-[var(--color-perigo)]">
             não está mais no seu catálogo
           </p>
         ) : null}
+
+        {/* No celular não há coluna de unitário; o preço mora com o item. */}
+        <p className="mt-1 font-mono text-[12px] text-neutral-700 lg:hidden">
+          R$ {brl(unitario)} cada
+        </p>
       </div>
 
-      <div className="flex w-full items-center gap-2 sm:w-auto">
-        <div className="flex items-center rounded-md border border-neutral-200">
-          <button
-            type="button"
-            aria-label={`Diminuir ${item.sku}`}
-            onClick={() => aoMudar(item.quantidade - 1)}
-            className="flex size-9 items-center justify-center text-neutral-600 hover:bg-neutral-50"
-          >
-            −
-          </button>
-          <input
-            value={item.quantidade}
-            onChange={(e) => aoMudar(Number(e.target.value.replace(/\D/g, '')) || 0)}
-            aria-label={`Quantidade de ${item.sku}`}
-            className="h-9 w-11 border-x border-neutral-200 text-center font-mono text-[13.5px]"
-          />
-          <button
-            type="button"
-            aria-label={`Aumentar ${item.sku}`}
-            onClick={() => aoMudar(item.quantidade + 1)}
-            className="flex size-9 items-center justify-center text-neutral-600 hover:bg-neutral-50"
-          >
-            +
-          </button>
-        </div>
+      <span className="hidden font-mono text-[12.5px] text-neutral-700 lg:block lg:text-right">
+        R$ {brl(unitario)}
+      </span>
 
-        <span className="ml-auto w-[92px] text-right font-mono text-[13.5px] font-medium text-neutral-900 sm:ml-0">
-          R$ {brl(unitario * item.quantidade)}
-        </span>
-
+      <span className="col-start-2 row-start-2 inline-flex w-fit items-center overflow-hidden rounded-lg border border-neutral-200 lg:col-start-auto lg:row-start-auto lg:justify-self-center">
         <button
           type="button"
-          onClick={aoRemover}
-          className="text-[11.5px] font-medium text-neutral-500 underline decoration-neutral-300 underline-offset-2"
+          aria-label={`Diminuir ${item.sku}`}
+          onClick={() => aoMudar(item.quantidade - 1)}
+          className="flex h-8 w-[30px] items-center justify-center text-[15px] text-neutral-600 hover:bg-neutral-50"
         >
-          remover
+          −
         </button>
-      </div>
+        <input
+          value={item.quantidade}
+          onChange={(e) => aoMudar(Number(e.target.value.replace(/\D/g, '')) || 0)}
+          aria-label={`Quantidade de ${item.sku}`}
+          className="h-8 w-[34px] border-x border-neutral-200 text-center font-mono text-[13px]"
+        />
+        <button
+          type="button"
+          aria-label={`Aumentar ${item.sku}`}
+          onClick={() => aoMudar(item.quantidade + 1)}
+          className="flex h-8 w-[30px] items-center justify-center text-[15px] text-neutral-600 hover:bg-neutral-50"
+        >
+          +
+        </button>
+      </span>
+
+      <span className="col-start-3 row-start-2 text-right font-mono text-[13.5px] font-medium text-neutral-900 lg:col-start-auto lg:row-start-auto">
+        R$ {brl(unitario * item.quantidade)}
+      </span>
+
+      <button
+        type="button"
+        onClick={aoRemover}
+        aria-label={`Remover ${item.produto} do carrinho`}
+        className="col-start-3 row-start-1 flex size-8 items-center justify-center justify-self-end rounded-lg border border-neutral-100 hover:border-[var(--color-perigo)] lg:col-start-auto lg:row-start-auto"
+      >
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--color-perigo)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M6 7l1 12.2A1.8 1.8 0 0 0 8.8 21h6.4a1.8 1.8 0 0 0 1.8-1.8L18 7" />
+          <path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7" />
+        </svg>
+      </button>
     </div>
   );
 }

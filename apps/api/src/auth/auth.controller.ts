@@ -35,6 +35,8 @@ interface RespostaSessao {
     readonly nome: string;
     readonly email: string;
     readonly dominio: Dominio;
+    /** So no portal: a empresa em nome de quem a pessoa compra. */
+    readonly empresa?: string;
     readonly permissoes: string[];
     readonly lojaIds: string[];
   };
@@ -86,6 +88,7 @@ abstract class AuthControllerBase {
         nome: sessao.principal.nome,
         email: sessao.principal.email,
         dominio: sessao.principal.dominio,
+        ...(sessao.principal.empresa ? { empresa: sessao.principal.empresa } : {}),
         permissoes: [...sessao.principal.permissoes],
         lojaIds: [...sessao.principal.lojaIds],
       },
@@ -215,6 +218,7 @@ export class AuthController extends AuthControllerBase {
       nome: principal.nome,
       email: principal.email,
       dominio: principal.dominio,
+      ...(principal.empresa ? { empresa: principal.empresa } : {}),
       permissoes: [...principal.permissoes],
       lojaIds: [...principal.lojaIds],
     };
@@ -298,6 +302,7 @@ export class PortalAuthController extends AuthControllerBase {
       nome: principal.nome,
       email: principal.email,
       dominio: principal.dominio,
+      ...(principal.empresa ? { empresa: principal.empresa } : {}),
       permissoes: [...principal.permissoes],
       lojaIds: [],
     };
