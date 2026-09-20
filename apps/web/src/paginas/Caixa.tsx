@@ -202,7 +202,7 @@ export function Caixa() {
         {/* A largura do artboard: 1440 menos o menu e a folga lateral. Com
               860px a tabela do turno e a lista de caixas nao cabiam lado a
               lado e viravam duas pilhas. */}
-        <div className="mx-auto flex w-full max-w-[1152px] flex-col gap-4">
+        <div className="flex w-full flex-col gap-4">
           {erro ? (
             <Aviso tom="perigo" titulo="Não foi possível concluir">
               {erro}
@@ -296,7 +296,7 @@ export function Caixa() {
             </Aviso>
           ) : null}
 
-          <div className="flex flex-col items-start gap-4 lg:flex-row">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             {caixa ? <MovimentosDoTurno caixa={caixa} /> : null}
 
             <section
@@ -305,28 +305,34 @@ export function Caixa() {
                 caixa ? 'lg:w-[392px] lg:shrink-0' : '',
               )}
             >
-              <div className="overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
-                <div className="border-b border-neutral-100 px-4 py-3">
+              {/* A lista ACOMPANHA a altura da coluna ao lado e rola por
+                  dentro: sem isso, igualar as colunas so mudava o vazio de
+                  lugar — da pagina para dentro do cartao. */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+                <div className="shrink-0 border-b border-neutral-100 px-4 py-3">
                   <h2 className="font-display text-[14px] font-semibold text-neutral-900">
                     Caixas anteriores
                   </h2>
                 </div>
-
-                {(historico.data?.itens ?? []).length === 0 ? (
-                  <p className="p-5 text-[13px] text-neutral-500">Nenhum caixa registrado ainda.</p>
-                ) : (
-                  (historico.data?.itens ?? []).map((c) => (
-                    <LinhaHistorico
-                      key={c.id}
-                      caixa={c}
-                      compacta={Boolean(caixa)}
-                      podeConferir={pode(PERM.caixa.conferir)}
-                      souEu={c.operadorId === usuario?.id}
-                      conferindo={conferir.isPending && conferir.variables === c.id}
-                      aoConferir={() => conferir.mutate(c.id)}
-                    />
-                  ))
-                )}
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {(historico.data?.itens ?? []).length === 0 ? (
+                    <p className="p-5 text-[13px] text-neutral-500">
+                      Nenhum caixa registrado ainda.
+                    </p>
+                  ) : (
+                    (historico.data?.itens ?? []).map((c) => (
+                      <LinhaHistorico
+                        key={c.id}
+                        caixa={c}
+                        compacta={Boolean(caixa)}
+                        podeConferir={pode(PERM.caixa.conferir)}
+                        souEu={c.operadorId === usuario?.id}
+                        conferindo={conferir.isPending && conferir.variables === c.id}
+                        aoConferir={() => conferir.mutate(c.id)}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* CASHBOX.md §7: sem `caixa.conferir` ninguem ve o caixa alheio,

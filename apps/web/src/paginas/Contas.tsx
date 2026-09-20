@@ -101,7 +101,7 @@ export function Contas() {
       </header>
 
       <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
-        <div className="mx-auto flex w-full max-w-[1152px] flex-col gap-3.5">
+        <div className="flex w-full flex-col gap-3.5">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
@@ -195,7 +195,7 @@ export function Contas() {
 
           {lista.data ? <Indicadores resumo={lista.data.resumo} /> : null}
 
-          <div className="flex flex-col items-start gap-4 lg:flex-row">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <section className="w-full min-w-0 flex-1 overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
               <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
                 {RECORTES.map((r) => (
