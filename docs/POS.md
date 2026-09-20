@@ -98,13 +98,15 @@ que a próxima é a 87?".
 
 ## 10. O que ainda não existe
 
-- **Caixa** (abrir, fechar, sangria, suprimento). As permissões já existem; a
-  tabela não. Fase 5.
 - **Devolução parcial.** `quantidade_devolvida` está no item, sem rota ainda.
   Hoje só há cancelamento total.
-- **Pagamento em carteira** (`FormaPagamento.CARTEIRA`) aceita o valor, mas
-  nada debita a conta corrente do cliente. Ver [WALLET.md](WALLET.md) — o
-  débito entra junto com a carteira, na Fase 5.
+- **Venda a prazo.** Pagar com `CARTEIRA` debita a conta corrente, mas lançar
+  a venda INTEIRA a prazo — o outro caminho do §6 de [WALLET.md](WALLET.md) —
+  ainda não existe. `cliente.usaCarteira` é gravado e ninguém o lê.
+
+> **Construído desde que este documento foi escrito:** o caixa inteiro (ver
+> [CASHBOX.md](CASHBOX.md)) e o débito em carteira no pagamento com
+> `FormaPagamento.CARTEIRA` — `vendas.service.ts` chama `debitarPorVenda`.
 
 ## 11. Testes obrigatórios
 

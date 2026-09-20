@@ -215,6 +215,9 @@ o runtime.
 | Classificar cliente pela tabela de preço | Tabela diz quanto ele PAGA; perfil diz quem ele É. Mover um professor para uma tabela promocional por um mês o tirava do ranking de revendedores por um motivo que nada tem a ver com revenda. Campos separados |
 | "Quem mais vendeu" quando o sistema só vê compra | A revenda do professor acontece fora daqui. Medir a compra e chamar de venda é rótulo mais forte do que a conta — e é o número que vai premiar alguém |
 | Ranking que esconde quem sumiu | Uma lista de quem comprou não tem linha para quem parou de comprar. O programa de premiação precisa justamente desse: conte à parte |
+| Fuso da sessão do banco deixado no padrão | O PostgreSQL renderiza `timestamptz` no fuso da SESSÃO e o adaptador do Prisma descartava o deslocamento: escrita +3 h, leitura −3 h. Os dois se cancelam na ida e volta, então as telas pareciam certas — só quebrava contra `now()` em SQL. `options: '-c timezone=UTC'` na conexão |
+| Medir ida e volta pelo caminho que se quer testar | Escrever errado e ler errado dá zero. Quem mede tem de ser outro: o driver `pg` cru provou o desvio de 180 min que o próprio Prisma escondia |
+| Documento que envelhece sem ninguém notar | Três `docs/` diziam que faltava o que já existia — alguém reconstruiria o caixa e o débito em carteira. Ao construir o que um documento lista como pendente, risque o item no MESMO commit |
 
 ## Testes
 

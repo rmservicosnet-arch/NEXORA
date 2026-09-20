@@ -108,6 +108,24 @@ export async function exigirPapelSemPrivilegio(prisma: PrismaClient): Promise<vo
 export async function criarPrisma(opcoes: OpcoesConexao): Promise<PrismaClient> {
   const adapter = new PrismaPg({
     connectionString: opcoes.url,
+    /*
+      A SESSÃO fala UTC. Sem isto, todo instante gravado cai 3 horas no
+      futuro.
+
+      O PostgreSQL renderiza `timestamptz` no fuso da sessão, e o adaptador do
+      Prisma descarta o deslocamento ao converter — "18:42-03" vira 18:42 UTC.
+      Na escrita o erro é +3; na leitura, −3. Os dois se cancelam quando o
+      mesmo caminho faz ida e volta, e foi por isso que o defeito sobreviveu:
+      as telas do app pareciam certas. Ele só aparecia quando algo comparava
+      com `now()` calculado em SQL — foi assim que as cinco faixas do relatório
+      de fila somaram zero com quatorze pedidos na fila.
+
+      Medido: escrita desvia 180 min com `America/Sao_Paulo`, 0 com UTC.
+
+      Fuso é assunto de APRESENTAÇÃO. O banco guarda instante; quem escolhe
+      como mostrar é a tela, com o fuso de quem lê.
+    */
+    options: '-c timezone=UTC',
     ...(opcoes.maxConexoes ? { max: opcoes.maxConexoes } : {}),
   });
 

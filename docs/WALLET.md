@@ -191,9 +191,16 @@ feita por script de manutenção passa por cima da aplicação — não do banco
   outra metade do §6.
 - **Devolução gerando crédito** (`DEVOLUCAO_VENDA`): o cancelamento de venda
   ainda não devolve dinheiro à carteira.
-- **Aging FIFO** dos débitos em aberto, para a cobrança.
-- **`cliente.usaCarteira`**: a decisão do §6 — carteira *ou* título — ainda não
-  é configurável por cliente; hoje quem tem carteira usa carteira.
+- **`cliente.usaCarteira` é gravado e NINGUÉM o lê.** O campo existe, a tela
+  de clientes o edita e o comentário do schema promete que ele decide entre
+  carteira e título. Nenhuma linha da venda o consulta. É a metade que falta
+  do item acima — e, até existir, o campo é uma promessa que o sistema não
+  cumpre.
+
+> **Construído desde que este documento foi escrito:** o aging de títulos em
+> aberto, por faixa de vencimento, em
+> `/relatorios/financeiro/aging` — mas ele lê `titulo_financeiro`, não o razão
+> da carteira. O aging FIFO dos débitos da CARTEIRA continua sem existir.
 
 ## 12. Testes obrigatórios
 

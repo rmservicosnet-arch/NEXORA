@@ -120,8 +120,10 @@ nada a ver com eles.
   sistema.
 - **Sangria obrigatória acima de um teto**, para limitar o dinheiro em gaveta.
 - **Relatório de quebras** por operador e período.
-- **Pagamento em carteira** ainda não debita a conta corrente do cliente. Ver
-  [WALLET.md](WALLET.md).
+
+> **Construído desde que este documento foi escrito:** o pagamento com
+> `FormaPagamento.CARTEIRA` debita a conta corrente — `vendas.service.ts`
+> chama `debitarPorVenda`.
 
 ## 11. Testes obrigatórios
 
