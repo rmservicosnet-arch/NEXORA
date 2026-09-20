@@ -44,13 +44,21 @@ interface Sucesso {
   readonly avisos: { codigo: string; mensagem: string }[];
 }
 
-export function PainelMovimento({ aoFechar }: { readonly aoFechar: () => void }) {
+export function PainelMovimento({
+  aoFechar,
+  operacaoInicial,
+}: {
+  readonly aoFechar: () => void;
+  /** Vem da URL: quem chega pela visão geral já quer a contagem. */
+  readonly operacaoInicial?: string | null;
+}) {
   const { pode } = useSessao();
   const fila = useQueryClient();
   const campoBusca = useRef<HTMLInputElement>(null);
 
   const disponiveis = OPERACOES.filter((o) => pode(o.permissao));
-  const [operacao, setOperacao] = useState<Operacao>(disponiveis[0]?.chave ?? 'entrada');
+  const pedida = disponiveis.find((o) => o.chave === operacaoInicial)?.chave;
+  const [operacao, setOperacao] = useState<Operacao>(pedida ?? disponiveis[0]?.chave ?? 'entrada');
 
   const [termo, setTermo] = useState('');
   const [selecionada, setSelecionada] = useState<VariacaoParaMovimento | null>(null);

@@ -188,6 +188,11 @@ export function Inicio() {
                     : 'nada negativo'
                 }
                 tom={consulta.data.variacoesNegativas > 0 ? 'perigo' : 'normal'}
+                acao={
+                  consulta.data.variacoesNegativas > 0
+                    ? { rotulo: 'Regularizar', para: '/estoque?operacao=contagem' }
+                    : undefined
+                }
               />
             </div>
 
@@ -237,6 +242,7 @@ function Indicador({
   referencia,
   nota,
   tom = 'normal',
+  acao,
 }: {
   readonly rotulo: string;
   readonly valor: string;
@@ -245,6 +251,8 @@ function Indicador({
   readonly referencia?: string;
   readonly nota?: string;
   readonly tom?: 'normal' | 'atencao' | 'perigo';
+  /** O que fazer com o número. Um cartão que só informa não resolve nada. */
+  readonly acao?: { readonly rotulo: string; readonly para: string };
 }) {
   return (
     <div className="rounded-lg border border-neutral-100 bg-white px-4 py-3.5 shadow-sm">
@@ -307,6 +315,24 @@ function Indicador({
         {delta !== null && referencia ? (
           <span className="text-neutral-400">{referencia}</span>
         ) : null}
+
+        {/* O cartão que só conta o problema deixa a pessoa procurando onde
+            resolvê-lo. O caminho fica aqui, ao lado do número. */}
+        {acao ? (
+          <Link
+            to={acao.para}
+            className={juntar(
+              'rounded-full px-2 py-0.5 text-[11px] font-semibold no-underline',
+              tom === 'perigo'
+                ? 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]'
+                : tom === 'atencao'
+                  ? 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]'
+                  : 'bg-neutral-50 text-neutral-600',
+            )}
+          >
+            {acao.rotulo}
+          </Link>
+        ) : null}
       </p>
     </div>
   );
@@ -356,9 +382,12 @@ function Grafico({ dados }: { readonly dados: VisaoGeral }) {
           </div>
 
           <div className="relative flex h-[168px] items-end gap-[3px]">
-            {dados.porDia.map((p) => {
+            {dados.porDia.map((p, indice) => {
               const vazio = Number(p.total) === 0;
               const altura = vazio ? 2 : Math.max((Number(p.total) / teto) * 100, 2);
+              // Só o último ganha rótulo, como no desenho: número em cima de
+              // toda barra vira ruído e some o formato da série.
+              const hoje = indice === dados.porDia.length - 1;
               return (
                 <div
                   key={p.dia}
@@ -370,13 +399,24 @@ function Grafico({ dados }: { readonly dados: VisaoGeral }) {
                   className="group flex h-full flex-1 items-end"
                   title={`${new Date(`${p.dia}T12:00:00`).toLocaleDateString('pt-BR')} · R$ ${brl(p.total)} · ${String(p.vendas)} ${p.vendas === 1 ? 'venda' : 'vendas'}`}
                 >
-                  <div
-                    className={juntar(
-                      'w-full rounded-t',
-                      vazio ? 'bg-neutral-100' : 'bg-primary-600 group-hover:bg-primary-700',
-                    )}
-                    style={{ height: `${altura.toFixed(1)}%` }}
-                  />
+                  <div className="flex h-full w-full flex-col items-center justify-end gap-1">
+                    {hoje ? (
+                      <span className="whitespace-nowrap font-mono text-[11px] font-medium text-neutral-900">
+                        {brl(p.total)}
+                      </span>
+                    ) : null}
+                    <div
+                      className={juntar(
+                        'w-full rounded-t',
+                        vazio
+                          ? 'bg-neutral-100'
+                          : hoje
+                            ? 'bg-primary-600 group-hover:bg-primary-700'
+                            : 'bg-primary-300 group-hover:bg-primary-400',
+                      )}
+                      style={{ height: `${altura.toFixed(1)}%` }}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -490,10 +530,10 @@ function PainelNegativos({ dados }: { readonly dados: VisaoGeral }) {
 
       <div className="border-t border-neutral-100 p-3">
         <Link
-          to="/estoque"
+          to="/estoque?operacao=contagem"
           className="flex h-9 items-center justify-center rounded-md border border-neutral-200 text-[13px] font-medium text-neutral-700 no-underline hover:bg-neutral-50"
         >
-          Abrir movimentações
+          Abrir regularização de estoque
         </Link>
       </div>
     </section>

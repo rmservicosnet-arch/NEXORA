@@ -7,6 +7,7 @@ import {
 } from '@estoque/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { useSessao } from '../auth/sessao';
@@ -46,7 +47,16 @@ export function Estoque() {
   const { pode } = useSessao();
   const [filtro, setFiltro] = useState('todos');
   const [localId, setLocalId] = useState('');
-  const [painelAberto, setPainelAberto] = useState(false);
+  /**
+   * `?operacao=contagem` abre o painel já na regularização.
+   *
+   * É o destino do "Abrir regularização de estoque" da visão geral: mandar
+   * para a lista e pedir que a pessoa ache o botão seria mandá-la procurar
+   * o que já se sabia.
+   */
+  const [urlParams, setUrlParams] = useSearchParams();
+  const operacaoDaUrl = urlParams.get('operacao');
+  const [painelAberto, setPainelAberto] = useState(Boolean(operacaoDaUrl));
   /**
    * Qual item está com o razão aberto.
    *
@@ -252,7 +262,19 @@ export function Estoque() {
         </section>
       </main>
 
-      {painelAberto ? <PainelMovimento aoFechar={() => setPainelAberto(false)} /> : null}
+      {painelAberto ? (
+        <PainelMovimento
+          operacaoInicial={operacaoDaUrl}
+          aoFechar={() => {
+            setPainelAberto(false);
+            if (operacaoDaUrl) {
+              const limpos = new URLSearchParams(urlParams);
+              limpos.delete('operacao');
+              setUrlParams(limpos, { replace: true });
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }
