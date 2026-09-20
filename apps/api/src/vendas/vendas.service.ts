@@ -507,17 +507,31 @@ export class VendasService {
           })
         )?.id;
 
+      /**
+       * Sem termo, devolve o comeco do catalogo: e a grade com que o PDV
+       * abre. Com termo, procura por codigo de barras, SKU, descricao e nome.
+       */
+      const procura = busca.termo
+        ? {
+            OR: [
+              { codigoBarras: busca.termo },
+              { sku: { contains: busca.termo, mode: 'insensitive' as const } },
+              { descricao: { contains: busca.termo, mode: 'insensitive' as const } },
+              { produto: { nome: { contains: busca.termo, mode: 'insensitive' as const } } },
+            ],
+          }
+        : // Vitrine mostra o que ESTA no balcao. Abrir o PDV com uma tela de
+          // itens zerados e oferecer o que nao da para vender; procurando
+          // pelo nome, o item sem saldo continua aparecendo.
+          { saldos: { some: { localId: local.id, quantidade: { gt: 0 } } } };
+
       const linhas = await tx.variacao.findMany({
-        where: {
-          status: 'ATIVO',
-          OR: [
-            { codigoBarras: busca.termo },
-            { sku: { contains: busca.termo, mode: 'insensitive' } },
-            { descricao: { contains: busca.termo, mode: 'insensitive' } },
-            { produto: { nome: { contains: busca.termo, mode: 'insensitive' } } },
-          ],
-        },
-        orderBy: { sku: 'asc' },
+        where: { status: 'ATIVO', ...procura },
+        // Por nome quando e vitrine; por SKU quando e busca, que e como o
+        // operador confere o que digitou.
+        orderBy: busca.termo
+          ? [{ sku: 'asc' as const }]
+          : [{ produto: { nome: 'asc' as const } }, { sku: 'asc' as const }],
         take: busca.limite,
         include: {
           produto: {
@@ -553,7 +567,7 @@ export class VendasService {
           imagemPrincipalId: v.produto.imagens[0]?.id ?? null,
           preco: v.precos[0] ? dec(v.precos[0].preco.toString()).toFixed(2) : null,
           saldo: dec((v.saldos[0]?.quantidade ?? 0).toString()).toFixed(0),
-          casouCodigoBarras: v.codigoBarras === busca.termo,
+          casouCodigoBarras: busca.termo.length > 0 && v.codigoBarras === busca.termo,
         }))
         .sort((a, b) => Number(b.casouCodigoBarras) - Number(a.casouCodigoBarras));
     });

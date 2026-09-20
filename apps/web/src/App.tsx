@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 
 import { ErroRequisicao } from './api/cliente';
-import { ProvedorSessao } from './auth/sessao';
+import { ProvedorSessao, useSessao } from './auth/sessao';
 import { ProvedorSessaoPortal } from './auth/sessaoPortal';
 import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
@@ -73,11 +73,40 @@ function AreaDoPortal() {
   );
 }
 
+/**
+ * Sessão exigida, sem o Shell.
+ *
+ * É a mesma guarda do Shell — a tela de tela cheia não pode ser a porta
+ * aberta. Quem não entrou vai para o login e volta para onde queria.
+ */
+function ExigeSessao() {
+  const { usuario, restaurando } = useSessao();
+  const local = useLocation();
+
+  if (restaurando) {
+    return <div className="min-h-dvh bg-neutral-25" />;
+  }
+
+  if (!usuario) {
+    return <Navigate to="/entrar" replace state={{ de: local.pathname }} />;
+  }
+
+  return <Outlet />;
+}
+
 function AreaDaEquipe() {
   return (
     <ProvedorSessao>
       <Routes>
         <Route path="/entrar" element={<Login />} />
+        {/*
+          O PDV fica FORA do Shell: ocupa a tela inteira, sem menu lateral.
+          Quem está no balcão não navega o sistema — vende, e sai por uma
+          porta só. A sessão continua exigida, pelo `ExigeSessao`.
+        */}
+        <Route element={<ExigeSessao />}>
+          <Route path="pdv" element={<Pdv />} />
+        </Route>
         <Route element={<Shell />}>
           <Route index element={<Inicio />} />
           <Route path="lojas" element={<Lojas />} />
@@ -114,7 +143,6 @@ function AreaDaEquipe() {
             }
           />
           <Route path="estoque" element={<Estoque />} />
-          <Route path="pdv" element={<Pdv />} />
           <Route path="caixa" element={<Caixa />} />
           <Route path="carteiras" element={<Carteiras />} />
           <Route path="clientes" element={<Clientes />} />

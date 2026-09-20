@@ -189,7 +189,12 @@ export type PaginaVendas = z.infer<typeof paginaVendasSchema>;
  * está a mercadoria", aqui é "por quanto eu vendo isto, e tem no balcão".
  */
 export const buscaItemVendaSchema = z.object({
-  termo: z.string().trim().min(1).max(120),
+  /**
+   * Vazio e valido: o PDV abre com a grade do que ha no balcao. Exigir termo
+   * obrigava a saber o nome antes de procurar — e no balcao nem sempre se
+   * sabe.
+   */
+  termo: z.string().trim().max(120).default(''),
   lojaId: z.string().uuid(),
   tabelaPrecoId: z.string().uuid().optional(),
   limite: z.coerce.number().int().min(1).max(30).default(15),
