@@ -93,7 +93,14 @@ export {
   type VisaoGeral,
 } from './visao-geral.js';
 
-export { lojaResumoSchema, type LojaResumo } from './lojas.js';
+export {
+  localDaLojaSchema,
+  lojaPainelSchema,
+  lojaResumoSchema,
+  type LocalDaLoja,
+  type LojaPainel,
+  type LojaResumo,
+} from './lojas.js';
 
 export {
   aceitePedidoSchema,

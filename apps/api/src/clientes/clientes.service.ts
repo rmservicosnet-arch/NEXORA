@@ -8,6 +8,7 @@ import {
   type NovoCliente,
   type PaginaClientes,
 } from '@estoque/contracts';
+import { dec } from '@estoque/core';
 import { comEscopoAtual, type PrismaClient, type ClienteEmTransacao } from '@estoque/db';
 
 import type { Principal } from '../auth/dominios';
@@ -225,7 +226,7 @@ export class ClientesService {
   private inclusao() {
     return {
       tabelaPreco: { select: { id: true, nome: true } },
-      carteira: { select: { id: true } },
+      carteira: { select: { id: true, saldo: true } },
       _count: { select: { acessos: true } },
     } as const;
   }
@@ -242,7 +243,7 @@ export class ClientesService {
       usaCarteira: boolean;
       criadoEm: Date;
       tabelaPreco: { id: string; nome: string } | null;
-      carteira: { id: string } | null;
+      carteira: { id: string; saldo: { toString(): string } } | null;
       _count: { acessos: number };
     },
     padrao: ModoCheckout,
@@ -262,6 +263,7 @@ export class ClientesService {
       modoCheckoutEfetivo: (c.modoCheckout as ModoCheckout | null) ?? padrao,
       usaCarteira: c.usaCarteira,
       temCarteira: c.carteira !== null,
+      saldoCarteira: c.carteira ? dec(c.carteira.saldo.toString()).toFixed(2) : null,
       acessos: c._count.acessos,
       criadoEm: c.criadoEm.toISOString(),
     };

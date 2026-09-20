@@ -51,6 +51,13 @@ export const clienteSchema = z.object({
 
   usaCarteira: z.boolean(),
   temCarteira: z.boolean(),
+  /**
+   * Saldo da carteira. `null` quando o cadastro nao tem conta corrente.
+   *
+   * NEGATIVO = o cliente deve a loja. A convencao nao se inverte aqui, como
+   * nao se inverte em lugar nenhum. Ver docs/WALLET.md §2.
+   */
+  saldoCarteira: z.string().nullable(),
   /** Quantos acessos ao portal este cadastro tem. Zero = nao entra. */
   acessos: z.number().int(),
   criadoEm: z.string(),
