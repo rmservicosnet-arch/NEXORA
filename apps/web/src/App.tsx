@@ -24,6 +24,7 @@ import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { RelatorioAbertosTela } from './paginas/RelatorioAbertos';
+import { RelatorioAcessosTela } from './paginas/RelatorioAcessos';
 import { RelatorioAceitesTela } from './paginas/RelatorioAceites';
 import { RelatorioAjustesTela } from './paginas/RelatorioAjustes';
 import { RelatorioAlteracoesTela } from './paginas/RelatorioAlteracoes';
@@ -35,6 +36,8 @@ import { RelatorioEstoque } from './paginas/RelatorioEstoque';
 import { RelatorioFilaTela } from './paginas/RelatorioFila';
 import { RelatorioLimiteTela } from './paginas/RelatorioLimite';
 import { RelatorioRupturaTela } from './paginas/RelatorioRuptura';
+import { RelatorioSensiveisTela } from './paginas/RelatorioSensiveis';
+import { RelatorioTrilhaTela } from './paginas/RelatorioTrilha';
 import { RelatorioFormasTela } from './paginas/RelatorioFormas';
 import { RelatorioGiroTela } from './paginas/RelatorioGiro';
 import { RelatorioInventarioTela } from './paginas/RelatorioInventario';
@@ -186,6 +189,9 @@ function AreaDaEquipe() {
           <Route path="relatorios/carteira/abertos" element={<RelatorioAbertosTela />} />
           <Route path="relatorios/carteira/limite" element={<RelatorioLimiteTela />} />
           <Route path="relatorios/carteira/ajustes" element={<RelatorioAjustesTela />} />
+          <Route path="relatorios/auditoria/trilha" element={<RelatorioTrilhaTela />} />
+          <Route path="relatorios/auditoria/sensiveis" element={<RelatorioSensiveisTela />} />
+          <Route path="relatorios/auditoria/acessos" element={<RelatorioAcessosTela />} />
           <Route path="relatorios/transferencias" element={<RelatorioTransferenciasTela />} />
           <Route path="relatorios/inventario" element={<RelatorioInventarioTela />} />
           <Route

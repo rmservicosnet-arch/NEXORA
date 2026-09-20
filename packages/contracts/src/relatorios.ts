@@ -778,3 +778,107 @@ export const relatorioAjustesSchema = z.object({
   itens: z.array(linhaAjusteSchema),
 });
 export type RelatorioAjustes = z.infer<typeof relatorioAjustesSchema>;
+
+// ---------------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------------
+
+export const filtroTrilhaSchema = z.object({
+  entidade: z.string().max(60).optional(),
+  entidadeId: z.string().uuid().optional(),
+  dias: z.coerce.number().int().min(1).max(365).default(90),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroTrilha = z.infer<typeof filtroTrilhaSchema>;
+
+export const linhaTrilhaSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  acao: z.string(),
+  entidade: z.string(),
+  entidadeId: z.string().nullable(),
+  ator: z.string().nullable(),
+  atorTipo: z.string(),
+  motivo: z.string().nullable(),
+  ip: z.string().nullable(),
+  /** O que mudou, campo a campo. So os campos que de fato mudaram. */
+  mudancas: z.array(z.object({ campo: z.string(), antes: z.string(), depois: z.string() })),
+});
+export type LinhaTrilha = z.infer<typeof linhaTrilhaSchema>;
+
+export const relatorioTrilhaSchema = z.object({
+  dias: z.number().int(),
+  entidade: z.string().nullable(),
+  entidadeId: z.string().nullable(),
+  registros: z.number().int(),
+  /** As entidades com registro no periodo, para escolher sem decorar nomes. */
+  entidades: z.array(z.object({ entidade: z.string(), registros: z.number().int() })),
+  itens: z.array(linhaTrilhaSchema),
+});
+export type RelatorioTrilha = z.infer<typeof relatorioTrilhaSchema>;
+
+export const filtroSensiveisSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  acao: z.string().max(80).optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroSensiveis = z.infer<typeof filtroSensiveisSchema>;
+
+export const relatorioSensiveisSchema = z.object({
+  dias: z.number().int(),
+  registros: z.number().int(),
+  atores: z.number().int(),
+  /** Acoes sensiveis sem motivo escrito. */
+  semMotivo: z.number().int(),
+  porAcao: z.array(z.object({ acao: z.string(), registros: z.number().int() })),
+  porAtor: z.array(
+    z.object({ ator: z.string(), registros: z.number().int(), semMotivo: z.number().int() }),
+  ),
+  itens: z.array(linhaTrilhaSchema),
+});
+export type RelatorioSensiveis = z.infer<typeof relatorioSensiveisSchema>;
+
+export const filtroAcessosSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroAcessos = z.infer<typeof filtroAcessosSchema>;
+
+export const linhaAcessoSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  acao: z.string(),
+  ator: z.string().nullable(),
+  ip: z.string().nullable(),
+  /** Nome do relatorio exportado, quando a acao e exportacao. */
+  relatorio: z.string().nullable(),
+  linhas: z.number().int().nullable(),
+  /** `true` quando as colunas exportadas incluiam custo, valor ou margem. */
+  comCusto: z.boolean(),
+});
+export type LinhaAcesso = z.infer<typeof linhaAcessoSchema>;
+
+export const relatorioAcessosSchema = z.object({
+  dias: z.number().int(),
+  exportacoes: z.number().int(),
+  /** Exportacoes cujas colunas traziam custo, valor ou margem. */
+  comCusto: z.number().int(),
+  linhasExportadas: z.number().int(),
+  /** Tentativas de ler dado de outra empresa. Deveria ser zero. */
+  crossTenant: z.number().int(),
+  /** Reuso de refresh: sinal de token roubado ou de aba fora de sincronia. */
+  reusoDeToken: z.number().int(),
+  porAtor: z.array(
+    z.object({ ator: z.string(), exportacoes: z.number().int(), comCusto: z.number().int() }),
+  ),
+  itens: z.array(linhaAcessoSchema),
+});
+export type RelatorioAcessos = z.infer<typeof relatorioAcessosSchema>;
+
+/** O que a tela manda ao servidor quando alguem baixa um CSV. */
+export const registroExportacaoSchema = z.object({
+  relatorio: z.string().min(1).max(80),
+  colunas: z.array(z.string().max(60)).max(60),
+  linhas: z.number().int().min(0).max(1_000_000),
+});
+export type RegistroExportacao = z.infer<typeof registroExportacaoSchema>;

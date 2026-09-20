@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 
+import { pedir } from '../api/cliente';
 import { Botao } from '../ui/Botao';
 import { juntar } from '../ui/juntar';
 
@@ -198,6 +199,24 @@ export function CabecalhoRelatorio({
  * quem exporta conclui que o sistema gravou errado.
  */
 export function baixarCsv(nome: string, colunas: string[], linhas: (string | number)[][]) {
+  /*
+    O servidor precisa saber que o dado saiu.
+
+    O arquivo e montado AQUI e nunca passaria pela API — sem este aviso, o
+    relatorio "quem levou dado de custo" seria uma tela em branco que parece
+    dizer que ninguem exportou nada.
+
+    O aviso nao bloqueia o download: perder uma linha de trilha e ruim, mas
+    impedir a exportacao porque o registro falhou e pior. A falha vai para o
+    console, que e onde alguem procura.
+  */
+  void pedir('/relatorios/auditoria/exportacao', {
+    method: 'POST',
+    body: { relatorio: nome.replace(/\.csv$/, ''), colunas, linhas: linhas.length },
+  }).catch((erro: unknown) => {
+    console.error('Exportacao nao registrada na auditoria', erro);
+  });
+
   const corpo = linhas.map((l) => l.map((c) => String(c).replaceAll(';', ',')).join(';'));
   const url = URL.createObjectURL(
     new Blob([MARCA_UTF8 + [colunas.join(';'), ...corpo].join(QUEBRA)], {

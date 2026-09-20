@@ -203,9 +203,21 @@ const GRUPOS: readonly Grupo[] = [
   {
     nome: 'Auditoria',
     itens: [
-      { nome: 'Trilha por entidade', descricao: 'Tudo que aconteceu com um registro' },
-      { nome: 'Ações sensíveis', descricao: 'Preço, ajuste, cancelamento, estorno' },
-      { nome: 'Acessos e exportações', descricao: 'Quem levou dado de custo ou de cliente' },
+      {
+        nome: 'Trilha por entidade',
+        descricao: 'Tudo que aconteceu com um registro',
+        para: '/relatorios/auditoria/trilha',
+      },
+      {
+        nome: 'Ações sensíveis',
+        descricao: 'Preço, ajuste, cancelamento, estorno',
+        para: '/relatorios/auditoria/sensiveis',
+      },
+      {
+        nome: 'Acessos e exportações',
+        descricao: 'Quem levou dado de custo ou de cliente',
+        para: '/relatorios/auditoria/acessos',
+      },
     ],
   },
   {

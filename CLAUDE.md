@@ -170,6 +170,12 @@ o runtime.
 | Rótulo de coluna mais forte do que a conta | "Valor parado" mostrava `saldo × custo` de QUALQUER item, inclusive o que girou bem. Quem lê decide pelo rótulo, não pela fórmula |
 | Resumo de relatório contado sobre a página | Pedir 10 linhas devolvia "no máximo 10 em trânsito". Indicador conta o conjunto; a lista é uma página dele |
 | Cobertura de estoque escrita como "infinita" | Sem venda não há ritmo: é ausência de giro, não excesso de cobertura. Nulo, e a tela escreve "sem giro" |
+| Exportação montada no navegador | O CSV nunca passa pela API: "quem levou dado de custo" fica em branco e parece dizer que ninguém exportou. A tela AVISA o servidor antes de baixar |
+| Conjunto sensível definido por prefixo | `acao LIKE 'CARTEIRA_%'` inclui toda ação FUTURA sem ninguém decidir — o mesmo erro do curinga de permissão. Lista explícita |
+| Detectar custo por `LIKE '%custo%'` | `com_custo` é a coluna que DIZ se havia custo, não o custo. Ancore no começo do nome |
+| Antes e depois despejados como JSON | Quem audita compara chave a chave e a alteração passa batido. Devolva só os campos que mudaram |
+| Enum do Postgres comparado com `text[]` | `p.status = ANY($1::text[])` dá "operador não existe". O cast vai no enum: `p.status::text` |
+| Vetor de parâmetros compartilhado entre consultas | Uma consulta que não usa `$1` recebe o parâmetro e o Postgres recusa a ligação inteira. Cada consulta com os seus |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes
