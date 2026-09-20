@@ -183,6 +183,10 @@ o runtime.
 | Página numerada em tela com rascunho | Trocar de página desmonta as linhas com preço digitado e o trabalho some sem aviso. Acrescente ao fim; quem grava é o botão |
 | Fluxo documentado com metade do caminho construído | Dava para INCLUIR e REMOVER item de pedido e não dava para mudar dois para cinco — a negociação emperrava numa operação que o §6 previa. Leia a tabela do documento inteira |
 | Teto de confirmação preso ao pedido original | O cliente aceitava o aumento e a confirmação recusava "mais do que foi pedido". O teto vem do ACORDO registrado, não do envio |
+| Dois controles para a mesma coisa na mesma tela | O stepper da conferência e um campo de edição: um sempre ativo, o outro só no modo — e o botão "Editar" parecia BLOQUEAR. Um controle, que o modo LIBERA |
+| Contagem pesada por linha da listagem | Uma varredura de `variacao` por tabela de preço: 144 tabelas viraram 144 varreduras por chamada. Agrupe uma vez e subtraia |
+| Resultado de busca que desce num bloco de rodapé | Empurra o próprio campo de busca para fora da tela. Lista para cima |
+| Lista de escolha sem o que distingue as opções | Dois "Kimono Trançado Judô" com preços diferentes: faltavam SKU, variação e saldo, que é o que decide |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

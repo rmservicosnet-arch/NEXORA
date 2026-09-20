@@ -50,25 +50,45 @@ export class TabelasService {
     private readonly auditoria: AuditoriaService,
   ) {}
 
-  async listar(): Promise<TabelaPreco[]> {
+  /**
+   * As tabelas de preco.
+   *
+   * Inativas ficam de fora por padrao. Uma base de teste juntou 140 tabelas
+   * desativadas e elas empurravam as quatro de verdade para fora da tela — a
+   * mesma armadilha ja registrada para lojas. `incluirInativas` traz todas.
+   */
+  async listar(incluirInativas = false): Promise<TabelaPreco[]> {
     return comEscopoAtual(this.prisma, async (tx) => {
       const linhas = await tx.tabelaPreco.findMany({
+        ...(incluirInativas ? {} : { where: { status: 'ATIVO' as const } }),
         orderBy: [{ padrao: 'desc' }, { status: 'asc' }, { nome: 'asc' }],
         include: { _count: { select: { precos: true, clientes: true } } },
       });
 
-      // Quantos ainda faltam, por tabela. `_count.precos` conta linhas de
-      // preco — inclusive de variacao inativa —, entao subtrair nao serve:
-      // daria numero negativo no dia em que alguem desativar uma variacao.
-      const faltando = await Promise.all(
-        linhas.map((t) =>
-          tx.variacao.count({
-            where: { status: 'ATIVO', precos: { none: { tabelaPrecoId: t.id } } },
-          }),
-        ),
-      );
+      /*
+        Quantos faltam, em DUAS consultas e nao em N.
 
-      return linhas.map((t, i) => this.paraContrato(t, faltando[i] ?? 0));
+        Era uma contagem pesada por tabela: com 144 tabelas, 144 varreduras de
+        variacao a cada abertura da tela, e o teste que lista tres vezes
+        estourava o prazo. Agora e o total de ativas menos as que ja tem preco
+        em cada tabela.
+
+        Contar `_count.precos` nao serviria: ele inclui linha de variacao
+        INATIVA, e a subtracao daria negativo no dia em que alguem desativar
+        uma variacao — por isso o agrupamento filtra a variacao ativa.
+      */
+      const [ativas, comPreco] = await Promise.all([
+        tx.variacao.count({ where: { status: 'ATIVO' } }),
+        tx.precoItem.groupBy({
+          by: ['tabelaPrecoId'],
+          where: { variacao: { status: 'ATIVO' } },
+          _count: { variacaoId: true },
+        }),
+      ]);
+
+      const porTabela = new Map(comPreco.map((g) => [g.tabelaPrecoId, g._count.variacaoId]));
+
+      return linhas.map((t) => this.paraContrato(t, ativas - (porTabela.get(t.id) ?? 0)));
     });
   }
 
@@ -238,13 +258,20 @@ export class TabelasService {
         ...(filtro.semPreco ? { precos: { none: { tabelaPrecoId: tabelaId } } } : {}),
       };
 
-      const [total, semPreco, totalFiltrado, linhas] = await Promise.all([
+      /*
+        Sem busca nem categoria, o recorte E um dos dois totais que ja estao
+        sendo contados. Uma terceira contagem ali seria a mesma resposta paga
+        duas vezes, em toda abertura da tela.
+      */
+      const recortado = Boolean(filtro.busca || filtro.categoriaId);
+
+      const [total, semPreco, filtrados, linhas] = await Promise.all([
         tx.variacao.count({ where: { status: 'ATIVO' } }),
         tx.variacao.count({
           where: { status: 'ATIVO', precos: { none: { tabelaPrecoId: tabelaId } } },
         }),
         // O mesmo `recorte` da listagem: o rodape conta o que a lista mostra.
-        tx.variacao.count({ where: recorte }),
+        recortado ? tx.variacao.count({ where: recorte }) : Promise.resolve(null),
         tx.variacao.findMany({
           where: recorte,
           orderBy: [{ produto: { nome: 'asc' } }, { sku: 'asc' }],
@@ -307,7 +334,7 @@ export class TabelasService {
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         total,
         semPreco,
-        totalFiltrado,
+        totalFiltrado: filtrados ?? (filtro.semPreco ? semPreco : total),
         margemMedia:
           podeVerCusto && comMargem > 0 ? somaMargem.dividedBy(comMargem).toFixed(1) : null,
       };

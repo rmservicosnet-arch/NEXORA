@@ -30,8 +30,8 @@ export class TabelasController {
 
   @Get()
   @Permissoes(PERM.preco.visualizar)
-  async listar(): Promise<TabelaPreco[]> {
-    return this.tabelas.listar();
+  async listar(@Query('incluirInativas') incluirInativas?: string): Promise<TabelaPreco[]> {
+    return this.tabelas.listar(incluirInativas === 'true');
   }
 
   @Post()

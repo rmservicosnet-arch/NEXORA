@@ -73,9 +73,9 @@ async function itens(tabelaId: string, query = ''): Promise<PaginaItens> {
   return resposta.body as PaginaItens;
 }
 
-async function listar(): Promise<Tabela[]> {
+async function listar(incluirInativas = false): Promise<Tabela[]> {
   const resposta = await http
-    .get('/api/tabelas-preco')
+    .get(`/api/tabelas-preco${incluirInativas ? '?incluirInativas=true' : ''}`)
     .set('Authorization', `Bearer ${tokenAdmin}`)
     .expect(200);
   return resposta.body as Tabela[];
@@ -203,7 +203,9 @@ describe.runIf(temBanco)('desativar', () => {
       .send({ status: 'INATIVO' })
       .expect(200);
 
-    expect((await listar()).find((t) => t.id === id)?.status).toBe('INATIVO');
+    // A listagem esconde as inativas: quem quer ver a que acabou de desativar
+    // pede por elas.
+    expect((await listar(true)).find((t) => t.id === id)?.status).toBe('INATIVO');
   });
 
   /**

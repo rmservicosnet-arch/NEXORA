@@ -33,13 +33,23 @@ function vivo(item: PedidoItem): boolean {
   return item.status !== 'REMOVIDO' && item.status !== 'CANCELADO';
 }
 
-/** O que o cliente pediu — ou, num item incluído pela equipe, o que ela pôs. */
-function pedida(item: PedidoItem): number {
-  return Number(item.quantidadeSolicitada) || Number(item.quantidadeConfirmada);
+/**
+ * A quantidade que vale HOJE para esta linha.
+ *
+ * O que o cliente pediu, o que a equipe pôs num item incluído por ela, ou o
+ * que as duas partes acordaram depois — o maior dos dois, que é o teto que o
+ * servidor aceita confirmar.
+ *
+ * Enquanto isto devolvia só `quantidadeSolicitada`, o "+" da conferência parava
+ * no que o cliente tinha pedido: o pedido subia de dois para cinco, o cliente
+ * aceitava, e a tela ainda não deixava passar de dois.
+ */
+function acordada(item: PedidoItem): number {
+  return Math.max(Number(item.quantidadeSolicitada), Number(item.quantidadeConfirmada));
 }
 
 function disponivelDe(item: PedidoItem): number {
-  return Number(item.disponivelAgora ?? pedida(item));
+  return Number(item.disponivelAgora ?? acordada(item));
 }
 
 export function PedidoDetalhe() {
@@ -79,8 +89,6 @@ export function PedidoDetalhe() {
    * que cabe no saldo; editar é mexer no que foi combinado com o cliente.
    */
   const [editando, setEditando] = useState(false);
-  /** Quantidade em edição, por item. Só o que foi digitado entra aqui. */
-  const [quantidades, setQuantidades] = useState<Record<string, string>>({});
 
   const consulta = useQuery({
     queryKey: ['pedidos', pedidoId],
@@ -107,7 +115,7 @@ export function PedidoDetalhe() {
       const inicial: Record<string, Decisao> = {};
       for (const i of pedido.itens) {
         if (!vivo(i)) continue;
-        inicial[i.id] = { acao: 'CONFIRMAR', quantidade: pedida(i) };
+        inicial[i.id] = { acao: 'CONFIRMAR', quantidade: acordada(i) };
       }
       return { dono: pedido.id, porItem: inicial };
     });
@@ -197,18 +205,12 @@ export function PedidoDetalhe() {
         method: 'POST',
         body: { quantidade: p.quantidade, motivo: motivoInclusao.trim() },
       }),
-    onSuccess: async (pedidoNovo, variaveis) => {
+    onSuccess: async (pedidoNovo) => {
       setSucesso(
         pedidoNovo.status === 'AGUARDANDO_ACEITE_CLIENTE'
           ? 'Quantidade ajustada. O total subiu, então o pedido está esperando o aceite do cliente.'
           : 'Quantidade ajustada.',
       );
-      // O campo volta a espelhar o servidor; deixar o digitado faria a tela
-      // discordar do pedido na próxima renderização.
-      setQuantidades((atual) => {
-        const { [variaveis.itemId]: _fora, ...resto } = atual;
-        return resto;
-      });
       await recarregar();
     },
     onError: aoFalhar,
@@ -302,6 +304,16 @@ export function PedidoDetalhe() {
   const itensDoPedido = pedido.itens;
   const idDoPedido = pedido.id;
   const editavel = EDITAVEL.includes(pedido.status);
+
+  /**
+   * O modo de edição é DERIVADO, nunca só o estado da tela.
+   *
+   * Aumentar um item manda o pedido para o aceite do cliente, e ali ele deixa
+   * de ser editável. Com o modo preso no `useState`, o campo continuava na
+   * tela e o botão "Concluir edição" sumia junto com a editabilidade — sem
+   * saída. Amarrado ao status, ele fecha sozinho.
+   */
+  const emEdicao = editando && editavel && pode(PERM.pedido.editarItens);
   const confirmavel = editavel && pode(PERM.pedido.confirmar);
   const faturavel =
     (pedido.status === 'CONFIRMADO' || pedido.status === 'CONFIRMADO_PARCIALMENTE') &&
@@ -325,7 +337,7 @@ export function PedidoDetalhe() {
     const novo: Record<string, Decisao> = {};
     for (const i of itensDoPedido) {
       if (!vivo(i)) continue;
-      const cabe = Math.max(0, Math.min(pedida(i), disponivelDe(i)));
+      const cabe = Math.max(0, Math.min(acordada(i), disponivelDe(i)));
       novo[i.id] =
         cabe === 0 ? { acao: 'DEVOLVER', quantidade: 0 } : { acao: 'CONFIRMAR', quantidade: cabe };
     }
@@ -338,7 +350,7 @@ export function PedidoDetalhe() {
     const novo: Record<string, Decisao> = {};
     for (const i of itensDoPedido) {
       if (!vivo(i)) continue;
-      novo[i.id] = { acao: 'CONFIRMAR', quantidade: pedida(i) };
+      novo[i.id] = { acao: 'CONFIRMAR', quantidade: acordada(i) };
     }
     setDecisoes({ dono: idDoPedido, porItem: novo });
     setJustificativa('');
@@ -431,15 +443,14 @@ export function PedidoDetalhe() {
               */}
               {editavel && pode(PERM.pedido.editarItens) ? (
                 <Botao
-                  variante={editando ? 'primario' : 'secundario'}
+                  variante={emEdicao ? 'primario' : 'secundario'}
                   tamanho="compacto"
                   onClick={() => {
-                    setEditando(!editando);
+                    setEditando(!emEdicao);
                     setRemovendo(null);
-                    setQuantidades({});
                   }}
                 >
-                  {editando ? 'Concluir edição' : 'Editar itens'}
+                  {emEdicao ? 'Concluir edição' : 'Editar itens'}
                 </Botao>
               ) : null}
 
@@ -459,7 +470,20 @@ export function PedidoDetalhe() {
 
           <div className="flex min-h-0 flex-1 flex-col overflow-x-auto rounded-md border border-neutral-100 bg-white shadow-sm">
             <div className="hidden shrink-0 grid-cols-[minmax(180px,1fr)_60px_110px_150px_120px_104px_44px] items-center gap-3 border-b border-neutral-100 bg-neutral-25 px-4 py-2 lg:grid lg:min-w-[830px]">
-              {['Item', 'Ped.', 'Disponível', 'Decisão', 'Quantidade', 'Valor', ''].map((t, i) => (
+              {/*
+                A coluna diz o que o controle FAZ agora. Chamada sempre de
+                "Quantidade", mexer nela fora da edição parecia alterar o
+                pedido — quando só decide quanto confirmar do acordado.
+              */}
+              {[
+                'Item',
+                'Ped.',
+                'Disponível',
+                'Decisão',
+                emEdicao ? 'Acordado' : 'Confirmar',
+                'Valor',
+                '',
+              ].map((t, i) => (
                 <span
                   key={t || `c${String(i)}`}
                   className={juntar(
@@ -480,19 +504,12 @@ export function PedidoDetalhe() {
                   item={item}
                   decisao={decisoes.porItem[item.id]}
                   editavel={confirmavel}
-                  editandoItens={editando}
-                  podeRemover={editando}
-                  quantidade={quantidades[item.id] ?? String(pedida(item))}
+                  editandoItens={emEdicao}
+                  podeRemover={emEdicao}
                   motivoValido={motivoInclusao.trim().length >= 5}
                   ajustando={ajustar.isPending}
-                  aoMudarQuantidade={(v) => setQuantidades((atual) => ({ ...atual, [item.id]: v }))}
-                  aoAjustar={() =>
-                    ajustar.mutate({
-                      itemId: item.id,
-                      quantidade: String(
-                        Math.max(1, Number(quantidades[item.id] ?? String(pedida(item))) || 1),
-                      ),
-                    })
+                  aoAjustar={(quantidade) =>
+                    ajustar.mutate({ itemId: item.id, quantidade: String(quantidade) })
                   }
                   removendo={removendo === item.id}
                   motivo={motivoRemocao}
@@ -507,61 +524,120 @@ export function PedidoDetalhe() {
               ))}
             </div>
 
-            {/* Incluir item acordado — o rodapé da tabela, como na proposta. */}
-            {editando ? (
-              <div className="flex shrink-0 flex-col gap-2 border-t border-neutral-100 bg-neutral-25 p-3">
+            {/*
+              Incluir item acordado.
+
+              A lista mostrava só nome e preço: dois "Kimono Trançado Judô" com
+              preços diferentes ficavam indistinguíveis, e o que os separa — SKU,
+              variação e saldo — era exatamente o que a tela jogava fora.
+
+              E ela sobe acima da busca: este bloco mora no RODAPÉ da tabela,
+              e um resultado que desce empurra o próprio campo para fora da
+              tela em quem trabalha numa tela curta.
+            */}
+            {emEdicao ? (
+              <div className="flex shrink-0 flex-col gap-2.5 border-t border-neutral-100 bg-neutral-25 p-3">
+                {catalogo.data && catalogo.data.length > 0 ? (
+                  <div className="flex flex-col overflow-hidden rounded-md border border-neutral-200 bg-white">
+                    {catalogo.data.slice(0, 6).map((i) => (
+                      <div
+                        key={i.variacaoId}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-3 py-2 last:border-b-0"
+                      >
+                        <span className="w-[116px] shrink-0 font-mono text-[11px] text-neutral-500">
+                          {i.sku}
+                        </span>
+
+                        {/*
+                          Produto E variação: sem a segunda, dois itens do mesmo
+                          produto são o mesmo texto com preços diferentes.
+                        */}
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-neutral-900">
+                          {i.produto}
+                          <span className="text-neutral-500"> · {i.descricaoVariacao}</span>
+                        </span>
+
+                        {!i.disponivel ? (
+                          <span className="shrink-0 rounded-full bg-[#fdecec] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--color-perigo)]">
+                            sem saldo
+                          </span>
+                        ) : null}
+
+                        <span className="w-[86px] shrink-0 text-right font-mono text-[12.5px] text-neutral-700">
+                          R$ {brl(i.preco)}
+                        </span>
+
+                        <Botao
+                          variante="secundario"
+                          tamanho="compacto"
+                          disabled={motivoInclusao.trim().length < 5 || incluir.isPending}
+                          onClick={() => incluir.mutate(i.variacaoId)}
+                        >
+                          Incluir
+                        </Botao>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* Estado da busca dito por extenso — lista vazia não explica nada. */}
+                {buscaItem.trim().length > 0 && buscaItem.trim().length < 2 ? (
+                  <p className="text-[11.5px] text-neutral-500">
+                    Digite ao menos duas letras para buscar.
+                  </p>
+                ) : null}
+
+                {catalogo.isFetching ? (
+                  <p className="text-[11.5px] text-neutral-500">Procurando…</p>
+                ) : null}
+
+                {catalogo.data && catalogo.data.length === 0 ? (
+                  <p className="text-[11.5px] text-neutral-500">
+                    Nada encontrado para “{buscaItem.trim()}”.
+                  </p>
+                ) : null}
+
+                {motivoInclusao.trim().length < 5 && catalogo.data && catalogo.data.length > 0 ? (
+                  <p className="text-[11.5px] font-medium text-[var(--color-atencao)]">
+                    Escreva o que foi combinado antes de incluir — o motivo vai para a linha do
+                    tempo que o cliente vê.
+                  </p>
+                ) : null}
+
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[12px] font-medium text-neutral-600">
-                    O que foi combinado:
-                  </span>
+                  <span className="text-[12px] text-neutral-600">O que foi combinado:</span>
                   <input
                     value={motivoInclusao}
                     onChange={(e) => setMotivoInclusao(e.target.value)}
-                    placeholder="O que foi combinado com o cliente"
-                    className="h-8 min-w-[220px] flex-1 rounded-md border border-neutral-200 px-2.5 text-[12.5px]"
+                    placeholder="Vai para a linha do tempo que o cliente vê"
+                    aria-label="O que foi combinado com o cliente"
+                    className="h-8 min-w-[240px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-[12.5px]"
                   />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] font-semibold text-neutral-700">
+                    Incluir item acordado
+                  </span>
+
                   <input
                     value={buscaItem}
                     onChange={(e) => setBuscaItem(e.target.value)}
-                    placeholder="Buscar no catálogo"
-                    className="h-8 w-[180px] rounded-md border border-neutral-200 px-2.5 text-[12.5px]"
+                    placeholder="SKU, produto ou código de barras…"
+                    aria-label="Buscar item no catálogo"
+                    className="h-8 min-w-[240px] flex-1 rounded-md border border-neutral-200 bg-white px-2.5 text-[12.5px]"
                   />
+
                   <span className="flex items-center gap-1.5">
                     <span className="text-[11.5px] text-neutral-500">qtd.</span>
                     <input
                       value={qtdInclusao}
                       onChange={(e) => setQtdInclusao(e.target.value.replace(/\D/g, ''))}
                       aria-label="Quantidade a incluir"
-                      className="h-8 w-[56px] rounded-md border border-neutral-200 px-2 text-right font-mono text-[12.5px]"
+                      className="h-8 w-[56px] rounded-md border border-neutral-200 bg-white px-2 text-right font-mono text-[12.5px]"
                     />
                   </span>
                 </div>
-
-                {catalogo.data && catalogo.data.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {catalogo.data.slice(0, 6).map((i) => (
-                      <button
-                        key={i.variacaoId}
-                        type="button"
-                        disabled={motivoInclusao.trim().length < 5 || incluir.isPending}
-                        onClick={() => incluir.mutate(i.variacaoId)}
-                        className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-left text-[12px] text-neutral-700 disabled:opacity-50"
-                      >
-                        <span className="max-w-[160px] truncate">{i.produto}</span>
-                        <span className="font-mono text-[11px] text-neutral-400">
-                          R$ {brl(i.preco)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                {motivoInclusao.trim().length < 5 && buscaItem.trim().length >= 2 ? (
-                  <p className="text-[11.5px] text-[var(--color-atencao)]">
-                    Descreva o que foi combinado antes de escolher o item — o motivo vai para a
-                    linha do tempo que o cliente vê.
-                  </p>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -833,13 +909,11 @@ function LinhaItem({
   podeRemover,
   removendo,
   motivo,
-  quantidade,
   motivoValido,
   ajustando,
   aoDecidir,
   aoAbrirRemocao,
   aoMudarMotivo,
-  aoMudarQuantidade,
   aoAjustar,
   aoRemover,
 }: {
@@ -850,20 +924,18 @@ function LinhaItem({
   readonly podeRemover: boolean;
   readonly removendo: boolean;
   readonly motivo: string;
-  readonly quantidade: string;
   readonly motivoValido: boolean;
   readonly ajustando: boolean;
   readonly aoDecidir: (m: Partial<Decisao>) => void;
   readonly aoAbrirRemocao: () => void;
   readonly aoMudarMotivo: (v: string) => void;
-  readonly aoMudarQuantidade: (v: string) => void;
-  readonly aoAjustar: () => void;
+  readonly aoAjustar: (quantidade: number) => void;
   readonly aoRemover: () => void;
 }) {
   const removido = item.status === 'REMOVIDO';
   const devolvido = item.status === 'DEVOLVIDO';
   const disponivel = disponivelDe(item);
-  const quer = pedida(item);
+  const quer = acordada(item);
 
   const confirmando = decisao?.acao === 'CONFIRMAR' ? decisao.quantidade : 0;
   const passaDoDisponivel = editavel && confirmando > disponivel;
@@ -911,48 +983,12 @@ function LinhaItem({
         </div>
 
         {/* Pedido */}
-        {/*
-          No modo de edição a quantidade pedida vira campo.
-
-          É aqui que a negociação entra: o cliente pediu dois e combinou cinco
-          por telefone. Sem isto, a única saída era incluir uma segunda linha
-          do mesmo SKU — e o pedido ficava com duas linhas iguais.
-        */}
-        {editandoItens && !removido ? (
-          <span className="order-2 flex items-center gap-1 lg:order-none">
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={quantidade}
-              onChange={(e) => aoMudarQuantidade(e.target.value)}
-              aria-label={`Quantidade de ${item.sku}`}
-              className="h-7 w-[52px] rounded border border-neutral-200 bg-white px-1.5 text-right font-mono text-[12.5px] text-neutral-900"
-            />
-            {Number(quantidade) !== quer ? (
-              <button
-                type="button"
-                disabled={!motivoValido || ajustando}
-                onClick={aoAjustar}
-                title={
-                  motivoValido
-                    ? 'Aplicar a nova quantidade'
-                    : 'Escreva o que foi combinado, no rodapé'
-                }
-                className="h-7 rounded border border-primary-200 bg-primary-50 px-1.5 text-[11px] font-semibold text-primary-700 disabled:opacity-45"
-              >
-                ok
-              </button>
-            ) : null}
+        <span className="order-2 text-right font-mono text-[12.5px] text-neutral-600 lg:order-none">
+          <span className="mr-1 font-sans text-[10px] uppercase text-neutral-400 lg:hidden">
+            ped.
           </span>
-        ) : (
-          <span className="order-2 text-right font-mono text-[12.5px] text-neutral-600 lg:order-none">
-            <span className="mr-1 font-sans text-[10px] uppercase text-neutral-400 lg:hidden">
-              ped.
-            </span>
-            {quer}
-          </span>
-        )}
+          {Number(item.quantidadeSolicitada) || quer}
+        </span>
 
         {/* Disponível */}
         <span className="order-3 lg:order-none">
@@ -1014,33 +1050,80 @@ function LinhaItem({
         </span>
 
         {/* Quantidade */}
+        {/*
+          UM controle de quantidade, não dois.
+
+          O botão "Editar itens" LIBERA este mesmo stepper em vez de travar um
+          e abrir outro. Fora da edição ele decide quanto confirmar e para no
+          que foi acordado; dentro, muda o próprio acordo e sobe sem teto — e
+          aí aparece o "aplicar", porque mexer no acordo é ato com motivo, e
+          não um número que muda sozinho na tela.
+        */}
         <span className="order-6 lg:order-none">
           {editavel && !removido && decisao?.acao === 'CONFIRMAR' ? (
-            <span className="inline-flex items-center rounded-md border border-neutral-200">
-              <button
-                type="button"
-                aria-label={`Diminuir ${item.sku}`}
-                onClick={() => aoDecidir({ quantidade: Math.max(0, confirmando - 1) })}
-                className="flex size-8 items-center justify-center text-neutral-600 hover:bg-neutral-50"
-              >
-                −
-              </button>
-              <span
-                className={juntar(
-                  'w-10 text-center font-mono text-[13px]',
-                  passaDoDisponivel && 'font-semibold text-[var(--color-atencao)]',
-                )}
-              >
-                {confirmando}
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center rounded-md border border-neutral-200">
+                <button
+                  type="button"
+                  aria-label={`Diminuir ${item.sku}`}
+                  disabled={confirmando <= 0}
+                  onClick={() => aoDecidir({ quantidade: Math.max(0, confirmando - 1) })}
+                  className="flex size-8 items-center justify-center text-neutral-600 hover:bg-neutral-50 disabled:opacity-35"
+                >
+                  −
+                </button>
+                <span
+                  className={juntar(
+                    'w-10 text-center font-mono text-[13px]',
+                    editandoItens && confirmando !== quer && 'font-semibold text-primary-700',
+                    passaDoDisponivel && 'font-semibold text-[var(--color-atencao)]',
+                  )}
+                >
+                  {confirmando}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Aumentar ${item.sku}`}
+                  disabled={!editandoItens && confirmando >= quer}
+                  title={
+                    !editandoItens && confirmando >= quer
+                      ? 'Para passar do acordado, clique em Editar itens'
+                      : undefined
+                  }
+                  onClick={() =>
+                    aoDecidir({
+                      quantidade: editandoItens ? confirmando + 1 : Math.min(quer, confirmando + 1),
+                    })
+                  }
+                  className="flex size-8 items-center justify-center text-neutral-600 hover:bg-neutral-50 disabled:opacity-35"
+                >
+                  +
+                </button>
               </span>
-              <button
-                type="button"
-                aria-label={`Aumentar ${item.sku}`}
-                onClick={() => aoDecidir({ quantidade: Math.min(quer, confirmando + 1) })}
-                className="flex size-8 items-center justify-center text-neutral-600 hover:bg-neutral-50"
-              >
-                +
-              </button>
+
+              {/*
+                O motivo que falta é dito por ESCRITO, não por botão morto: no
+                celular não há hover, e um botão apagado com a explicação num
+                `title` vira "a tela não deixa".
+              */}
+              {editandoItens && confirmando !== quer ? (
+                motivoValido ? (
+                  <button
+                    type="button"
+                    disabled={ajustando}
+                    onClick={() => aoAjustar(confirmando)}
+                    className="h-7 rounded border border-primary-200 bg-primary-50 px-2 text-[11px] font-semibold text-primary-700 disabled:opacity-45"
+                  >
+                    {ajustando ? '…' : 'aplicar'}
+                  </button>
+                ) : (
+                  <span className="text-[10.5px] font-medium leading-[13px] text-[var(--color-atencao)]">
+                    escreva o que
+                    <br />
+                    foi combinado
+                  </span>
+                )
+              ) : null}
             </span>
           ) : (
             <span className="text-[12px] text-neutral-500">
