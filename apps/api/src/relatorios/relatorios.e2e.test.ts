@@ -109,6 +109,23 @@ interface Inventario {
   }[];
 }
 
+interface Formas {
+  dias: number;
+  total: string;
+  imediato: string;
+  futuro: string;
+  formas: {
+    forma: string;
+    total: string;
+    participacao: string;
+    pagamentos: number;
+    medio: string;
+    parcelasMedias: string;
+    futuro: boolean;
+  }[];
+  parcelamento: { parcelas: number; pagamentos: number; total: string; participacao: string }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -537,5 +554,88 @@ describe.runIf(temBanco)('divergências de inventário', () => {
     await http.get('/api/relatorios/giro').expect(401);
     await http.get('/api/relatorios/transferencias').expect(401);
     await http.get('/api/relatorios/inventario').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('formas de pagamento', () => {
+  it('as formas somam o total recebido', async () => {
+    const r = await http
+      .get('/api/relatorios/formas-pagamento?dias=90')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Formas;
+    const soma = f.formas.reduce((s, l) => s + Number(l.total), 0);
+    expect(soma).toBeCloseTo(Number(f.total), 2);
+    expect(f.total).toMatch(/^\d+\.\d{2}$/);
+  });
+
+  /**
+   * Crédito é dinheiro futuro mesmo em uma parcela: quem liquida é a
+   * adquirente. Chamá-lo de à vista faria a loja contar com o que não tem.
+   */
+  it('crédito nunca entra no que já está na conta', async () => {
+    const r = await http
+      .get('/api/relatorios/formas-pagamento?dias=90')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Formas;
+
+    for (const l of f.formas) {
+      if (['CREDITO', 'BOLETO', 'PRAZO', 'CARTEIRA'].includes(l.forma)) {
+        expect(l.futuro).toBe(true);
+      }
+      if (['DINHEIRO', 'PIX', 'DEBITO', 'TRANSFERENCIA'].includes(l.forma)) {
+        expect(l.futuro).toBe(false);
+      }
+    }
+
+    expect(Number(f.imediato) + Number(f.futuro)).toBeCloseTo(Number(f.total), 2);
+
+    const somaFutura = f.formas.filter((l) => l.futuro).reduce((s, l) => s + Number(l.total), 0);
+    expect(somaFutura).toBeCloseTo(Number(f.futuro), 2);
+  });
+
+  it('o parcelamento é só do crédito e fecha nele', async () => {
+    const r = await http
+      .get('/api/relatorios/formas-pagamento?dias=90')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Formas;
+    const credito = f.formas.find((l) => l.forma === 'CREDITO');
+
+    const soma = f.parcelamento.reduce((s, l) => s + Number(l.total), 0);
+    expect(soma).toBeCloseTo(Number(credito?.total ?? 0), 2);
+
+    if (f.parcelamento.length > 0) {
+      const partes = f.parcelamento.reduce((s, l) => s + Number(l.participacao), 0);
+      expect(partes).toBeGreaterThan(99);
+      expect(partes).toBeLessThan(101);
+      for (const l of f.parcelamento) expect(l.parcelas).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  /** Ponderada pelo valor: dez compras de R$ 20 em 1x não disfarçam uma de R$ 3.000 em 12x. */
+  it('as parcelas médias nunca ficam abaixo de uma', async () => {
+    const r = await http
+      .get('/api/relatorios/formas-pagamento?dias=90')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const l of (r.body as Formas).formas) {
+      expect(Number(l.parcelasMedias)).toBeGreaterThanOrEqual(1);
+      expect(Number(l.medio)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('recusa período fora do intervalo e exige sessão', async () => {
+    await http
+      .get('/api/relatorios/formas-pagamento?dias=999')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/formas-pagamento').expect(401);
   });
 });

@@ -240,3 +240,54 @@ export const relatorioInventarioSchema = z.object({
   itens: z.array(linhaInventarioSchema),
 });
 export type RelatorioInventario = z.infer<typeof relatorioInventarioSchema>;
+
+// ---------------------------------------------------------------------------
+// Formas de pagamento
+// ---------------------------------------------------------------------------
+
+export const filtroFormasSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+});
+export type FiltroFormas = z.infer<typeof filtroFormasSchema>;
+
+export const linhaFormaSchema = z.object({
+  forma: z.string(),
+  total: z.string(),
+  /** Participacao no total recebido, em pontos percentuais. */
+  participacao: z.string(),
+  pagamentos: z.number().int(),
+  /** Valor medio de cada pagamento nesta forma. */
+  medio: z.string(),
+  /** Media ponderada de parcelas. `1.0` em quem nao parcela. */
+  parcelasMedias: z.string(),
+  /** `true` quando o dinheiro so entra depois da venda. */
+  futuro: z.boolean(),
+});
+export type LinhaForma = z.infer<typeof linhaFormaSchema>;
+
+export const linhaParcelamentoSchema = z.object({
+  parcelas: z.number().int(),
+  pagamentos: z.number().int(),
+  total: z.string(),
+  participacao: z.string(),
+});
+export type LinhaParcelamento = z.infer<typeof linhaParcelamentoSchema>;
+
+export const relatorioFormasSchema = z.object({
+  dias: z.number().int(),
+  total: z.string(),
+  /**
+   * O dinheiro que ja esta na mao: dinheiro, PIX, debito, transferencia.
+   *
+   * Credito fica de FORA, mesmo em uma parcela: o prazo e da adquirente, e
+   * este sistema ainda nao registra a data de liquidacao dela.
+   */
+  imediato: z.string(),
+  /** Credito, boleto, prazo e carteira: entra depois da venda. */
+  futuro: z.string(),
+  formas: z.array(linhaFormaSchema),
+  /** So do credito: em quantas vezes a loja vendeu. */
+  parcelamento: z.array(linhaParcelamentoSchema),
+});
+export type RelatorioFormas = z.infer<typeof relatorioFormasSchema>;

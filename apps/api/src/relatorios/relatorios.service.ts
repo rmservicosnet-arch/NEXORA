@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  FiltroFormas,
   FiltroGiro,
   FiltroMovimentoRelatorio,
   FiltroPosicao,
@@ -7,7 +8,9 @@ import type {
   LinhaPosicao,
   LinhaRanking,
   LinhaTransferencia,
+  LinhaForma,
   PosicaoEstoque,
+  RelatorioFormas,
   RelatorioGiro,
   RelatorioInventario,
   RelatorioTransferencias,
@@ -17,6 +20,14 @@ import { dec, type Dec } from '@estoque/core';
 import { comEscopoAtual, type ClienteEmTransacao, type PrismaClient } from '@estoque/db';
 
 import { PRISMA } from '../infra/prisma/prisma.module';
+
+/**
+ * Formas cujo dinheiro só entra DEPOIS da venda.
+ *
+ * Crédito entra aqui mesmo em uma parcela: quem liquida é a adquirente, e o
+ * sistema ainda não guarda a data dela.
+ */
+const FORMAS_FUTURAS = new Set(['CREDITO', 'BOLETO', 'PRAZO', 'CARTEIRA']);
 
 /** Curva ABC: A concentra 80% do valor, B os 15% seguintes, C o resto. */
 const CORTE_A = 80;
@@ -263,6 +274,102 @@ export class RelatoriosService {
         porLoja,
         dimensao: filtro.dimensao,
         ranking,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Formas de pagamento
+  // -------------------------------------------------------------------------
+
+  /**
+   * Como o dinheiro entrou — e quando ele entra de verdade.
+   *
+   * Crédito fica no balde "futuro" mesmo em uma parcela: o prazo é da
+   * adquirente, e este sistema ainda não registra a data de liquidação dela.
+   * Chamá-lo de à vista faria o caixa parecer ter dinheiro que não tem.
+   */
+  async formas(filtro: FiltroFormas): Promise<RelatorioFormas> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND v.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      const periodo = `
+        v.status = 'CONCLUIDA'
+        AND (v.concluida_em AT TIME ZONE 'America/Sao_Paulo')::date
+            > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+        ${recorte}`;
+
+      const linhas = await tx.$queryRawUnsafe<
+        { forma: string; total: string; pagamentos: bigint; parcelas: string }[]
+      >(
+        `
+        SELECT pg.forma,
+               sum(pg.valor)::text AS total,
+               count(*) AS pagamentos,
+               /* Ponderada pelo valor: dez compras de R$ 20 em 1x não disfarçam
+                  uma de R$ 3.000 em 12x. */
+               (sum(pg.valor * pg.parcelas) / NULLIF(sum(pg.valor), 0))::text AS parcelas
+          FROM venda_pagamento pg
+          JOIN venda v ON v.id = pg.venda_id
+         WHERE ${periodo}
+         GROUP BY pg.forma
+         ORDER BY sum(pg.valor) DESC
+        `,
+        ...parametros,
+      );
+
+      const parcelas = await tx.$queryRawUnsafe<
+        { parcelas: number; pagamentos: bigint; total: string }[]
+      >(
+        `
+        SELECT pg.parcelas, count(*) AS pagamentos, sum(pg.valor)::text AS total
+          FROM venda_pagamento pg
+          JOIN venda v ON v.id = pg.venda_id
+         WHERE ${periodo}
+           AND pg.forma = 'CREDITO'
+         GROUP BY pg.parcelas
+         ORDER BY pg.parcelas
+        `,
+        ...parametros,
+      );
+
+      const total = linhas.reduce((soma, l) => soma.plus(dec(l.total)), dec(0));
+      const totalCredito = parcelas.reduce((soma, l) => soma.plus(dec(l.total)), dec(0));
+
+      const formas: LinhaForma[] = linhas.map((l) => {
+        const valor = dec(l.total);
+        const quantos = Number(l.pagamentos);
+
+        return {
+          forma: l.forma,
+          total: valor.toFixed(2),
+          participacao: total.greaterThan(0) ? valor.dividedBy(total).times(100).toFixed(1) : '0.0',
+          pagamentos: quantos,
+          medio: quantos > 0 ? valor.dividedBy(quantos).toFixed(2) : '0.00',
+          parcelasMedias: dec(l.parcelas ?? '1').toFixed(1),
+          futuro: FORMAS_FUTURAS.has(l.forma),
+        };
+      });
+
+      const futuro = formas
+        .filter((f) => f.futuro)
+        .reduce((soma, f) => soma.plus(dec(f.total)), dec(0));
+
+      return {
+        dias: filtro.dias,
+        total: total.toFixed(2),
+        imediato: total.minus(futuro).toFixed(2),
+        futuro: futuro.toFixed(2),
+        formas,
+        parcelamento: parcelas.map((l) => ({
+          parcelas: l.parcelas,
+          pagamentos: Number(l.pagamentos),
+          total: dec(l.total).toFixed(2),
+          participacao: totalCredito.greaterThan(0)
+            ? dec(l.total).dividedBy(totalCredito).times(100).toFixed(1)
+            : '0.0',
+        })),
       };
     });
   }

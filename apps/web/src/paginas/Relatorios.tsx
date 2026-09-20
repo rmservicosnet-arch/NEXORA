@@ -123,7 +123,11 @@ const GRUPOS: readonly Grupo[] = [
         restrito: true,
         para: '/relatorios/vendas',
       },
-      { nome: 'Formas de pagamento', descricao: 'Distribuição e prazo de recebimento' },
+      {
+        nome: 'Formas de pagamento',
+        descricao: 'Distribuição, parcelamento e o que ainda não entrou',
+        para: '/relatorios/formas-pagamento',
+      },
       { nome: 'Descontos concedidos', descricao: 'Por vendedor. Controle, não curiosidade' },
       { nome: 'Cancelamentos e devoluções', descricao: 'Volume, motivo e impacto' },
       { nome: 'Comparativo entre lojas', descricao: 'Mesma métrica, lojas lado a lado' },
