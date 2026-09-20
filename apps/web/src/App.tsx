@@ -26,6 +26,11 @@ import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { RelatorioAbertosTela } from './paginas/RelatorioAbertos';
+import { RelatorioAgingTela } from './paginas/RelatorioAging';
+import { RelatorioAReceberTela } from './paginas/RelatorioAReceber';
+import { RelatorioCustoAquisicaoTela } from './paginas/RelatorioCustoAquisicao';
+import { RelatorioFluxoTela } from './paginas/RelatorioFluxo';
+import { RelatorioFornecedoresTela } from './paginas/RelatorioFornecedores';
 import { RelatorioAcessosTela } from './paginas/RelatorioAcessos';
 import { RelatorioAceitesTela } from './paginas/RelatorioAceites';
 import { RelatorioAjustesTela } from './paginas/RelatorioAjustes';
@@ -173,6 +178,14 @@ function AreaDaEquipe() {
           <Route path="relatorios/fechamento-caixa" element={<RelatorioFechamentosTela />} />
           <Route path="relatorios/transferencias" element={<RelatorioTransferenciasTela />} />
           <Route path="relatorios/inventario" element={<RelatorioInventarioTela />} />
+          <Route path="relatorios/financeiro/aging" element={<RelatorioAgingTela />} />
+          <Route path="relatorios/financeiro/fluxo" element={<RelatorioFluxoTela />} />
+          <Route path="relatorios/compras/fornecedores" element={<RelatorioFornecedoresTela />} />
+          <Route
+            path="relatorios/compras/custo-aquisicao"
+            element={<RelatorioCustoAquisicaoTela />}
+          />
+          <Route path="relatorios/compras/a-receber" element={<RelatorioAReceberTela />} />
           <Route
             path="*"
             element={

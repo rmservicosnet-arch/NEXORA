@@ -208,6 +208,10 @@ o runtime.
 | Seed que cria o que a API recusaria | Fundo 200 + suprimento 500 − sangrias 1000 dá −300 na gaveta: o serviço recusa sangria maior do que existe, mas o seed escreve direto. Dado de demonstração obedece às mesmas invariantes |
 | Largura do artboard virando teto da tela | 1152px é o que sobra DENTRO de um artboard de 1440. Num monitor de 1900 vira coluna centralizada com 250px de vazio de cada lado — e só essas telas faziam isso. O artboard dá proporção, não largura máxima |
 | Colunas lado a lado com `items-start` | A curta para onde acaba e deixa um vazio de PÁGINA embaixo, do tamanho da outra. Igualar a altura move o vazio para dentro do cartão, que é onde ele parece intencional — e o cartão rola por dentro |
+| Aging somando o valor cheio do título | Um título de 9.600 com 4.743 pagos pesa 4.856 na faixa, não 9.600. E as faixas têm de FECHAR com o total: buraco ou sobreposição, quem lê não descobre qual coluna mente |
+| "Fluxo de caixa" misturando previsto com realizado | Título em aberto com vencimento no período é promessa. Somá-lo faz o fluxo mentir exatamente no mês em que ninguém pagou — e a ressalva vai na RESPOSTA, não só na tela |
+| Prazo de entrega zero quando falta a emissão | Zero afirma "chegou no mesmo dia". Sem a data de saída não há prazo: nulo, e a coluna escreve "sem emissão" |
+| Custo de aquisição lido do custo médio | A média mistura datas e fornecedores. O que se leva para negociar é o que o fornecedor COBROU, nota a nota — e custo inicial zero não vira "subiu infinito%" |
 
 ## Testes
 

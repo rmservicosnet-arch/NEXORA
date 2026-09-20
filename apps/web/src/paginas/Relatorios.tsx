@@ -227,25 +227,47 @@ const GRUPOS: readonly Grupo[] = [
   },
   {
     nome: 'Financeiro',
-    fase: 'Fase 5',
     itens: [
-      { nome: 'Contas a receber por vencimento', descricao: 'Aging: a vencer, 1–30, 31–60, 60+' },
-      { nome: 'Contas a pagar por vencimento', descricao: 'Idem, do outro lado' },
-      { nome: 'Fluxo de caixa realizado', descricao: 'Entrou e saiu, por período' },
-      { nome: 'Comissões apuradas', descricao: 'Por vendedor, com status de pagamento' },
+      {
+        nome: 'Contas a pagar por vencimento',
+        descricao: 'Aging: a vencer, 1–30, 31–60, 60+',
+        para: '/relatorios/financeiro/aging?tipo=PAGAR',
+      },
+      {
+        nome: 'Contas a receber por vencimento',
+        descricao: 'Idem, do outro lado — o saldo continua sendo o da carteira',
+        para: '/relatorios/financeiro/aging?tipo=RECEBER',
+      },
+      {
+        nome: 'Fluxo de caixa realizado',
+        descricao: 'Entrou e saiu, por período. Só baixa que aconteceu',
+        para: '/relatorios/financeiro/fluxo',
+      },
+      {
+        nome: 'Comissões apuradas',
+        descricao: 'Por vendedor, com status de pagamento — falta a regra de comissão no sistema',
+      },
     ],
   },
   {
     nome: 'Compras',
-    fase: 'Fase 5',
     itens: [
-      { nome: 'Compras por fornecedor', descricao: 'Volume, valor, prazo de entrega' },
+      {
+        nome: 'Compras por fornecedor',
+        descricao: 'Volume, valor, prazo de entrega',
+        para: '/relatorios/compras/fornecedores',
+      },
       {
         nome: 'Evolução do custo de aquisição',
-        descricao: 'Quanto o custo subiu, por item',
+        descricao: 'O que o fornecedor cobrou, nota a nota — não o custo médio',
         restrito: true,
+        para: '/relatorios/compras/custo-aquisicao',
       },
-      { nome: 'Pedidos de compra em aberto', descricao: 'Pedido e ainda não chegou' },
+      {
+        nome: 'Notas a receber',
+        descricao: 'Nota lançada e mercadoria que não entrou',
+        para: '/relatorios/compras/a-receber',
+      },
     ],
   },
 ];
