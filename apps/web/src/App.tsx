@@ -25,8 +25,10 @@ import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
 import { RelatorioCancelamentosTela } from './paginas/RelatorioCancelamentos';
 import { RelatorioComparativoTela } from './paginas/RelatorioComparativo';
+import { RelatorioConfirmacaoTela } from './paginas/RelatorioConfirmacao';
 import { RelatorioDescontosTela } from './paginas/RelatorioDescontos';
 import { RelatorioEstoque } from './paginas/RelatorioEstoque';
+import { RelatorioFilaTela } from './paginas/RelatorioFila';
 import { RelatorioFormasTela } from './paginas/RelatorioFormas';
 import { RelatorioGiroTela } from './paginas/RelatorioGiro';
 import { RelatorioInventarioTela } from './paginas/RelatorioInventario';
@@ -170,6 +172,8 @@ function AreaDaEquipe() {
           <Route path="relatorios/descontos" element={<RelatorioDescontosTela />} />
           <Route path="relatorios/cancelamentos" element={<RelatorioCancelamentosTela />} />
           <Route path="relatorios/comparativo-lojas" element={<RelatorioComparativoTela />} />
+          <Route path="relatorios/pedidos/fila" element={<RelatorioFilaTela />} />
+          <Route path="relatorios/pedidos/confirmacao" element={<RelatorioConfirmacaoTela />} />
           <Route path="relatorios/transferencias" element={<RelatorioTransferenciasTela />} />
           <Route path="relatorios/inventario" element={<RelatorioInventarioTela />} />
           <Route

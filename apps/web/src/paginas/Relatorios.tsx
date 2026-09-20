@@ -148,8 +148,16 @@ const GRUPOS: readonly Grupo[] = [
   {
     nome: 'Pedidos',
     itens: [
-      { nome: 'Fila e tempo de confirmação', descricao: 'Quanto o pedido espera. Onde trava' },
-      { nome: 'Taxa de confirmação', descricao: 'Confirmado, parcial, devolvido, recusado' },
+      {
+        nome: 'Fila e tempo de confirmação',
+        descricao: 'Quanto o pedido espera. Onde trava',
+        para: '/relatorios/pedidos/fila',
+      },
+      {
+        nome: 'Taxa de confirmação',
+        descricao: 'Confirmado, parcial, devolvido, recusado',
+        para: '/relatorios/pedidos/confirmacao',
+      },
       { nome: 'Ruptura', descricao: 'Venda perdida por falta de estoque' },
       { nome: 'Alterações pela equipe', descricao: 'O que foi incluído e removido, por quem' },
       { nome: 'Aceites de cliente', descricao: 'Aumentos aceitos e recusados' },

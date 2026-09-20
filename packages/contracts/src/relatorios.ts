@@ -426,3 +426,99 @@ export const relatorioComparativoSchema = z.object({
   lojas: z.array(linhaLojaComparadaSchema),
 });
 export type RelatorioComparativo = z.infer<typeof relatorioComparativoSchema>;
+
+// ---------------------------------------------------------------------------
+// Pedidos: fila e tempo de confirmacao
+// ---------------------------------------------------------------------------
+
+/** A fila e AGORA. Periodo vale para o tempo de confirmacao ja medido. */
+export const filtroFilaSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroFila = z.infer<typeof filtroFilaSchema>;
+
+export const linhaFilaSchema = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  cliente: z.string(),
+  loja: z.string(),
+  enviadoEm: z.string(),
+  horasNaFila: z.number().int(),
+  valorSolicitado: z.string(),
+  itens: z.number().int(),
+  /** Preco congelado no envio vence aqui. Vencido exige aceite do cliente. */
+  validoAte: z.string().nullable(),
+  precoVencido: z.boolean(),
+  /** `true` quando o pedido espera o CLIENTE, nao a equipe. */
+  esperaCliente: z.boolean(),
+});
+export type LinhaFila = z.infer<typeof linhaFilaSchema>;
+
+export const relatorioFilaSchema = z.object({
+  dias: z.number().int(),
+  /** Aguardando a equipe, agora. */
+  naFila: z.number().int(),
+  valorNaFila: z.string(),
+  /** Horas do pedido mais antigo ainda sem resposta. */
+  maisAntigoHoras: z.number().int().nullable(),
+  /** Na fila com o preco congelado ja vencido. */
+  precoVencido: z.number().int(),
+  /** Aguardando o CLIENTE aceitar um aumento. Fila dele, nao da equipe. */
+  esperandoCliente: z.number().int(),
+  /** Confirmados no periodo: e deles que sai o tempo medido. */
+  confirmados: z.number().int(),
+  horasMedias: z.string().nullable(),
+  /** Mediana: uma confirmacao esquecida por uma semana distorce a media. */
+  horasMediana: z.string().nullable(),
+  faixas: z.array(
+    z.object({ faixa: z.string(), pedidos: z.number().int(), valor: z.string() }),
+  ),
+  itens: z.array(linhaFilaSchema),
+});
+export type RelatorioFila = z.infer<typeof relatorioFilaSchema>;
+
+// ---------------------------------------------------------------------------
+// Pedidos: taxa de confirmacao
+// ---------------------------------------------------------------------------
+
+export const filtroConfirmacaoSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+});
+export type FiltroConfirmacao = z.infer<typeof filtroConfirmacaoSchema>;
+
+export const relatorioConfirmacaoSchema = z.object({
+  dias: z.number().int(),
+  /** Pedidos ENVIADOS na janela, qualquer que seja o desfecho. */
+  enviados: z.number().int(),
+  /** Os que ja tem desfecho. A taxa se mede sobre estes. */
+  decididos: z.number().int(),
+  /** Ainda na fila: nao sao fracasso, sao pendencia. */
+  emAberto: z.number().int(),
+  taxaConfirmacao: z.string(),
+  valorSolicitado: z.string(),
+  valorConfirmado: z.string(),
+  /** Quanto do pedido virou nota: `confirmado / solicitado`. */
+  aproveitamento: z.string(),
+  desfechos: z.array(
+    z.object({
+      status: z.string(),
+      pedidos: z.number().int(),
+      valor: z.string(),
+      participacao: z.string(),
+    }),
+  ),
+  porLoja: z.array(
+    z.object({
+      loja: z.string(),
+      enviados: z.number().int(),
+      decididos: z.number().int(),
+      confirmados: z.number().int(),
+      taxa: z.string(),
+      valorConfirmado: z.string(),
+    }),
+  ),
+});
+export type RelatorioConfirmacao = z.infer<typeof relatorioConfirmacaoSchema>;
