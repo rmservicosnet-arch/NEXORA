@@ -7,12 +7,13 @@ import {
 } from '@estoque/contracts';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { useSessao } from '../auth/sessao';
 import { Aviso } from '../ui/Aviso';
 import { Botao } from '../ui/Botao';
-import { EstadoCarregando, EstadoVazio } from '../ui/Estados';
+import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 import { juntar } from '../ui/juntar';
 
 /** `\n` escrito assim porque o arquivo é lido por planilha, não por humano. */
@@ -23,20 +24,6 @@ function brl(valor: string | number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-/**
- * Como um saldo é escrito na tela.
- *
- * O valor que trafega é negativo quando o cliente deve. A tela escreve "em
- * aberto" porque é o que o operador fala — mas o sinal nunca é invertido no
- * dado. Ver docs/WALLET.md §2.
- */
-function rotuloDeSaldo(saldo: string): { texto: string; tom: 'devendo' | 'credito' | 'zerado' } {
-  const n = Number(saldo);
-  if (n < 0) return { texto: `R$ ${brl(n)} em aberto`, tom: 'devendo' };
-  if (n > 0) return { texto: `R$ ${brl(n)} de crédito`, tom: 'credito' };
-  return { texto: 'Zerado', tom: 'zerado' };
 }
 
 /** Iniciais para o avatar — no máximo duas, como no desenho. */
@@ -96,13 +83,135 @@ const TIPOS_LANCAMENTO = [
 /** Os que criam dinheiro sem contrapartida. O banco também exige motivo. */
 const EXIGEM_MOTIVO = new Set(['BONIFICACAO', 'AJUSTE_CREDITO', 'AJUSTE_DEBITO']);
 
+/**
+ * As carteiras da empresa.
+ *
+ * A lista responde "quem deve"; o extrato de cada uma responde "por quê" — e
+ * são duas perguntas diferentes, em duas telas. Antes era um mestre-detalhe
+ * que espremia o extrato em metade da largura.
+ */
 export function Carteiras() {
-  const { pode } = useSessao();
-  const fila = useQueryClient();
+  const navegar = useNavigate();
 
   const [busca, setBusca] = useState('');
   const [soDevedores, setSoDevedores] = useState(false);
-  const [selecionado, setSelecionado] = useState<string | null>(null);
+
+  const parametros = new URLSearchParams({ limite: '60' });
+  if (busca.trim()) parametros.set('busca', busca.trim());
+  if (soDevedores) parametros.set('apenasDevedores', 'true');
+
+  const lista = useQuery({
+    queryKey: ['carteiras', busca, soDevedores],
+    queryFn: () => pedir<PaginaCarteiras>(`/carteira?${parametros.toString()}`),
+    placeholderData: keepPreviousData,
+  });
+
+  const itens = lista.data?.itens ?? [];
+  const devendo = itens.filter((c) => Number(c.saldo) < 0).length;
+
+  return (
+    <>
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
+        <input
+          type="search"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Nome do cliente…"
+          aria-label="Buscar cliente"
+          className="h-[34px] w-full max-w-[300px] rounded-md border border-neutral-200 bg-neutral-25 px-3 text-[13.5px]"
+        />
+
+        <div className="flex-1" />
+
+        {lista.data ? (
+          <span className="text-[13px] text-neutral-500">
+            A receber:{' '}
+            <strong className="font-mono font-semibold text-[var(--color-perigo)]">
+              R$ {brl(lista.data.totalAReceber)}
+            </strong>
+          </span>
+        ) : null}
+      </header>
+
+      <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
+              Carteiras
+            </h1>
+            <p className="mt-0.5 text-[13.5px] text-neutral-500">
+              {itens.length} {itens.length === 1 ? 'conta corrente' : 'contas correntes'}
+              {devendo > 0 ? ` · ${devendo} em aberto` : ''} · saldo negativo é o cliente devendo à
+              loja
+            </p>
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-neutral-600">
+            <input
+              type="checkbox"
+              checked={soDevedores}
+              onChange={(e) => setSoDevedores(e.target.checked)}
+              className="size-3.5 accent-[var(--color-perigo)]"
+            />
+            Só quem está devendo
+          </label>
+        </div>
+
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-sm">
+          <div className="hidden shrink-0 grid-cols-[minmax(0,1fr)_150px_150px_150px_130px] gap-3 border-b border-neutral-100 bg-neutral-25 px-4 py-2.5 lg:grid">
+            {['Cliente', 'Saldo', 'Limite', 'Disponível', 'Estado'].map((t, i) => (
+              <span
+                key={t}
+                className={juntar(
+                  'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
+                  i >= 1 && i <= 3 ? 'text-right' : '',
+                )}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {lista.isPending ? <EstadoCarregando titulo="Carregando…" /> : null}
+
+            {lista.isSuccess && itens.length === 0 ? (
+              <EstadoVazio
+                titulo={soDevedores ? 'Ninguém devendo' : 'Nenhuma carteira'}
+                descricao={
+                  soDevedores
+                    ? 'Nenhuma conta corrente está em aberto.'
+                    : 'Clientes com conta corrente aparecem aqui.'
+                }
+              />
+            ) : null}
+
+            {itens.map((c) => (
+              <LinhaCarteira
+                key={c.id}
+                carteira={c}
+                aoAbrir={() => void navegar(`/carteiras/${c.clienteId}`)}
+              />
+            ))}
+          </div>
+        </section>
+      </main>
+    </>
+  );
+}
+
+/**
+ * O extrato de uma carteira.
+ *
+ * A tela inteira, como no desenho: identidade, os três números e o razão em
+ * colunas. Conferir uma conta é ler de cima para baixo — e isso não cabe em
+ * metade da largura.
+ */
+export function CarteiraDoCliente() {
+  const { clienteId = '' } = useParams();
+  const { pode } = useSessao();
+  const fila = useQueryClient();
+
   const [erro, setErro] = useState<string | null>(null);
 
   const [tipo, setTipo] = useState('QUITACAO');
@@ -114,25 +223,14 @@ export function Carteiras() {
   const [novoLimite, setNovoLimite] = useState('');
   const [motivoLimite, setMotivoLimite] = useState('');
 
-  const parametros = new URLSearchParams({ limite: '50' });
-  if (busca.trim()) parametros.set('busca', busca.trim());
-  if (soDevedores) parametros.set('apenasDevedores', 'true');
-
-  const lista = useQuery({
-    queryKey: ['carteiras', busca, soDevedores],
-    queryFn: () => pedir<PaginaCarteiras>(`/carteira?${parametros.toString()}`),
-    placeholderData: keepPreviousData,
-  });
-
   const extrato = useQuery({
-    queryKey: ['carteiras', 'extrato', selecionado],
-    queryFn: () => pedir<ExtratoCarteira>(`/carteira/${selecionado ?? ''}/extrato?limite=100`),
-    enabled: Boolean(selecionado),
+    queryKey: ['carteiras', 'extrato', clienteId],
+    queryFn: () => pedir<ExtratoCarteira>(`/carteira/${clienteId}/extrato?limite=100`),
   });
 
   const lancar = useMutation({
     mutationFn: () =>
-      pedir<ExtratoCarteira>(`/carteira/${selecionado ?? ''}/lancamentos`, {
+      pedir<ExtratoCarteira>(`/carteira/${clienteId}/lancamentos`, {
         method: 'POST',
         body: {
           tipo,
@@ -147,6 +245,9 @@ export function Carteiras() {
       setMotivo('');
       setErro(null);
       await fila.invalidateQueries({ queryKey: ['carteiras'] });
+      // O cadastro do cliente mostra o mesmo saldo; deixá-lo com a versão
+      // anterior faria as duas telas discordarem.
+      await fila.invalidateQueries({ queryKey: ['clientes'] });
     },
     onError: (e) => {
       setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível lançar.');
@@ -155,7 +256,7 @@ export function Carteiras() {
 
   const limitar = useMutation({
     mutationFn: () =>
-      pedir<Carteira>(`/carteira/${selecionado ?? ''}/limite`, {
+      pedir<Carteira>(`/carteira/${clienteId}/limite`, {
         method: 'POST',
         body: {
           limiteCredito: novoLimite,
@@ -176,7 +277,7 @@ export function Carteiras() {
 
   const estornar = useMutation({
     mutationFn: (movimentoId: string) =>
-      pedir<ExtratoCarteira>(`/carteira/${selecionado ?? ''}/lancamentos/${movimentoId}/estornar`, {
+      pedir<ExtratoCarteira>(`/carteira/${clienteId}/lancamentos/${movimentoId}/estornar`, {
         method: 'POST',
         body: { justificativa: 'Estorno lançado pela tela de carteiras' },
       }),
@@ -190,7 +291,6 @@ export function Carteiras() {
   });
 
   const disponiveis = TIPOS_LANCAMENTO.filter((t) => pode(t.permissao));
-  const itens = lista.data?.itens ?? [];
   const atual = extrato.data;
 
   function abrirLancamento(qual: string) {
@@ -245,274 +345,214 @@ export function Carteiras() {
     URL.revokeObjectURL(url);
   }
 
+  if (extrato.isPending) {
+    return <EstadoCarregando titulo="Carregando extrato…" />;
+  }
+
+  if (extrato.isError || !atual) {
+    return (
+      <EstadoErro
+        titulo="Não foi possível abrir a carteira"
+        descricao={
+          extrato.error instanceof ErroRequisicao
+            ? extrato.error.corpo.mensagem
+            : 'O cliente pode não ter conta corrente.'
+        }
+        aoTentarNovamente={() => void extrato.refetch()}
+      />
+    );
+  }
+
   return (
     <>
-      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
-        <span className="text-[13.5px] font-medium text-neutral-900">Carteiras</span>
-        {atual ? (
-          <>
-            <span className="text-neutral-300">/</span>
-            <span className="truncate text-[13.5px] font-medium text-neutral-900">
-              {atual.carteira.cliente}
-            </span>
-          </>
-        ) : null}
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
+        <Link
+          to="/carteiras"
+          className="text-[13.5px] text-neutral-500 no-underline hover:underline"
+        >
+          Carteiras
+        </Link>
+        <span className="text-neutral-300">/</span>
+        <span className="truncate text-[13.5px] font-medium text-neutral-900">
+          {atual.carteira.cliente}
+        </span>
 
         <div className="flex-1" />
 
-        {lista.data ? (
-          <span className="text-[13px] text-neutral-500">
-            A receber:{' '}
-            <strong className="font-mono font-semibold text-[var(--color-perigo)]">
-              R$ {brl(lista.data.totalAReceber)}
-            </strong>
-          </span>
-        ) : null}
-
-        {atual ? (
-          <Botao variante="secundario" onClick={exportar}>
-            Exportar extrato
-          </Botao>
-        ) : null}
+        <Botao variante="secundario" onClick={exportar}>
+          Exportar extrato
+        </Botao>
       </header>
 
-      {/* Mestre-detalhe vira pilha no celular: a coluna de 380px sozinha
-          já passa da largura do telefone. A lista ganha teto de altura para
-          o extrato continuar alcançável sem rolar a lista inteira. */}
-      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex max-h-[45vh] w-full shrink-0 flex-col border-b border-neutral-100 lg:max-h-none lg:w-[320px] lg:border-b-0 lg:border-r">
-          <div className="flex shrink-0 flex-col gap-2 border-b border-neutral-100 p-4">
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Nome do cliente"
-              aria-label="Buscar cliente"
-              className="h-[35px] rounded-md border border-neutral-200 bg-white px-3 text-[13px]"
+      <main className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 border-b border-neutral-100 bg-white px-4 py-4 sm:px-6">
+            <Identidade
+              carteira={atual.carteira}
+              podeQuitar={pode(PERM.carteira.lancarQuitacao)}
+              podeDepositar={pode(PERM.carteira.lancarDeposito)}
+              podeLimitar={pode(PERM.carteira.definirLimite)}
+              temOutros={disponiveis.length > 0}
+              aoQuitar={() => abrirLancamento('QUITACAO')}
+              aoDepositar={() => abrirLancamento('DEPOSITO')}
+              aoAjustar={() => {
+                abrirLancamento(disponiveis[0]?.valor ?? 'QUITACAO');
+              }}
+              aoLimitar={() => {
+                setFormulario(false);
+                setNovoLimite(atual.carteira.limiteCredito);
+                setFormLimite(true);
+                setErro(null);
+              }}
             />
-            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-neutral-600">
-              <input
-                type="checkbox"
-                checked={soDevedores}
-                onChange={(e) => setSoDevedores(e.target.checked)}
-                className="size-3.5 accent-[var(--color-perigo)]"
-              />
-              Só quem está devendo
-            </label>
+
+            <Numeros carteira={atual.carteira} />
+
+            {erro ? (
+              <Aviso tom="perigo" className="mt-3" titulo="Não foi possível concluir">
+                {erro}
+              </Aviso>
+            ) : null}
+
+            {formulario ? (
+              <div className="mt-3 flex flex-wrap items-end gap-2.5 rounded-md border border-primary-100 bg-primary-50 p-3.5">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                    Tipo
+                  </span>
+                  <select
+                    value={tipo}
+                    onChange={(e) => setTipo(e.target.value)}
+                    className="h-10 rounded-md border border-neutral-200 bg-white px-2.5 text-[13.5px]"
+                  >
+                    {disponiveis.map((t) => (
+                      <option key={t.valor} value={t.valor}>
+                        {t.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                    Valor
+                  </span>
+                  <input
+                    value={valor}
+                    onChange={(e) => setValor(e.target.value)}
+                    placeholder="0.00"
+                    className="h-10 w-[110px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
+                  />
+                </label>
+
+                <label className="flex min-w-[180px] flex-1 flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                    Motivo{EXIGEM_MOTIVO.has(tipo) ? '' : ' (opcional)'}
+                  </span>
+                  <input
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder={
+                      EXIGEM_MOTIVO.has(tipo)
+                        ? 'Obrigatório: este tipo cria dinheiro sem contrapartida'
+                        : 'Comprovante, acordo, observação'
+                    }
+                    className="h-10 rounded-md border border-neutral-200 px-2.5 text-[13.5px]"
+                  />
+                </label>
+
+                <Botao
+                  variante="primario"
+                  carregando={lancar.isPending}
+                  disabled={
+                    valor.trim().length === 0 ||
+                    (EXIGEM_MOTIVO.has(tipo) && motivo.trim().length < 5)
+                  }
+                  onClick={() => lancar.mutate()}
+                >
+                  Lançar
+                </Botao>
+
+                <Botao variante="fantasma" onClick={() => setFormulario(false)}>
+                  Cancelar
+                </Botao>
+              </div>
+            ) : null}
+
+            {formLimite ? (
+              <div className="mt-3 flex flex-wrap items-end gap-2.5 rounded-md border border-neutral-200 bg-neutral-25 p-3.5">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                    Limite de crédito
+                  </span>
+                  <input
+                    value={novoLimite}
+                    onChange={(e) => setNovoLimite(e.target.value)}
+                    placeholder="0.00"
+                    className="h-10 w-[130px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
+                  />
+                </label>
+
+                <label className="flex min-w-[180px] flex-1 flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                    Motivo (opcional)
+                  </span>
+                  <input
+                    value={motivoLimite}
+                    onChange={(e) => setMotivoLimite(e.target.value)}
+                    placeholder="Acordo, análise de crédito, decisão do gestor"
+                    className="h-10 rounded-md border border-neutral-200 px-2.5 text-[13.5px]"
+                  />
+                </label>
+
+                <Botao
+                  variante="primario"
+                  carregando={limitar.isPending}
+                  disabled={novoLimite.trim().length === 0}
+                  onClick={() => limitar.mutate()}
+                >
+                  Salvar limite
+                </Botao>
+
+                <Botao variante="fantasma" onClick={() => setFormLimite(false)}>
+                  Cancelar
+                </Botao>
+
+                <p className="w-full text-[11.5px] text-neutral-500">
+                  O limite é quanto o saldo pode ficar negativo. Reduzi-lo não desfaz compra
+                  nenhuma: só impede a próxima.
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
-            {lista.isPending ? <EstadoCarregando titulo="Carregando…" /> : null}
+            {atual.movimentos.length === 0 ? (
+              <EstadoVazio titulo="Sem movimentos" descricao="Nada lançado ainda." />
+            ) : (
+              <div>
+                <CabecalhoDaTabela />
 
-            {lista.isSuccess && itens.length === 0 ? (
-              <EstadoVazio
-                titulo="Nenhuma carteira"
-                descricao="Clientes com conta corrente aparecem aqui."
-              />
-            ) : null}
-
-            {itens.map((c) => (
-              <LinhaCarteira
-                key={c.id}
-                carteira={c}
-                ativo={c.clienteId === selecionado}
-                aoSelecionar={() => {
-                  setSelecionado(c.clienteId);
-                  setFormulario(false);
-                  setFormLimite(false);
-                  setErro(null);
-                }}
-              />
-            ))}
+                {atual.movimentos.map((m) => (
+                  <LinhaMovimento
+                    key={m.id}
+                    movimento={m}
+                    podeEstornar={pode(PERM.carteira.estornar)}
+                    ocupado={estornar.isPending}
+                    aoEstornar={() => estornar.mutate(m.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {!selecionado ? (
-            <EstadoVazio
-              titulo="Escolha um cliente"
-              descricao="O extrato aparece aqui, com saldo, limite e cada lançamento."
-            />
-          ) : extrato.isPending ? (
-            <EstadoCarregando titulo="Carregando extrato…" />
-          ) : atual ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="shrink-0 border-b border-neutral-100 bg-white px-4 py-4 sm:px-6">
-                <Identidade
-                  carteira={atual.carteira}
-                  podeQuitar={pode(PERM.carteira.lancarQuitacao)}
-                  podeDepositar={pode(PERM.carteira.lancarDeposito)}
-                  podeLimitar={pode(PERM.carteira.definirLimite)}
-                  temOutros={disponiveis.length > 0}
-                  aoQuitar={() => abrirLancamento('QUITACAO')}
-                  aoDepositar={() => abrirLancamento('DEPOSITO')}
-                  aoAjustar={() => {
-                    abrirLancamento(disponiveis[0]?.valor ?? 'QUITACAO');
-                  }}
-                  aoLimitar={() => {
-                    setFormulario(false);
-                    setNovoLimite(atual.carteira.limiteCredito);
-                    setFormLimite(true);
-                    setErro(null);
-                  }}
-                />
-
-                <Numeros carteira={atual.carteira} />
-
-                {erro ? (
-                  <Aviso tom="perigo" className="mt-3" titulo="Não foi possível concluir">
-                    {erro}
-                  </Aviso>
-                ) : null}
-
-                {formulario ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-2.5 rounded-md border border-primary-100 bg-primary-50 p-3.5">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                        Tipo
-                      </span>
-                      <select
-                        value={tipo}
-                        onChange={(e) => setTipo(e.target.value)}
-                        className="h-10 rounded-md border border-neutral-200 bg-white px-2.5 text-[13.5px]"
-                      >
-                        {disponiveis.map((t) => (
-                          <option key={t.valor} value={t.valor}>
-                            {t.rotulo}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                        Valor
-                      </span>
-                      <input
-                        value={valor}
-                        onChange={(e) => setValor(e.target.value)}
-                        placeholder="0.00"
-                        className="h-10 w-[110px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
-                      />
-                    </label>
-
-                    <label className="flex min-w-[180px] flex-1 flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                        Motivo{EXIGEM_MOTIVO.has(tipo) ? '' : ' (opcional)'}
-                      </span>
-                      <input
-                        value={motivo}
-                        onChange={(e) => setMotivo(e.target.value)}
-                        placeholder={
-                          EXIGEM_MOTIVO.has(tipo)
-                            ? 'Obrigatório: este tipo cria dinheiro sem contrapartida'
-                            : 'Comprovante, acordo, observação'
-                        }
-                        className="h-10 rounded-md border border-neutral-200 px-2.5 text-[13.5px]"
-                      />
-                    </label>
-
-                    <Botao
-                      variante="primario"
-                      carregando={lancar.isPending}
-                      disabled={
-                        valor.trim().length === 0 ||
-                        (EXIGEM_MOTIVO.has(tipo) && motivo.trim().length < 5)
-                      }
-                      onClick={() => lancar.mutate()}
-                    >
-                      Lançar
-                    </Botao>
-
-                    <Botao variante="fantasma" onClick={() => setFormulario(false)}>
-                      Cancelar
-                    </Botao>
-                  </div>
-                ) : null}
-
-                {formLimite ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-2.5 rounded-md border border-neutral-200 bg-neutral-25 p-3.5">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                        Limite de crédito
-                      </span>
-                      <input
-                        value={novoLimite}
-                        onChange={(e) => setNovoLimite(e.target.value)}
-                        placeholder="0.00"
-                        className="h-10 w-[130px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
-                      />
-                    </label>
-
-                    <label className="flex min-w-[180px] flex-1 flex-col gap-1">
-                      <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
-                        Motivo (opcional)
-                      </span>
-                      <input
-                        value={motivoLimite}
-                        onChange={(e) => setMotivoLimite(e.target.value)}
-                        placeholder="Acordo, análise de crédito, decisão do gestor"
-                        className="h-10 rounded-md border border-neutral-200 px-2.5 text-[13.5px]"
-                      />
-                    </label>
-
-                    <Botao
-                      variante="primario"
-                      carregando={limitar.isPending}
-                      disabled={novoLimite.trim().length === 0}
-                      onClick={() => limitar.mutate()}
-                    >
-                      Salvar limite
-                    </Botao>
-
-                    <Botao variante="fantasma" onClick={() => setFormLimite(false)}>
-                      Cancelar
-                    </Botao>
-
-                    <p className="w-full text-[11.5px] text-neutral-500">
-                      O limite é quanto o saldo pode ficar negativo. Reduzi-lo não desfaz compra
-                      nenhuma: só impede a próxima.
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-auto">
-                {atual.movimentos.length === 0 ? (
-                  <EstadoVazio titulo="Sem movimentos" descricao="Nada lançado ainda." />
-                ) : (
-                  <div>
-                    <CabecalhoDaTabela />
-
-                    {atual.movimentos.map((m) => (
-                      <LinhaMovimento
-                        key={m.id}
-                        movimento={m}
-                        podeEstornar={pode(PERM.carteira.estornar)}
-                        ocupado={estornar.isPending}
-                        aoEstornar={() => estornar.mutate(m.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <Rodape extrato={atual} />
-            </div>
-          ) : null}
+          <Rodape extrato={atual} />
         </div>
       </main>
     </>
   );
 }
 
-/**
- * Quem é o cliente e o que dá para fazer com a conta dele.
- *
- * As ações estão nomeadas — "Lançar quitação", "Depósito" — em vez de um
- * "Lançar" genérico: quem abre esta tela já sabe o que veio fazer, e o
- * genérico obriga a escolher de novo no formulário.
- */
 function Identidade({
   carteira,
   podeQuitar,
@@ -748,44 +788,85 @@ function Rodape({ extrato }: { readonly extrato: ExtratoCarteira }) {
 
 function LinhaCarteira({
   carteira,
-  ativo,
-  aoSelecionar,
+  aoAbrir,
 }: {
   readonly carteira: Carteira;
-  readonly ativo: boolean;
-  readonly aoSelecionar: () => void;
+  readonly aoAbrir: () => void;
 }) {
-  const { texto, tom } = rotuloDeSaldo(carteira.saldo);
+  const saldo = Number(carteira.saldo);
+  const disponivel = Number(carteira.disponivel);
+  const inativa = carteira.status === 'INATIVO';
 
   return (
     <button
       type="button"
-      onClick={aoSelecionar}
+      onClick={aoAbrir}
       className={juntar(
-        'flex w-full flex-col gap-0.5 border-b border-neutral-50 px-4 py-2.5 text-left',
-        ativo ? 'bg-primary-50' : 'hover:bg-neutral-25',
+        'flex w-full flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-50 px-4 py-2.5 text-left last:border-0 hover:bg-neutral-25',
+        'lg:grid lg:grid-cols-[minmax(0,1fr)_150px_150px_150px_130px]',
+        saldo < 0 && 'bg-[#fdf7f7]',
       )}
     >
-      <span className="flex items-baseline justify-between gap-2">
-        <span className="min-w-0 truncate text-[13.5px] font-medium text-neutral-900">
-          {carteira.cliente}
+      <span className="flex min-w-0 flex-1 items-center gap-2.5 lg:flex-none">
+        <span className="flex size-[30px] shrink-0 items-center justify-center rounded-md bg-primary-50 text-[11px] font-semibold text-primary-700">
+          {iniciais(carteira.cliente)}
         </span>
-        <span
-          className={juntar(
-            'shrink-0 font-mono text-[13px] font-semibold',
-            tom === 'devendo'
-              ? 'text-[var(--color-perigo)]'
-              : tom === 'credito'
-                ? 'text-[var(--color-sucesso)]'
-                : 'text-neutral-400',
-          )}
-        >
-          {texto}
+        <span className="min-w-0">
+          <span className="block truncate text-[13px] font-medium text-neutral-900">
+            {carteira.cliente}
+          </span>
+          <span className="block truncate text-[11px] text-neutral-400">
+            {carteira.tabelaPreco ? `tabela ${carteira.tabelaPreco}` : 'sem tabela'} · desde{' '}
+            {new Date(carteira.criadoEm).toLocaleDateString('pt-BR')}
+          </span>
         </span>
       </span>
-      <span className="text-[11.5px] text-neutral-400">
-        limite R$ {brl(carteira.limiteCredito)}
-        {carteira.bloqueadaParaCompra ? ' · bloqueada' : ''}
+
+      <span
+        className={juntar(
+          'font-mono text-[13px] font-semibold lg:text-right',
+          saldo < 0
+            ? 'text-[var(--color-perigo)]'
+            : saldo > 0
+              ? 'text-[var(--color-sucesso)]'
+              : 'text-neutral-400',
+        )}
+      >
+        {saldo < 0 ? '− ' : ''}R$ {brl(carteira.saldo)}
+      </span>
+
+      <span className="font-mono text-[13px] text-neutral-600 lg:text-right">
+        R$ {brl(carteira.limiteCredito)}
+      </span>
+
+      <span
+        className={juntar(
+          'font-mono text-[13px] lg:text-right',
+          disponivel < 0 ? 'font-semibold text-[var(--color-perigo)]' : 'text-neutral-900',
+        )}
+      >
+        {disponivel < 0 ? '− ' : ''}R$ {brl(carteira.disponivel)}
+      </span>
+
+      <span className="flex flex-wrap items-center gap-1.5">
+        {carteira.bloqueadaParaCompra ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-perigo-fundo)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-perigo)]">
+            <span className="size-1.5 rounded-full bg-current" />
+            Bloqueada
+          </span>
+        ) : (
+          <span
+            className={juntar(
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold',
+              inativa
+                ? 'bg-neutral-50 text-neutral-500'
+                : 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
+            )}
+          >
+            <span className="size-1.5 rounded-full bg-current" />
+            {inativa ? 'Inativa' : 'Ativa'}
+          </span>
+        )}
       </span>
     </button>
   );

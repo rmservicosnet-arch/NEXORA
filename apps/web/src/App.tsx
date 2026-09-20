@@ -7,7 +7,7 @@ import { ProvedorSessaoPortal } from './auth/sessaoPortal';
 import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
-import { Carteiras } from './paginas/Carteiras';
+import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
 import { Clientes } from './paginas/Clientes';
@@ -148,6 +148,7 @@ function AreaDaEquipe() {
           <Route path="estoque" element={<Estoque />} />
           <Route path="caixa" element={<Caixa />} />
           <Route path="carteiras" element={<Carteiras />} />
+          <Route path="carteiras/:clienteId" element={<CarteiraDoCliente />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="clientes/:clienteId" element={<Cliente />} />
           <Route path="pedidos" element={<Pedidos />} />
