@@ -82,6 +82,17 @@ export const resumoFinanceiroCaixaSchema = z.object({
   valorAbertura: z.string(),
   suprimentos: z.string(),
   sangrias: z.string(),
+  /**
+   * As duas metades do dinheiro, separadas.
+   *
+   * O painel abre a conta em PARCELAS, nunca só no total: quem confere precisa
+   * ver de onde cada uma veio, e diante de uma diferença a única saída seria
+   * aceitar o número. O troco é parcela própria porque é justamente a que se
+   * esquece — e esquecê-la transforma todo caixa que deu troco numa falta.
+   * docs/CASHBOX.md §4.
+   */
+  dinheiroRecebido: z.string(),
+  trocoDevolvido: z.string(),
   /** Dinheiro que ficou na gaveta: recebido em espécie menos o troco. */
   vendasEmDinheiro: z.string(),
   /** `abertura + suprimentos − sangrias + vendas em dinheiro`. */

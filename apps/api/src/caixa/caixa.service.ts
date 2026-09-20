@@ -523,6 +523,8 @@ export class CaixaService {
       valorAbertura: dec(valorAbertura.toString()).toFixed(2),
       suprimentos: suprimentos.toFixed(2),
       sangrias: sangrias.toFixed(2),
+      dinheiroRecebido: dinheiroRecebido.toFixed(2),
+      trocoDevolvido: troco.toFixed(2),
       vendasEmDinheiro: vendasEmDinheiro.toFixed(2),
       esperadoEmCaixa: esperado.toFixed(2),
       vendasEmCartao: cartao.toFixed(2),

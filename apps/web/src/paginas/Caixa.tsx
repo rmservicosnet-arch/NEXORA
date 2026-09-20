@@ -23,7 +23,7 @@ function brl(valor: string | number): string {
 }
 
 export function Caixa() {
-  const { pode } = useSessao();
+  const { pode, usuario } = useSessao();
   const fila = useQueryClient();
 
   const [lojaId, setLojaId] = useState('');
@@ -66,6 +66,25 @@ export function Caixa() {
     setMotivo('');
     setErro(null);
   }
+
+  /**
+   * Conferencia: o segundo par de olhos.
+   *
+   * A rota `POST /caixa/:id/conferir` existe com permissao propria desde o
+   * inicio e nenhuma tela a chamava — metade do caminho do docs/CASHBOX.md §6
+   * construida. Sem ela, "CONFERIDO" era um status que nada alcancava.
+   */
+  const conferir = useMutation({
+    mutationFn: (id: string) =>
+      pedir<CaixaDto>(`/caixa/${id}/conferir`, { method: 'POST', body: {} }),
+    onSuccess: async () => {
+      setErro(null);
+      await fila.invalidateQueries({ queryKey: ['caixa'] });
+    },
+    onError: (e) => {
+      setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Nao foi possivel conferir.');
+    },
+  });
 
   const acao = useMutation({
     mutationFn: async () => {
@@ -180,7 +199,10 @@ export function Caixa() {
       </header>
 
       <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
-        <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5">
+        {/* A largura do artboard: 1440 menos o menu e a folga lateral. Com
+              860px a tabela do turno e a lista de caixas nao cabiam lado a
+              lado e viravam duas pilhas. */}
+        <div className="mx-auto flex w-full max-w-[1152px] flex-col gap-4">
           {erro ? (
             <Aviso tom="perigo" titulo="Não foi possível concluir">
               {erro}
@@ -274,19 +296,49 @@ export function Caixa() {
             </Aviso>
           ) : null}
 
-          <section className="flex flex-col gap-2">
-            <h2 className="font-display text-[15px] font-semibold text-neutral-900">
-              Caixas anteriores
-            </h2>
+          <div className="flex flex-col items-start gap-4 lg:flex-row">
+            {caixa ? <MovimentosDoTurno caixa={caixa} /> : null}
 
-            <div className="overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
-              {(historico.data?.itens ?? []).length === 0 ? (
-                <p className="p-5 text-[13px] text-neutral-500">Nenhum caixa registrado ainda.</p>
-              ) : (
-                (historico.data?.itens ?? []).map((c) => <LinhaHistorico key={c.id} caixa={c} />)
+            <section
+              className={juntar(
+                'flex w-full flex-col gap-3',
+                caixa ? 'lg:w-[392px] lg:shrink-0' : '',
               )}
-            </div>
-          </section>
+            >
+              <div className="overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+                <div className="border-b border-neutral-100 px-4 py-3">
+                  <h2 className="font-display text-[14px] font-semibold text-neutral-900">
+                    Caixas anteriores
+                  </h2>
+                </div>
+
+                {(historico.data?.itens ?? []).length === 0 ? (
+                  <p className="p-5 text-[13px] text-neutral-500">Nenhum caixa registrado ainda.</p>
+                ) : (
+                  (historico.data?.itens ?? []).map((c) => (
+                    <LinhaHistorico
+                      key={c.id}
+                      caixa={c}
+                      compacta={Boolean(caixa)}
+                      podeConferir={pode(PERM.caixa.conferir)}
+                      souEu={c.operadorId === usuario?.id}
+                      conferindo={conferir.isPending && conferir.variables === c.id}
+                      aoConferir={() => conferir.mutate(c.id)}
+                    />
+                  ))
+                )}
+              </div>
+
+              {/* CASHBOX.md §7: sem `caixa.conferir` ninguem ve o caixa alheio,
+                  nem na listagem. Dizer isso por escrito evita a pergunta
+                  "por que a lista esta curta?". */}
+              <p className="px-1 text-[11.5px] leading-4 text-neutral-500">
+                {pode(PERM.caixa.conferir)
+                  ? 'Voce ve caixas de outras pessoas porque tem caixa.conferir — e nao confere os seus: feita por quem fechou, a conferencia e assinatura em branco.'
+                  : 'A lista mostra apenas os seus caixas: o valor da gaveta alheia e o que aquela pessoa vai ter de justificar no fechamento.'}
+              </p>
+            </section>
+          </div>
         </div>
       </main>
     </>
@@ -296,83 +348,229 @@ export function Caixa() {
 function PainelCaixa({ caixa }: { readonly caixa: CaixaDto }) {
   const r = caixa.resumo;
 
+  const aberto = new Date(caixa.abertoEm);
+  const ate = caixa.fechadoEm ? new Date(caixa.fechadoEm) : new Date();
+  const minutos = Math.floor((ate.getTime() - aberto.getTime()) / 60_000);
+  const horas = Math.floor(minutos / 60);
+  const duracao = String(horas) + 'h' + String(minutos % 60).padStart(2, '0');
+
   return (
-    <section className="flex flex-col gap-4 rounded-md border border-neutral-100 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <section className="overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-5 pb-3.5 pt-4">
         <div>
-          <h2 className="font-display text-[17px] font-semibold text-neutral-900">
-            Caixa {caixa.numero}
-          </h2>
-          <p className="mt-0.5 text-[13px] text-neutral-500">
-            {caixa.operador} · aberto em{' '}
-            {new Date(caixa.abertoEm).toLocaleString('pt-BR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-            })}
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-display text-[17px] font-semibold text-neutral-900">
+              Caixa #{caixa.numero}
+            </h2>
+            <Selo status={caixa.status} />
+          </div>
+          <p className="mt-1 text-[13px] text-neutral-500">
+            {caixa.operador} · {caixa.loja} · aberto em{' '}
+            {aberto.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · {duracao}{' '}
+            de turno
           </p>
         </div>
 
         <div className="text-right">
-          <p className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
+          <p className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-neutral-500">
             Esperado na gaveta
           </p>
-          <p className="font-mono text-[28px] font-bold leading-9 text-neutral-900">
+          <p className="font-mono text-[30px] font-bold leading-9 tabular-nums text-neutral-900">
             R$ {brl(r.esperadoEmCaixa)}
           </p>
-        </div>
-      </div>
-
-      {/* A conta aberta em parcelas.
-          O total sozinho não serve a quem confere: diante de uma diferença, a
-          única saída seria aceitar o número. */}
-      <div className="grid grid-cols-4 gap-3 rounded-md bg-neutral-25 p-4">
-        <Parcela rotulo="Fundo de troco" valor={r.valorAbertura} />
-        <Parcela rotulo="Suprimentos" valor={r.suprimentos} sinal="+" />
-        <Parcela rotulo="Sangrias" valor={r.sangrias} sinal="−" />
-        <Parcela rotulo="Vendas em dinheiro" valor={r.vendasEmDinheiro} sinal="+" destaque />
-      </div>
-
-      <div className="grid grid-cols-4 gap-3 border-t border-neutral-100 pt-3">
-        <Parcela rotulo="Cartão" valor={r.vendasEmCartao} discreto />
-        <Parcela rotulo="PIX" valor={r.vendasEmPix} discreto />
-        <Parcela rotulo="Outras formas" valor={r.outrasFormas} discreto />
-        <div>
-          <p className="text-[11.5px] text-neutral-500">Vendido no turno</p>
-          <p className="font-mono text-[15px] font-semibold text-neutral-900">
-            R$ {brl(r.totalVendido)}
-          </p>
-          <p className="text-[11px] text-neutral-400">
-            {r.quantidadeVendas} venda{r.quantidadeVendas === 1 ? '' : 's'}
+          <p className="text-[12px] text-neutral-400">
+            é este valor que a contagem do fechamento tem de encontrar
           </p>
         </div>
       </div>
 
-      {caixa.movimentos.length > 0 ? (
-        <div className="flex flex-col gap-1.5 border-t border-neutral-100 pt-3">
+      {/*
+        A conta aberta em PARCELAS, nunca só no total: quem confere precisa ver
+        de onde cada uma veio, e diante de uma diferença a única saída seria
+        aceitar o número. O troco é parcela própria porque é a que se esquece —
+        e esquecê-la transforma todo caixa que deu troco numa falta.
+        docs/CASHBOX.md §4.
+      */}
+      <div className="grid grid-cols-2 border-t border-neutral-100 bg-neutral-25 sm:grid-cols-3 lg:grid-cols-5">
+        <Parcela rotulo="Fundo de troco" valor={r.valorAbertura} sinal="+" />
+        <Parcela rotulo="Suprimentos" valor={r.suprimentos} sinal="+" tom="sucesso" />
+        <Parcela rotulo="Sangrias" valor={r.sangrias} sinal="-" tom="perigo" />
+        <Parcela rotulo="Dinheiro recebido" valor={r.dinheiroRecebido} sinal="+" />
+        <Parcela rotulo="Troco devolvido" valor={r.trocoDevolvido} sinal="-" tom="perigo" />
+      </div>
+
+      {/* Cartão e PIX vão para a adquirente, não para a gaveta. Contá-los no
+          fechamento faria o operador procurar, em espécie, um dinheiro que
+          nunca esteve ali. docs/CASHBOX.md §1. */}
+      <div className="border-t border-neutral-100 px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            className="text-neutral-400"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5" />
+            <path d="M12 8h.01" />
+          </svg>
           <p className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
-            Sangrias e suprimentos
+            Não entra na gaveta — vai para a adquirente
           </p>
-          {caixa.movimentos.map((m) => (
-            <div key={m.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]">
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[12px] text-neutral-500">Cartão</p>
+            <p className="font-mono text-[14px] tabular-nums text-neutral-700">
+              R$ {brl(r.vendasEmCartao)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[12px] text-neutral-500">PIX</p>
+            <p className="font-mono text-[14px] tabular-nums text-neutral-700">
+              R$ {brl(r.vendasEmPix)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[12px] text-neutral-500">Outras formas</p>
+            <p className="font-mono text-[14px] tabular-nums text-neutral-700">
+              R$ {brl(r.outrasFormas)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[12px] text-neutral-500">
+              Vendido no turno{' '}
+              <span className="text-neutral-400">
+                · {r.quantidadeVendas} venda{r.quantidadeVendas === 1 ? '' : 's'}
+              </span>
+            </p>
+            <p className="font-mono text-[14px] font-medium tabular-nums text-neutral-900">
+              R$ {brl(r.totalVendido)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * O razão do turno.
+ *
+ * Append-only como todo razão daqui: sangria e suprimento não se corrigem,
+ * lança-se o contrário. O motivo é obrigatório justamente para ser lido nesta
+ * tabela — dinheiro que saiu sem motivo escrito vira diferença sem dono no
+ * fechamento, e a conversa acontece dias depois, sem ninguém lembrar.
+ */
+function MovimentosDoTurno({ caixa }: { readonly caixa: CaixaDto }) {
+  return (
+    <section className="w-full min-w-0 flex-1 overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
+        <h2 className="font-display text-[14px] font-semibold text-neutral-900">
+          Movimentos do turno
+        </h2>
+        <span className="text-[11.5px] text-neutral-400">
+          append-only · correção é lançamento contrário
+        </span>
+      </div>
+
+      <div
+        className={juntar(GRADE_MOVIMENTO, 'border-b border-neutral-100 bg-neutral-25 px-4 py-2')}
+      >
+        <ColunaCaixa>Hora</ColunaCaixa>
+        <ColunaCaixa>Tipo</ColunaCaixa>
+        <ColunaCaixa>Motivo</ColunaCaixa>
+        <ColunaCaixa direita>Valor</ColunaCaixa>
+      </div>
+
+      {caixa.movimentos.map((m) => {
+        const sangria = m.tipo === 'SANGRIA';
+        return (
+          <div
+            key={m.id}
+            className={juntar(GRADE_MOVIMENTO, 'border-b border-neutral-50 px-4 py-2.5')}
+          >
+            <span className="font-mono text-[12.5px] text-neutral-500">
+              {new Date(m.criadoEm).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            <span>
               <span
                 className={juntar(
-                  'w-[92px] shrink-0 font-medium',
-                  m.tipo === 'SANGRIA' ? 'text-[var(--color-perigo)]' : 'text-[var(--color-sucesso)]',
+                  'inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
+                  sangria
+                    ? 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]'
+                    : 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
                 )}
               >
-                {m.tipo === 'SANGRIA' ? 'Sangria' : 'Suprimento'}
+                {sangria ? 'Sangria' : 'Suprimento'}
               </span>
-              <span className="w-[100px] shrink-0 text-right font-mono text-neutral-900">
-                {m.tipo === 'SANGRIA' ? '−' : '+'} R$ {brl(m.valor)}
-              </span>
-              <span className="w-full min-w-0 truncate text-neutral-500 sm:w-auto sm:flex-1">
-                {m.motivo}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+            </span>
+            <span className="min-w-0 truncate text-[12.5px] text-neutral-700">{m.motivo}</span>
+            <span
+              className={juntar(
+                'text-right font-mono text-[13.5px] font-medium tabular-nums',
+                sangria ? 'text-[var(--color-perigo)]' : 'text-[var(--color-sucesso)]',
+              )}
+            >
+              {sangria ? '-' : '+'} R$ {brl(m.valor)}
+            </span>
+          </div>
+        );
+      })}
+
+      {/* A abertura fecha a lista por baixo: é o primeiro lançamento do turno,
+          e sem ela o fundo de troco parece ter nascido do nada. */}
+      <div className={juntar(GRADE_MOVIMENTO, 'px-4 py-2.5')}>
+        <span className="font-mono text-[12.5px] text-neutral-500">
+          {new Date(caixa.abertoEm).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </span>
+        <span>
+          <span className="inline-block rounded-full bg-neutral-50 px-2.5 py-0.5 text-[11px] font-semibold text-neutral-600">
+            Abertura
+          </span>
+        </span>
+        <span className="min-w-0 truncate text-[12.5px] text-neutral-700">
+          {caixa.observacaoAbertura ?? 'Fundo de troco conferido na abertura'}
+        </span>
+        <span className="text-right font-mono text-[13.5px] font-medium tabular-nums text-neutral-900">
+          + R$ {brl(caixa.valorAbertura)}
+        </span>
+      </div>
     </section>
+  );
+}
+
+/** A mesma grade no cabeçalho e em cada linha. Uma declaração, não duas. */
+const GRADE_MOVIMENTO = 'grid grid-cols-[52px_104px_minmax(0,1fr)_112px] items-center gap-3';
+
+function ColunaCaixa({
+  children,
+  direita,
+}: {
+  readonly children: React.ReactNode;
+  readonly direita?: boolean;
+}) {
+  return (
+    <span
+      className={juntar(
+        'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
+        direita && 'text-right',
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -380,83 +578,133 @@ function Parcela({
   rotulo,
   valor,
   sinal,
-  destaque,
-  discreto,
+  tom,
 }: {
   readonly rotulo: string;
   readonly valor: string;
-  readonly sinal?: '+' | '−';
-  readonly destaque?: boolean;
-  readonly discreto?: boolean;
+  readonly sinal: '+' | '-';
+  readonly tom?: 'sucesso' | 'perigo';
 }) {
   return (
-    <div>
+    <div className="border-b border-r border-neutral-100 px-5 py-3 last:border-r-0">
       <p className="text-[11.5px] text-neutral-500">{rotulo}</p>
       <p
         className={juntar(
-          'font-mono text-[15px]',
-          destaque
-            ? 'font-semibold text-neutral-900'
-            : discreto
-              ? 'text-neutral-600'
-              : 'text-neutral-900',
+          'mt-0.5 font-mono text-[15px] font-medium tabular-nums',
+          Number(valor) === 0
+            ? 'text-neutral-400'
+            : tom === 'sucesso'
+              ? 'text-[var(--color-sucesso)]'
+              : tom === 'perigo'
+                ? 'text-[var(--color-perigo)]'
+                : 'text-neutral-900',
         )}
       >
-        {sinal && Number(valor) > 0 ? `${sinal} ` : ''}R$ {brl(valor)}
+        {sinal === '-' ? '−' : '+'} R$ {brl(valor)}
       </p>
     </div>
   );
 }
 
-function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
+function LinhaHistorico({
+  caixa,
+  compacta,
+  podeConferir,
+  souEu,
+  conferindo,
+  aoConferir,
+}: {
+  readonly caixa: CaixaDto;
+  readonly compacta: boolean;
+  readonly podeConferir: boolean;
+  readonly souEu: boolean;
+  readonly conferindo: boolean;
+  readonly aoConferir: () => void;
+}) {
   const diferenca = caixa.diferenca === null ? null : Number(caixa.diferenca);
 
-  return (
-    <div
-      className={juntar(
-        'flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5 last:border-0',
-        'sm:grid sm:grid-cols-[70px_minmax(0,1fr)_130px_120px_120px]',
-      )}
-    >
-      <span className="order-1 font-mono text-[13px] text-neutral-600 sm:order-none">
-        #{caixa.numero}
-      </span>
+  /*
+    Conferir é o segundo par de olhos: só cabe em caixa FECHADO e nunca por
+    quem o fechou. O botão nasce desabilitado com o motivo POR ESCRITO em vez
+    de sumir — some, e quem tem a permissão fica procurando onde clicar.
+    docs/CASHBOX.md §6.
+  */
+  const cabeConferir = caixa.status === 'FECHADO' && podeConferir;
 
-      <div className="order-3 w-full min-w-0 sm:order-none sm:w-auto">
-        <p className="truncate text-[13.5px] text-neutral-900">{caixa.operador}</p>
-        <p className="truncate text-[11.5px] text-neutral-400">
-          {caixa.loja} · {new Date(caixa.abertoEm).toLocaleDateString('pt-BR')}
-        </p>
+  return (
+    <div className="flex flex-col gap-2 border-b border-neutral-50 px-4 py-2.5 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-mono text-[13px] text-neutral-600">#{caixa.numero}</span>
+        <Selo status={caixa.status} />
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] text-neutral-900">{caixa.operador}</p>
+          <p className="truncate text-[11.5px] text-neutral-400">
+            {caixa.loja} · {new Date(caixa.abertoEm).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+
+        {/*
+          Falta e sobra por EXTENSO, não em `title`: no celular não há hover, e
+          é no celular que a conferência acontece no balcão.
+        */}
+        <span className="shrink-0 text-right">
+          <span
+            className={juntar(
+              'block font-mono text-[13px] font-medium tabular-nums',
+              diferenca === null
+                ? 'text-neutral-400'
+                : diferenca === 0
+                  ? 'text-[var(--color-sucesso)]'
+                  : 'text-[var(--color-perigo)]',
+            )}
+          >
+            {diferenca === null
+              ? '—'
+              : diferenca === 0
+                ? 'exato'
+                : (diferenca > 0 ? '+ R$ ' : '− R$ ') + brl(Math.abs(diferenca))}
+          </span>
+          {diferenca !== null && diferenca !== 0 ? (
+            <span className="block text-[11px] text-[var(--color-perigo)]">
+              {diferenca < 0 ? 'falta' : 'sobra'}
+            </span>
+          ) : null}
+        </span>
+
+        {cabeConferir ? (
+          <span className="flex shrink-0 flex-col items-end gap-0.5">
+            <button
+              type="button"
+              disabled={souEu || conferindo}
+              onClick={aoConferir}
+              className={juntar(
+                'h-7 rounded-md px-2.5 text-[12px] font-semibold',
+                souEu
+                  ? 'cursor-not-allowed border border-neutral-100 bg-neutral-50 text-neutral-300'
+                  : 'bg-primary-600 text-white hover:bg-primary-700',
+              )}
+            >
+              {conferindo ? 'Conferindo…' : 'Conferir'}
+            </button>
+            {/*
+              O motivo cabe em duas palavras ao lado do botão. A frase inteira
+              mora uma vez no rodapé da lista: repetida em cada caixa meu, ela
+              virava parágrafo a cada duas linhas e ninguém lia nenhum.
+            */}
+            {souEu ? <span className="text-[10.5px] text-neutral-400">você fechou</span> : null}
+          </span>
+        ) : null}
       </div>
 
-      <span className="order-2 mr-auto sm:order-none sm:mr-0">
-        <Selo status={caixa.status} />
-      </span>
-
-      <span className="order-4 text-right font-mono text-[13px] text-neutral-600 sm:order-none">
-        <span className="mr-1 font-sans text-[10.5px] uppercase text-neutral-400 sm:hidden">
-          contado
-        </span>
-        {caixa.valorContado === null ? '—' : `R$ ${brl(caixa.valorContado)}`}
-      </span>
-
-      <span
-        className={juntar(
-          'order-5 ml-auto text-right font-mono text-[13px] font-medium sm:order-none sm:ml-0',
-          diferenca === null
-            ? 'text-neutral-400'
-            : diferenca === 0
-              ? 'text-[var(--color-sucesso)]'
-              : 'text-[var(--color-perigo)]',
-        )}
-        title={diferenca === null ? undefined : diferenca < 0 ? 'Falta' : 'Sobra'}
-      >
-        {diferenca === null
-          ? '—'
-          : diferenca === 0
-            ? 'exato'
-            : `${diferenca > 0 ? '+' : '−'} R$ ${brl(Math.abs(diferenca))}`}
-      </span>
+      {caixa.status === 'CONFERIDO' && caixa.conferidoPor && !compacta ? (
+        <p className="text-[11px] text-neutral-400">
+          conferido por {caixa.conferidoPor}
+          {caixa.conferidoEm
+            ? ' em ' + new Date(caixa.conferidoEm).toLocaleDateString('pt-BR')
+            : ''}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -464,7 +712,10 @@ function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
 function Selo({ status }: { readonly status: CaixaDto['status'] }) {
   const mapa = {
     ABERTO: { texto: 'Aberto', cor: 'text-[var(--color-sucesso)] bg-[var(--color-sucesso-fundo)]' },
-    FECHADO: { texto: 'Fechado', cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]' },
+    FECHADO: {
+      texto: 'Fechado',
+      cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]',
+    },
     CONFERIDO: { texto: 'Conferido', cor: 'text-neutral-600 bg-neutral-50' },
   } as const;
 

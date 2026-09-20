@@ -193,6 +193,8 @@ o runtime.
 | Item de flex com `overflow:hidden` numa linha curta demais | `line-clamp` e `truncate` ligam `overflow:hidden`, e isso anula o `min-height:auto` que impediria o encolhimento: três linhas de texto viraram 3px, sem erro nenhum. Altura de linha é PISO (`minmax(h,auto)`), e todo texto leva `shrink-0` |
 | `flex-1 min-w-0` numa linha `flex-wrap` | Não quebra: esmaga. O nome do produto virou uma letra no celular enquanto os controles seguiam na mesma linha. Quem precisa de duas linhas pede grade com posição explícita |
 | Recortes que não particionam o total ao lado deles | "Todos 1462" com quatro pílulas somando 1166: cancelado e expirado não cabiam em nenhuma. Ou a soma fecha, ou "Todos" não mostra número |
+| Rota com permissão própria que nenhuma tela chama | `POST /caixa/:id/conferir` existia desde o início e CONFERIDO era um status que nada alcançava. Antes de criar rota, procure quem vai apertar o botão |
+| Parcela somada dentro de outra no painel de conferência | `vendasEmDinheiro` já vinha líquido do troco: quem confere via um número e não tinha como achar os R$ 812,50 que saíram da gaveta. Cada parcela da fórmula é uma coluna |
 
 ## Testes
 
