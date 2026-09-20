@@ -961,6 +961,13 @@ model BaixaTitulo {
 
   observacao String? @db.VarChar(400)
 
+  /// Estornada NAO e apagada: a baixa fica, marcada, e os razoes de caixa e
+  /// carteira recebem os lancamentos contrarios. Apagar diria que o dinheiro
+  /// nunca se moveu, e ele se moveu.
+  estornadaEm    DateTime? @map("estornada_em") @db.Timestamptz(3)
+  estornoMotivo  String?   @map("estorno_motivo") @db.VarChar(400)
+  estornadaPorId String?   @map("estornada_por_id") @db.Uuid
+
   atorId   String?  @map("ator_id") @db.Uuid
   criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
 

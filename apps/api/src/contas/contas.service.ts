@@ -1,6 +1,7 @@
 import {
   type BaixaTitulo,
   type CancelamentoTitulo,
+  type EstornoBaixa,
   type FiltroTitulos,
   type NovoTitulo,
   type PaginaTitulos,
@@ -237,6 +238,18 @@ export class ContasService {
    * Em título A RECEBER, a quitação vai para a CARTEIRA: é lá que o saldo do
    * cliente vive, e é ela que manda no limite de crédito.
    */
+  /**
+   * Dar baixa.
+   *
+   * Tudo numa SO transacao. Antes eram tres: o movimento de caixa numa, o
+   * lancamento da carteira noutra, a linha da baixa numa terceira. Uma falha
+   * entre elas deixava dinheiro movido sem baixa gravada — a pior metade de
+   * acontecer, porque a cobranca continua de pe e o dinheiro ja saiu.
+   *
+   * O caixa e a carteira sao servicos proprios, com as suas regras e a sua
+   * auditoria. Chama-los e o que impede este modulo de virar um segundo lugar
+   * onde dinheiro se move.
+   */
   async baixar(id: string, dados: BaixaTitulo, principal: Principal): Promise<Titulo> {
     const contexto = exigirContexto();
 
@@ -259,22 +272,14 @@ export class ContasService {
       });
     }
 
-    const emAberto = dec(titulo.valor.toFixed(2)).minus(dec(titulo.valorPago.toFixed(2)));
     const valor = dec(dados.valor);
 
-    if (valor.greaterThan(emAberto)) {
-      throw new BadRequestException({
-        codigo: 'BAIXA_ACIMA_DO_SALDO',
-        mensagem: `Em aberto há R$ ${emAberto.toFixed(2)}. Baixar mais do que se deve é erro de digitação.`,
-      });
-    }
-
     /*
-      O caixa e a carteira são serviços próprios, com as suas regras e a sua
-      auditoria. Chamá-los é o que impede este módulo de virar um segundo
-      lugar onde dinheiro se move.
+      Dinheiro sai da GAVETA: a baixa vira sangria ou suprimento no caixa
+      daquela loja. As duas conferencias — do caixa e do titulo — sao leitura
+      e acontecem antes da transacao de escrita.
     */
-    let movimentoCaixaId: string | null = null;
+    let caixaId: string | null = null;
     if (dados.forma === 'DINHEIRO') {
       if (!dados.lojaId) {
         throw new BadRequestException({
@@ -292,31 +297,13 @@ export class ContasService {
         });
       }
 
-      const atualizado = await this.caixa.movimentar(
-        caixaAberto.id,
-        {
-          tipo: titulo.tipo === 'PAGAR' ? 'SANGRIA' : 'SUPRIMENTO',
-          valor: valor.toFixed(2),
-          motivo: `Baixa de título: ${titulo.descricao}`.slice(0, 400),
-        },
-        principal,
-      );
-
-      movimentoCaixaId = atualizado.movimentos[atualizado.movimentos.length - 1]?.id ?? null;
+      caixaId = caixaAberto.id;
     }
-
-    /*
-      O ponteiro para o lancamento da carteira fica por preencher: `lancar`
-      devolve o extrato, nao o id do movimento. Declarar a coluna e nao ter o
-      numero e melhor do que inventar um — e o `documento` do lancamento ja
-      amarra os dois lados.
-    */
-    const carteiraMovimentoId: string | null = null;
 
     /*
       So quem TEM carteira leva a quitacao para o razao dela.
 
-      Isto era `if (RECEBER && clienteId)`, e `lancar` lanca
+      Isto era `if (RECEBER && clienteId)`, e a carteira lanca
       CARTEIRA_NAO_ENCONTRADA para quem nao tem: a baixa inteira morria com
       404. E o titulo de venda a prazo nasce EXATAMENTE para o cliente sem
       carteira (WALLET §6) — ou seja, o titulo era criado num caminho e nao
@@ -326,33 +313,70 @@ export class ContasService {
       Cliente sem carteira quita no proprio titulo: nao ha segundo saldo para
       mover, que e o ponto do §6.
     */
-    const carteiraDoCliente = titulo.clienteId
-      ? await comEscopoAtual(this.prisma, async (tx) =>
-          this.carteira.carteiraDoCliente(tx, titulo.clienteId!),
-        )
-      : null;
-
-    if (titulo.tipo === 'RECEBER' && titulo.clienteId && carteiraDoCliente) {
-      await this.carteira.lancar(
-        titulo.clienteId,
-        {
-          tipo: 'QUITACAO',
-          valor: valor.toFixed(2),
-          // O documento amarra o lançamento da carteira ao título: quem olhar
-          // o extrato do cliente vê de onde a quitação veio.
-          documento: `TITULO ${titulo.id.slice(0, 8)}`,
-          ...(dados.forma === 'CARTEIRA'
-            ? {}
-            : {
-                formaPagamento: dados.forma as
-                  'DINHEIRO' | 'PIX' | 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA' | 'BOLETO',
-              }),
-        },
-        principal,
-      );
-    }
+    const temCarteira =
+      titulo.tipo === 'RECEBER' && titulo.clienteId
+        ? (await comEscopoAtual(this.prisma, async (tx) =>
+            this.carteira.carteiraDoCliente(tx, titulo.clienteId!),
+          )) !== null
+        : false;
 
     await comEscopoAtual(this.prisma, async (tx) => {
+      // Travar a linha antes de somar: duas baixas simultaneas leem o mesmo
+      // `valorPago` e uma sobrescreve a outra — o titulo quitaria pela metade
+      // com o dinheiro inteiro recebido.
+      const travado = await tx.$queryRaw<{ valor: string; valor_pago: string; status: string }[]>`
+        SELECT valor::text, valor_pago::text, status::text
+          FROM titulo_financeiro
+         WHERE id = ${id}::uuid
+         FOR UPDATE
+      `;
+
+      const linha = travado[0];
+      if (!linha || linha.status !== 'ABERTO') {
+        throw new ConflictException({
+          codigo: 'TITULO_NAO_ESTA_ABERTO',
+          mensagem: 'O título mudou de situação enquanto esta baixa era montada.',
+        });
+      }
+
+      const emAberto = dec(linha.valor).minus(dec(linha.valor_pago));
+
+      if (valor.greaterThan(emAberto)) {
+        throw new BadRequestException({
+          codigo: 'BAIXA_ACIMA_DO_SALDO',
+          mensagem: `Em aberto há R$ ${emAberto.toFixed(2)}. Baixar mais do que se deve é erro de digitação.`,
+        });
+      }
+
+      const movimentoCaixaId = caixaId
+        ? await this.caixa.movimentarEm(
+            tx,
+            caixaId,
+            {
+              tipo: titulo.tipo === 'PAGAR' ? 'SANGRIA' : 'SUPRIMENTO',
+              valor: valor.toFixed(2),
+              motivo: `Baixa de título: ${titulo.descricao}`.slice(0, 400),
+            },
+            principal,
+          )
+        : null;
+
+      const carteiraMovimentoId =
+        temCarteira && titulo.clienteId
+          ? await this.carteira.quitarPorBaixa(
+              tx,
+              {
+                clienteId: titulo.clienteId,
+                valor,
+                // O documento amarra o lançamento da carteira ao título: quem
+                // olhar o extrato do cliente vê de onde a quitação veio.
+                documento: `TITULO ${titulo.id.slice(0, 8)}`,
+                ...(dados.forma === 'CARTEIRA' ? {} : { formaPagamento: dados.forma }),
+              },
+              principal,
+            )
+          : null;
+
       await tx.baixaTitulo.create({
         data: {
           tenantId: contexto.tenantId,
@@ -367,7 +391,7 @@ export class ContasService {
         },
       });
 
-      const pago = dec(titulo.valorPago.toFixed(2)).plus(valor);
+      const pago = dec(linha.valor_pago).plus(valor);
 
       await tx.tituloFinanceiro.update({
         where: { id },
@@ -375,9 +399,7 @@ export class ContasService {
           valorPago: pago.toFixed(2),
           // Quitado só quando não sobra nada. Marcar como pago o que foi pago
           // pela metade é perder a cobrança do resto.
-          ...(pago.greaterThanOrEqualTo(dec(titulo.valor.toFixed(2)))
-            ? { status: 'PAGO' as const }
-            : {}),
+          ...(pago.greaterThanOrEqualTo(dec(linha.valor)) ? { status: 'PAGO' as const } : {}),
         },
       });
     });
@@ -392,6 +414,189 @@ export class ContasService {
     });
 
     return this.detalhe(id);
+  }
+
+  /**
+   * Desfaz uma baixa.
+   *
+   * Nao existia, e a falta aparecia de duas formas: uma baixa errada digitada
+   * pela equipe ficava de pe para sempre, e a recusa de cancelar uma venda
+   * mandava "estorne a baixa antes" — um botao que nao havia.
+   *
+   * A baixa NAO e apagada. Ela fica marcada, e o que ela moveu volta pelos
+   * razoes de quem move: lancamento CONTRARIO no caixa e na carteira. Apagar
+   * a linha diria que o dinheiro nunca se moveu, e ele se moveu.
+   *
+   * O contrario no caixa entra no caixa ORIGINAL quando ele ainda esta
+   * aberto. Fechado, entra no caixa aberto de hoje — o dinheiro volta para a
+   * gaveta de hoje, que e onde ele fisicamente esta. Reabrir turno fechado
+   * para acertar o passado seria reescrever uma conferencia ja assinada.
+   */
+  async estornarBaixa(
+    tituloId: string,
+    baixaId: string,
+    dados: EstornoBaixa,
+    principal: Principal,
+  ): Promise<Titulo> {
+    const contexto = exigirContexto();
+
+    const baixa = await comEscopoAtual(this.prisma, async (tx) =>
+      tx.baixaTitulo.findFirst({
+        where: { id: baixaId, tituloId },
+        include: {
+          titulo: {
+            select: {
+              id: true,
+              tipo: true,
+              status: true,
+              lojaId: true,
+              clienteId: true,
+              valor: true,
+              valorPago: true,
+            },
+          },
+        },
+      }),
+    );
+
+    if (!baixa) {
+      throw new NotFoundException({
+        codigo: 'BAIXA_NAO_ENCONTRADA',
+        mensagem: 'Baixa nao encontrada neste titulo.',
+      });
+    }
+
+    if (baixa.estornadaEm) {
+      throw new ConflictException({
+        codigo: 'BAIXA_JA_ESTORNADA',
+        mensagem: 'Esta baixa ja foi estornada.',
+      });
+    }
+
+    if (baixa.titulo.status === 'CANCELADO') {
+      throw new ConflictException({
+        codigo: 'TITULO_CANCELADO',
+        mensagem: 'O titulo foi cancelado. Estornar a baixa dele nao tem a quem cobrar depois.',
+      });
+    }
+
+    const valor = dec(baixa.valor.toFixed(2));
+
+    /*
+      Onde o contrario entra: no caixa original, se ele ainda estiver aberto;
+      no caixa aberto de hoje, se nao. As duas conferencias sao leitura e vem
+      antes da transacao de escrita.
+    */
+    let caixaDestinoId: string | null = null;
+    if (baixa.movimentoCaixaId) {
+      const original = await comEscopoAtual(this.prisma, async (tx) =>
+        tx.movimentoCaixa.findFirst({
+          where: { id: baixa.movimentoCaixaId! },
+          select: { caixa: { select: { id: true, status: true } } },
+        }),
+      );
+
+      if (original?.caixa.status === 'ABERTO') {
+        caixaDestinoId = original.caixa.id;
+      } else {
+        if (!baixa.titulo.lojaId) {
+          throw new ConflictException({
+            codigo: 'TITULO_SEM_LOJA',
+            mensagem:
+              'Esta baixa moveu dinheiro na gaveta e o titulo nao diz de qual loja. Sem loja nao ha caixa onde devolver.',
+          });
+        }
+
+        const meu = await this.caixa.meuCaixaAberto(baixa.titulo.lojaId, principal);
+        if (!meu) {
+          throw new ConflictException({
+            codigo: 'CAIXA_FECHADO',
+            mensagem:
+              'Esta baixa moveu dinheiro na gaveta e o caixa dela ja fechou. Abra o seu caixa: o contrario tem de aparecer na conferencia de algum turno.',
+          });
+        }
+        caixaDestinoId = meu.id;
+      }
+    }
+
+    await comEscopoAtual(this.prisma, async (tx) => {
+      // Trava o titulo antes de subtrair, pela mesma razao da baixa.
+      const travado = await tx.$queryRaw<{ valor: string; valor_pago: string }[]>`
+        SELECT valor::text, valor_pago::text
+          FROM titulo_financeiro
+         WHERE id = ${tituloId}::uuid
+         FOR UPDATE
+      `;
+
+      const linha = travado[0];
+      if (!linha) {
+        throw new NotFoundException({
+          codigo: 'TITULO_NAO_ENCONTRADO',
+          mensagem: 'Titulo nao encontrado.',
+        });
+      }
+
+      const motivo = `Estorno de baixa: ${dados.motivo}`.slice(0, 400);
+
+      if (caixaDestinoId) {
+        await this.caixa.movimentarEm(
+          tx,
+          caixaDestinoId,
+          {
+            // O contrario do que a baixa fez: se ela tirou da gaveta, devolve.
+            tipo: baixa.titulo.tipo === 'PAGAR' ? 'SUPRIMENTO' : 'SANGRIA',
+            valor: valor.toFixed(2),
+            motivo,
+          },
+          principal,
+        );
+      }
+
+      if (baixa.carteiraMovimentoId && baixa.titulo.clienteId) {
+        await this.carteira.estornarMovimentoEm(
+          tx,
+          {
+            clienteId: baixa.titulo.clienteId,
+            movimentoId: baixa.carteiraMovimentoId,
+            motivo,
+          },
+          principal,
+        );
+      }
+
+      await tx.baixaTitulo.update({
+        where: { id: baixaId },
+        data: {
+          estornadaEm: new Date(),
+          estornoMotivo: dados.motivo,
+          estornadaPorId: principal.id,
+        },
+      });
+
+      const pago = dec(linha.valor_pago).minus(valor);
+
+      await tx.tituloFinanceiro.update({
+        where: { id: tituloId },
+        data: {
+          valorPago: pago.toFixed(2),
+          // Volta a ser cobravel: um titulo PAGO cujo pagamento foi desfeito
+          // e um titulo em aberto, nao um titulo pago com menos dinheiro.
+          status: 'ABERTO',
+        },
+      });
+    });
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'TITULO_BAIXA_ESTORNADA',
+      entidade: 'titulo_financeiro',
+      entidadeId: tituloId,
+      atorNome: principal.nome,
+      motivo: dados.motivo,
+      depois: { baixaId, valor: valor.toFixed(2) },
+    });
+
+    return this.detalhe(tituloId);
   }
 
   async cancelar(id: string, dados: CancelamentoTitulo, principal: Principal): Promise<Titulo> {
@@ -696,6 +901,8 @@ export class ContasService {
         pagoEm: Date;
         forma: string;
         observacao: string | null;
+        estornadaEm: Date | null;
+        estornoMotivo: string | null;
         atorId: string | null;
         criadoEm: Date;
       }[];
@@ -746,6 +953,8 @@ export class ContasService {
         observacao: b.observacao,
         ator: b.atorId ? (nomes.get(b.atorId) ?? null) : null,
         criadoEm: b.criadoEm.toISOString(),
+        estornadaEm: b.estornadaEm?.toISOString() ?? null,
+        estornoMotivo: b.estornoMotivo,
       })),
     };
   }

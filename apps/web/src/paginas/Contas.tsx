@@ -509,11 +509,18 @@ function PainelBaixa({
   const [forma, setForma] = useState<(typeof FORMAS)[number]['chave']>('TRANSFERENCIA');
   const [observacao, setObservacao] = useState('');
 
+  /* Qual baixa está sendo desfeita, e por quê. O id do dono mora no estado:
+     o painel não remonta ao trocar de título. */
+  const [desfazendo, setDesfazendo] = useState<string | null>(null);
+  const [motivoEstorno, setMotivoEstorno] = useState('');
+
   // O painel não remonta ao trocar de título: a rota é a mesma, muda o
   // objeto. Sem isto, o valor digitado para um título ficaria no seguinte.
   useEffect(() => {
     setValor(titulo.emAberto);
     setObservacao('');
+    setDesfazendo(null);
+    setMotivoEstorno('');
   }, [titulo.id, titulo.emAberto]);
 
   const baixar = useMutation({
@@ -535,6 +542,36 @@ function PainelBaixa({
     },
     onError: (e) => {
       aoFalhar(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível dar baixa.');
+    },
+  });
+
+  /*
+    Desfazer uma baixa.
+
+    A rota nasceu junto com este botão: baixa errada digitada pela equipe não
+    tinha como ser desfeita, e a recusa de cancelar uma venda mandava
+    "estorne a baixa antes" — um botão que não existia.
+
+    O motivo é obrigatório e é pedido aqui, não no servidor: desfazer dinheiro
+    sem dizer por que é o mesmo que não registrar.
+  */
+  const estornar = useMutation({
+    mutationFn: (alvo: { id: string; motivo: string }) =>
+      pedir<Titulo>(`/financeiro/titulos/${titulo.id}/baixas/${alvo.id}/estornar`, {
+        method: 'POST',
+        body: { motivo: alvo.motivo },
+      }),
+    onSuccess: async () => {
+      setDesfazendo(null);
+      setMotivoEstorno('');
+      await fila.invalidateQueries({ queryKey: ['contas'] });
+      await fila.invalidateQueries({ queryKey: ['carteiras'] });
+      await fila.invalidateQueries({ queryKey: ['caixa'] });
+    },
+    onError: (e) => {
+      aoFalhar(
+        e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível estornar a baixa.',
+      );
     },
   });
 
@@ -652,13 +689,75 @@ function PainelBaixa({
             Baixas anteriores
           </p>
           {titulo.baixas.map((b) => (
-            <p key={b.id} className="mt-1 flex justify-between text-[12px] text-neutral-600">
-              <span>
-                {data(b.pagoEm)} · {b.forma.toLowerCase()}
-                {b.ator ? ` · ${b.ator}` : ''}
-              </span>
-              <span className="font-mono tabular-nums">R$ {brl(b.valor)}</span>
-            </p>
+            <div key={b.id} className="mt-1.5">
+              <p className="flex items-center justify-between gap-2 text-[12px] text-neutral-600">
+                <span className={b.estornadaEm ? 'text-neutral-400 line-through' : undefined}>
+                  {data(b.pagoEm)} · {b.forma.toLowerCase()}
+                  {b.ator ? ` · ${b.ator}` : ''}
+                </span>
+                <span
+                  className={juntar(
+                    'shrink-0 font-mono tabular-nums',
+                    b.estornadaEm && 'text-neutral-400 line-through',
+                  )}
+                >
+                  R$ {brl(b.valor)}
+                </span>
+              </p>
+
+              {/*
+                Estornada NÃO some da lista: sumir diria que o dinheiro nunca
+                se moveu, e ele se moveu. Fica riscada, com o motivo.
+              */}
+              {b.estornadaEm ? (
+                <p className="text-[11.5px] leading-4 text-[var(--color-atencao)]">
+                  Estornada em {data(b.estornadaEm.slice(0, 10))}
+                  {b.estornoMotivo ? ` — ${b.estornoMotivo}` : ''}
+                </p>
+              ) : desfazendo === b.id ? (
+                <div className="mt-1 flex flex-col gap-1.5 rounded-md border border-neutral-100 bg-neutral-25 p-2">
+                  <input
+                    value={motivoEstorno}
+                    onChange={(e) => setMotivoEstorno(e.target.value)}
+                    autoFocus
+                    placeholder="Por que esta baixa está sendo desfeita?"
+                    className="h-8 rounded border border-neutral-200 bg-white px-2 text-[12px]"
+                  />
+                  <p className="text-[11px] leading-4 text-neutral-500">
+                    O motivo fica no título e na auditoria. O contrário entra no caixa e na
+                    carteira.
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={motivoEstorno.trim().length < 5 || estornar.isPending}
+                      onClick={() => estornar.mutate({ id: b.id, motivo: motivoEstorno.trim() })}
+                      className="h-7 rounded border border-[var(--color-perigo)] px-2.5 text-[11.5px] font-medium text-[var(--color-perigo)] disabled:border-neutral-200 disabled:text-neutral-400"
+                    >
+                      Estornar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDesfazendo(null)}
+                      className="h-7 rounded border border-neutral-200 px-2.5 text-[11.5px] text-neutral-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDesfazendo(b.id);
+                    setMotivoEstorno('');
+                  }}
+                  className="text-[11.5px] text-neutral-500 underline underline-offset-2 hover:text-[var(--color-perigo)]"
+                >
+                  Estornar esta baixa
+                </button>
+              )}
+            </div>
           ))}
         </div>
       ) : null}

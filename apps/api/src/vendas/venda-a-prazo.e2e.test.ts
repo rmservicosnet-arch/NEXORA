@@ -387,5 +387,31 @@ describe.runIf(temBanco)('venda a prazo', () => {
       .body as { status: string };
 
     expect(venda.status).toBe('CONCLUIDA');
+
+    /*
+      E a saida que a recusa aponta EXISTE.
+
+      Este pedaco e o que impede a mensagem de virar promessa: estorna a
+      baixa e o cancelamento passa. Enquanto o estorno nao existia, a recusa
+      mandava a pessoa apertar um botao que nao havia.
+    */
+    const comBaixa = (await autenticado('get', `/api/financeiro/titulos/${meu!.id}`).expect(200))
+      .body as { baixas: { id: string }[] };
+
+    await autenticado(
+      'post',
+      `/api/financeiro/titulos/${meu!.id}/baixas/${comBaixa.baixas[0]!.id}/estornar`,
+    )
+      .send({ motivo: 'Cancelamento da venda combinado com o cliente' })
+      .expect(201);
+
+    await autenticado('post', `/api/vendas/${resultado.venda.id}/cancelar`)
+      .send({ motivo: 'Cliente desistiu, baixa estornada antes' })
+      .expect(201);
+
+    const depois = (await autenticado('get', `/api/vendas/${resultado.venda.id}`).expect(200))
+      .body as { status: string };
+
+    expect(depois.status).toBe('CANCELADA');
   });
 });

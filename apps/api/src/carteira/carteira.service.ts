@@ -550,6 +550,102 @@ export class CarteiraService {
     return debitos.length;
   }
 
+  /**
+   * A quitacao que uma BAIXA de titulo lanca na carteira.
+   *
+   * Na transacao de quem chama, e devolvendo o id. O ponteiro
+   * `baixa_titulo.carteira_movimento_id` existia desde o inicio e nunca era
+   * preenchido, porque `lancar` devolve o extrato e nao o movimento — e sem
+   * ele o estorno da baixa nao sabe qual linha do razao desfazer.
+   *
+   * A permissao continua sendo conferida aqui, como em `lancar`: quem da
+   * baixa num titulo a receber esta lancando na carteira de alguem.
+   */
+  async quitarPorBaixa(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly clienteId: string;
+      readonly valor: Dec;
+      readonly documento: string;
+      readonly formaPagamento?: string | undefined;
+    },
+    principal: Principal,
+  ): Promise<string> {
+    if (!principal.permissoes.has(PERM.carteira.lancarQuitacao)) {
+      throw new ForbiddenException({
+        codigo: 'SEM_PERMISSAO',
+        mensagem: 'Voce nao tem permissao para lancar quitacao na carteira.',
+      });
+    }
+
+    const contexto = exigirContexto();
+    const carteira = await this.travar(tx, params.clienteId);
+
+    const movimento = await this.gravarMovimento(tx, contexto, {
+      carteiraId: carteira.id,
+      saldoAtual: carteira.saldo,
+      sentido: 'CREDITO',
+      tipo: 'QUITACAO',
+      valor: params.valor,
+      principal,
+      documento: params.documento,
+      ...(params.formaPagamento ? { formaPagamento: params.formaPagamento } : {}),
+    });
+
+    return movimento.id;
+  }
+
+  /**
+   * Estorna UM movimento, na transacao de quem chama.
+   *
+   * O irmao tx-aware de `estornar`. Existe porque o estorno de uma baixa de
+   * titulo tem de entrar na mesma transacao que desfaz a baixa: o razao
+   * creditado sem a baixa desfeita e dinheiro contado duas vezes.
+   */
+  async estornarMovimentoEm(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly clienteId: string;
+      readonly movimentoId: string;
+      readonly motivo: string;
+    },
+    principal: Principal,
+  ): Promise<void> {
+    const contexto = exigirContexto();
+
+    const original = await tx.carteiraMovimento.findFirst({
+      where: { id: params.movimentoId },
+      include: { estornos: { select: { id: true }, take: 1 } },
+    });
+
+    if (!original) {
+      throw new NotFoundException({
+        codigo: 'MOVIMENTO_NAO_ENCONTRADO',
+        mensagem: 'Movimento nao encontrado nesta carteira.',
+      });
+    }
+
+    // Ja estornado e PULADO, nao e erro: quem chama esta desfazendo uma
+    // operacao maior, e repetir a tentativa nao pode creditar duas vezes.
+    if (original.estornos.length > 0) {
+      return;
+    }
+
+    const carteira = await this.travar(tx, params.clienteId);
+
+    await this.gravarMovimento(tx, contexto, {
+      carteiraId: carteira.id,
+      saldoAtual: carteira.saldo,
+      sentido: original.sentido === 'CREDITO' ? 'DEBITO' : 'CREDITO',
+      tipo: original.sentido === 'CREDITO' ? 'ESTORNO_CREDITO' : 'ESTORNO_DEBITO',
+      valor: dec(original.valor.toString()),
+      principal,
+      justificativa: params.motivo,
+      estornoDeId: original.id,
+      chaveIdempotencia: `estorno:${original.id}`,
+    });
+  }
+
   /** A carteira do cliente, se ele tiver uma. Usado pelo PDV. */
   async carteiraDoCliente(tx: ClienteEmTransacao, clienteId: string): Promise<Carteira | null> {
     const carteira = await tx.carteira.findFirst({

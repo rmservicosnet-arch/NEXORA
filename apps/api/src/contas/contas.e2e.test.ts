@@ -41,7 +41,13 @@ interface Titulo {
   parcela: number;
   parcelas: number;
   vencimento: string;
-  baixas: { id: string; valor: string; forma: string }[];
+  baixas: {
+    id: string;
+    valor: string;
+    forma: string;
+    estornadaEm: string | null;
+    estornoMotivo: string | null;
+  }[];
 }
 
 interface Pagina {
@@ -445,5 +451,100 @@ describe.runIf(temBanco)('contas', () => {
     };
 
     expect(carteiras.itens.some((c) => c.clienteId === cliente.id)).toBe(false);
+  });
+
+  /*
+    ESTORNO DE BAIXA.
+
+    Nao existia, e a falta aparecia em dois lugares: baixa errada digitada
+    pela equipe ficava de pe para sempre, e a recusa de cancelar uma venda
+    mandava "estorne a baixa antes" — um botao que nao havia.
+  */
+  it('estornar a baixa devolve o título para ABERTO, e a baixa FICA marcada', async () => {
+    const [titulo] = await novoTitulo({
+      tipo: 'PAGAR',
+      fornecedorId,
+      descricao: `Estorno de baixa ${sufixo()}`,
+      vencimento: emDias(10),
+      valor: '400.00',
+    });
+
+    const pago = (
+      await autenticado('post', `/api/financeiro/titulos/${titulo!.id}/baixar`)
+        .send({ valor: '400.00', pagoEm: emDias(0), forma: 'PIX' })
+        .expect(201)
+    ).body as Titulo;
+
+    expect(pago.status).toBe('PAGO');
+    expect(pago.valorPago).toBe('400.00');
+
+    const estornado = (
+      await autenticado(
+        'post',
+        `/api/financeiro/titulos/${titulo!.id}/baixas/${pago.baixas[0]!.id}/estornar`,
+      )
+        .send({ motivo: 'Baixa lançada no título errado' })
+        .expect(201)
+    ).body as Titulo;
+
+    // Volta a ser cobrável: título PAGO cujo pagamento foi desfeito é título
+    // em aberto, não título pago com menos dinheiro.
+    expect(estornado.status).toBe('ABERTO');
+    expect(estornado.valorPago).toBe('0.00');
+    expect(estornado.emAberto).toBe('400.00');
+
+    // A baixa NÃO some: sumir diria que o dinheiro nunca se moveu.
+    expect(estornado.baixas).toHaveLength(1);
+    expect(estornado.baixas[0]!.estornadaEm).not.toBeNull();
+    expect(estornado.baixas[0]!.estornoMotivo).toContain('título errado');
+  });
+
+  it('estornar duas vezes a mesma baixa é recusado', async () => {
+    const [titulo] = await novoTitulo({
+      tipo: 'PAGAR',
+      fornecedorId,
+      descricao: `Estorno duplo ${sufixo()}`,
+      vencimento: emDias(10),
+      valor: '90.00',
+    });
+
+    const pago = (
+      await autenticado('post', `/api/financeiro/titulos/${titulo!.id}/baixar`)
+        .send({ valor: '90.00', pagoEm: emDias(0), forma: 'PIX' })
+        .expect(201)
+    ).body as Titulo;
+
+    const rota = `/api/financeiro/titulos/${titulo!.id}/baixas/${pago.baixas[0]!.id}/estornar`;
+
+    await autenticado('post', rota).send({ motivo: 'Primeiro estorno, correto' }).expect(201);
+
+    const recusa = await autenticado('post', rota)
+      .send({ motivo: 'Segundo estorno, indevido' })
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('BAIXA_JA_ESTORNADA');
+  });
+
+  it('estornar sem motivo é recusado — desfazer dinheiro pede a frase', async () => {
+    const [titulo] = await novoTitulo({
+      tipo: 'PAGAR',
+      fornecedorId,
+      descricao: `Estorno sem motivo ${sufixo()}`,
+      vencimento: emDias(10),
+      valor: '50.00',
+    });
+
+    const pago = (
+      await autenticado('post', `/api/financeiro/titulos/${titulo!.id}/baixar`)
+        .send({ valor: '50.00', pagoEm: emDias(0), forma: 'PIX' })
+        .expect(201)
+    ).body as Titulo;
+
+    await autenticado(
+      'post',
+      `/api/financeiro/titulos/${titulo!.id}/baixas/${pago.baixas[0]!.id}/estornar`,
+    )
+      .send({ motivo: 'x' })
+      .expect(400);
   });
 });

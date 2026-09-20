@@ -94,6 +94,18 @@ export const cancelamentoTituloSchema = z.object({
 });
 export type CancelamentoTitulo = z.infer<typeof cancelamentoTituloSchema>;
 
+/**
+ * Desfazer uma baixa.
+ *
+ * O motivo é obrigatório porque desfazer um recebimento move dinheiro no
+ * sentido contrário em dois razões — caixa e carteira — e quem confere depois
+ * precisa da frase, não só do número.
+ */
+export const estornoBaixaSchema = z.object({
+  motivo: z.string().trim().min(5, 'Descreva por que a baixa está sendo desfeita').max(400),
+});
+export type EstornoBaixa = z.infer<typeof estornoBaixaSchema>;
+
 export const filtroTitulosSchema = z.object({
   tipo: tipoTituloSchema.default('PAGAR'),
   /** `vencidos` e `abertos` são recortes derivados, não colunas. */
@@ -116,6 +128,15 @@ export const baixaResumoSchema = z.object({
   observacao: z.string().nullable(),
   ator: z.string().nullable(),
   criadoEm: z.string(),
+  /**
+   * Baixa estornada continua na lista, marcada.
+   *
+   * Sumir com ela diria que o dinheiro nunca se moveu — e ele se moveu. Quem
+   * lê o título precisa ver que houve uma baixa e que ela foi desfeita, com
+   * o motivo.
+   */
+  estornadaEm: z.string().nullable(),
+  estornoMotivo: z.string().nullable(),
 });
 export type BaixaResumo = z.infer<typeof baixaResumoSchema>;
 

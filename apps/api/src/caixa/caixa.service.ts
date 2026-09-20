@@ -123,6 +123,39 @@ export class CaixaService {
     const contexto = exigirContexto();
 
     await comEscopoAtual(this.prisma, async (tx) => {
+      await this.movimentarEm(tx, caixaId, dados, principal);
+    });
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: dados.tipo === 'SANGRIA' ? 'CAIXA_SANGRIA' : 'CAIXA_SUPRIMENTO',
+      entidade: 'caixa',
+      entidadeId: caixaId,
+      atorNome: principal.nome,
+      motivo: dados.motivo,
+      depois: { valor: dados.valor },
+    });
+
+    return this.detalhe(caixaId, principal);
+  }
+
+  /**
+   * O mesmo movimento, na transacao de QUEM CHAMA — e devolvendo o id.
+   *
+   * A baixa de titulo em dinheiro precisa das duas coisas: entrar na mesma
+   * transacao da baixa (dinheiro movido sem a baixa gravada e a pior metade
+   * de acontecer) e guardar o ponteiro, porque sem ele o estorno da baixa nao
+   * sabe qual linha da gaveta desfazer.
+   */
+  async movimentarEm(
+    tx: ClienteEmTransacao,
+    caixaId: string,
+    dados: NovoMovimentoCaixa,
+    principal: Principal,
+  ): Promise<string> {
+    const contexto = exigirContexto();
+
+    {
       const caixa = await this.exigirCaixa(tx, caixaId);
 
       if (caixa.status !== 'ABERTO') {
@@ -162,7 +195,7 @@ export class CaixaService {
         }
       }
 
-      await tx.movimentoCaixa.create({
+      const movimento = await tx.movimentoCaixa.create({
         data: {
           tenantId: contexto.tenantId,
           caixaId: caixa.id,
@@ -171,20 +204,11 @@ export class CaixaService {
           motivo: dados.motivo,
           atorId: principal.id,
         },
+        select: { id: true },
       });
-    });
 
-    await this.auditoria.registrar({
-      contexto,
-      acao: dados.tipo === 'SANGRIA' ? 'CAIXA_SANGRIA' : 'CAIXA_SUPRIMENTO',
-      entidade: 'caixa',
-      entidadeId: caixaId,
-      atorNome: principal.nome,
-      motivo: dados.motivo,
-      depois: { valor: dados.valor },
-    });
-
-    return this.detalhe(caixaId, principal);
+      return movimento.id;
+    }
   }
 
   // -------------------------------------------------------------------------

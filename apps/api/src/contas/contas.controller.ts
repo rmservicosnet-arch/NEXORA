@@ -2,10 +2,12 @@ import {
   PERM,
   baixaSchema,
   cancelamentoTituloSchema,
+  estornoBaixaSchema,
   filtroTitulosSchema,
   novoTituloSchema,
   type BaixaTitulo,
   type CancelamentoTitulo,
+  type EstornoBaixa,
   type FiltroTitulos,
   type NovoTitulo,
   type PaginaTitulos,
@@ -60,6 +62,24 @@ export class ContasController {
     @PrincipalAtual() principal: Principal,
   ): Promise<Titulo> {
     return this.contas.baixar(id, dados, principal);
+  }
+
+  /**
+   * Desfazer uma baixa.
+   *
+   * Mesma permissao de dar baixa: quem pode mover o dinheiro pode desfazer o
+   * movimento. O que NAO pode e desfazer sem dizer por que — o motivo e
+   * obrigatorio no schema.
+   */
+  @Post(':id/baixas/:baixaId/estornar')
+  @Permissoes(PERM.financeiro.baixar)
+  async estornarBaixa(
+    @Param('id') id: string,
+    @Param('baixaId') baixaId: string,
+    @Body(new ZodPipe(estornoBaixaSchema)) dados: EstornoBaixa,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<Titulo> {
+    return this.contas.estornarBaixa(id, baixaId, dados, principal);
   }
 
   @Post(':id/cancelar')

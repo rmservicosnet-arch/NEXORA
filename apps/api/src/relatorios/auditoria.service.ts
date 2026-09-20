@@ -264,7 +264,7 @@ export class RelatoriosAuditoriaService {
         AND (a.criado_em AT TIME ZONE 'America/Sao_Paulo')::date
             > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int`;
 
-      const [linhas, porAcao] = await Promise.all([
+      const [linhas, porAcao, agregados, porAtorNaJanela] = await Promise.all([
         tx.$queryRawUnsafe<LinhaBruta[]>(
           `
           SELECT a.id,
@@ -295,6 +295,68 @@ export class RelatoriosAuditoriaService {
           `,
           ...parametros,
         ),
+
+        /*
+          Os agregados de exportacao sobre a JANELA INTEIRA.
+
+          Eram calculados sobre `itens`, que e uma PAGINA — `LIMIT` acima.
+          Enquanto havia poucos registros os dois numeros coincidiam; passado
+          o limite, exportar 42 linhas fazia o total subir 39, porque um
+          registro de 3 linhas caiu fora da pagina no mesmo instante.
+          Indicador conta o conjunto; a lista e uma pagina dele.
+
+          `com_custo` sai do MESMO criterio do detalhe: coluna cujo NOME
+          COMECA por custo, margem, valor, faturamento, liquido ou bruto.
+          Ancorado no comeco de proposito — `com_custo` e a coluna que diz se
+          havia custo, nao o custo.
+        */
+        tx.$queryRawUnsafe<{ com_custo: bigint; linhas: string | null }[]>(
+          `
+          SELECT count(*) FILTER (
+                   WHERE EXISTS (
+                     SELECT 1
+                       FROM jsonb_array_elements_text(
+                              COALESCE(a.depois -> 'colunas', '[]'::jsonb)
+                            ) AS coluna
+                      WHERE coluna ~* '^(custo|margem|valor|faturamento|liquido|bruto)'
+                   )
+                 ) AS com_custo,
+                 COALESCE(sum((a.depois ->> 'linhas')::bigint), 0)::text AS linhas
+            FROM audit_log a
+           WHERE ${janela}
+             AND a.acao = $3::text
+          `,
+          ...parametros,
+          ACAO_EXPORTACAO,
+        ),
+
+        /*
+          Por ator, idem: quem exportou o que na janela toda. Uma lista de
+          quem exportou montada sobre a pagina esconde justamente quem
+          exportou ha mais tempo.
+        */
+        tx.$queryRawUnsafe<{ ator: string | null; exportacoes: bigint; com_custo: bigint }[]>(
+          `
+          SELECT a.ator_nome AS ator,
+                 count(*) AS exportacoes,
+                 count(*) FILTER (
+                   WHERE EXISTS (
+                     SELECT 1
+                       FROM jsonb_array_elements_text(
+                              COALESCE(a.depois -> 'colunas', '[]'::jsonb)
+                            ) AS coluna
+                      WHERE coluna ~* '^(custo|margem|valor|faturamento|liquido|bruto)'
+                   )
+                 ) AS com_custo
+            FROM audit_log a
+           WHERE ${janela}
+             AND a.acao = $3::text
+           GROUP BY a.ator_nome
+           ORDER BY count(*) DESC
+          `,
+          ...parametros,
+          ACAO_EXPORTACAO,
+        ),
       ]);
 
       const conta = (acao: string) => Number(porAcao.find((a) => a.acao === acao)?.registros ?? 0);
@@ -320,27 +382,20 @@ export class RelatoriosAuditoriaService {
         };
       });
 
-      const exportacoes = itens.filter((i) => i.acao === ACAO_EXPORTACAO);
-      const porAtor = new Map<string, { exportacoes: number; comCusto: number }>();
-
-      for (const e of exportacoes) {
-        const chave = e.ator ?? 'Não identificado';
-        const atual = porAtor.get(chave) ?? { exportacoes: 0, comCusto: 0 };
-        atual.exportacoes += 1;
-        if (e.comCusto) atual.comCusto += 1;
-        porAtor.set(chave, atual);
-      }
+      const resumo = agregados[0];
 
       return {
         dias: filtro.dias,
         exportacoes: conta(ACAO_EXPORTACAO),
-        comCusto: exportacoes.filter((e) => e.comCusto).length,
-        linhasExportadas: exportacoes.reduce((s, e) => s + (e.linhas ?? 0), 0),
+        comCusto: Number(resumo?.com_custo ?? 0),
+        linhasExportadas: Number(resumo?.linhas ?? 0),
         crossTenant: conta('CROSS_TENANT_ATTEMPT'),
         reusoDeToken: conta('REUSO_DETECTADO'),
-        porAtor: [...porAtor.entries()]
-          .map(([ator, v]) => ({ ator, ...v }))
-          .sort((a, b) => b.exportacoes - a.exportacoes),
+        porAtor: porAtorNaJanela.map((a) => ({
+          ator: a.ator ?? 'Não identificado',
+          exportacoes: Number(a.exportacoes),
+          comCusto: Number(a.com_custo),
+        })),
         itens,
       };
     });
