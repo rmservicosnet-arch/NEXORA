@@ -535,6 +535,138 @@ describe.runIf(temBanco)('a equipe edita o pedido', () => {
     expect(aceito.aceiteClienteEm).not.toBeNull();
   });
 
+  /**
+   * A negociacao que nao tinha caminho.
+   *
+   * Havia como incluir item e como remover item, e nao havia como mudar dois
+   * para cinco. A unica saida era incluir uma segunda linha do mesmo SKU.
+   */
+  it('aumentar a quantidade de um item pede o aceite do cliente', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId: a, quantidade: '2' }]);
+
+    expect(pedido.valorSolicitado).toBe('200.00');
+
+    const maior = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[0]!.id}/quantidade`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ quantidade: '5', motivo: 'Cliente aumentou por telefone' })
+        .expect(201)
+    ).body as Pedido;
+
+    const item = maior.itens[0]!;
+
+    // `quantidadeSolicitada` e a referencia congelada: reescreve-la faria o
+    // aumento desaparecer na comparacao.
+    expect(item.quantidadeSolicitada).toBe('2');
+    expect(item.quantidadeConfirmada).toBe('5');
+    expect(maior.valorSolicitado).toBe('200.00');
+    expect(maior.valorConfirmado).toBe('500.00');
+    expect(maior.status).toBe('AGUARDANDO_ACEITE_CLIENTE');
+  });
+
+  /**
+   * O teto da confirmacao e o ACORDADO, nao o enviado.
+   *
+   * Antes, o pedido subia de dois para cinco, o cliente tocava em "aceito" e
+   * a confirmacao respondia "nao da para confirmar mais do que foi pedido".
+   */
+  it('depois do aceite, a equipe confirma a quantidade acordada', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId: a, quantidade: '2' }]);
+
+    await http
+      .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[0]!.id}/quantidade`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ quantidade: '5', motivo: 'Cliente aumentou por telefone' })
+      .expect(201);
+
+    await http
+      .post(`/api/portal/pedidos/${pedido.id}/aceite`)
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .send({ aceita: true })
+      .expect(201);
+
+    const confirmado = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/confirmar`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ itens: [{ itemId: pedido.itens[0]!.id, quantidadeConfirmada: '5' }] })
+        .expect(201)
+    ).body as Pedido;
+
+    expect(confirmado.status).toBe('CONFIRMADO');
+    expect(confirmado.itens[0]!.quantidadeConfirmada).toBe('5');
+  });
+
+  /** O teto continua existindo: sem ele, um dedo errado infla o pedido. */
+  it('confirmar acima do acordado continua recusado', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId: a, quantidade: '2' }]);
+
+    const recusa = await http
+      .post(`/api/pedidos/${pedido.id}/confirmar`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ itens: [{ itemId: pedido.itens[0]!.id, quantidadeConfirmada: '9' }] })
+      .expect(400);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('CONFIRMOU_MAIS_QUE_O_ACORDADO');
+  });
+
+  /** Reduzir nao tira dinheiro do cliente: segue sem pedir aceite. */
+  it('reduzir a quantidade nao pede aceite', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId: a, quantidade: '4' }]);
+
+    const menor = (
+      await http
+        .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[0]!.id}/quantidade`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ quantidade: '1', motivo: 'Cliente reduziu por telefone' })
+        .expect(201)
+    ).body as Pedido;
+
+    expect(menor.status).toBe('AGUARDANDO_CONFIRMACAO');
+    expect(menor.valorConfirmado).toBe('100.00');
+  });
+
+  it('item removido nao volta por ajuste de quantidade', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const b = await itemPublicado('50.00', '10');
+    const pedido = await enviarPedido([
+      { variacaoId: a, quantidade: '1' },
+      { variacaoId: b, quantidade: '1' },
+    ]);
+
+    await http
+      .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[1]!.id}/remover`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ motivo: 'Combinado por telefone com o cliente' })
+      .expect(201);
+
+    // Quem removeu escreveu um motivo. Desfazer isso e outra decisao.
+    const recusa = await http
+      .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[1]!.id}/quantidade`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ quantidade: '3', motivo: 'Tentando ressuscitar o item' })
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('ITEM_REMOVIDO');
+  });
+
+  /** Token do outro dominio da 401, nao 403: falha na autenticacao. ADR-009. */
+  it('o cliente nao ajusta a quantidade pela rota da equipe', async () => {
+    const a = await itemPublicado('100.00', '10');
+    const pedido = await enviarPedido([{ variacaoId: a, quantidade: '2' }]);
+
+    await http
+      .post(`/api/pedidos/${pedido.id}/itens/${pedido.itens[0]!.id}/quantidade`)
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .send({ quantidade: '3', motivo: 'Aumentando por conta propria' })
+      .expect(401);
+  });
+
   it('o cliente pode recusar o novo valor, e o pedido volta a equipe', async () => {
     const a = await itemPublicado('100.00', '10');
     const b = await itemPublicado('80.00', '10');

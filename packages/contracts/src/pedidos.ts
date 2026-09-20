@@ -135,6 +135,24 @@ export const inclusaoItemSchema = z.object({
 });
 export type InclusaoItem = z.infer<typeof inclusaoItemSchema>;
 
+/**
+ * Ajuste de quantidade de um item que ja esta no pedido.
+ *
+ * Mexe em `quantidadeConfirmada`. `quantidadeSolicitada` NUNCA e reescrita: e
+ * o que o cliente pediu, e e contra ela que toda edicao da equipe e comparada.
+ * Sem essa referencia congelada, aumentar o pedido e depois compara-lo consigo
+ * mesmo nunca acusaria aumento nenhum.
+ *
+ * Zero nao e ajuste, e remocao — que tem endpoint proprio, porque remover
+ * exige motivo e vira `REMOVIDO`, nao `DEVOLVIDO`. Ver docs/ORDERS.md §6.
+ */
+export const ajusteQuantidadeItemSchema = z.object({
+  quantidade,
+  /** O que foi combinado com o solicitante. Vai para a linha do tempo. */
+  motivo: z.string().trim().min(5, 'Descreva o que foi combinado').max(200),
+});
+export type AjusteQuantidadeItem = z.infer<typeof ajusteQuantidadeItemSchema>;
+
 export const remocaoItemSchema = z.object({
   motivo: z.string().trim().min(5, 'Descreva o que foi combinado').max(200),
 });

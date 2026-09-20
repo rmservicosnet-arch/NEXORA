@@ -181,6 +181,8 @@ o runtime.
 | Cursor devolvido pelo servidor e ignorado pela tela | `proximoCursor` voltava e nada o usava: com 3.888 variações, quem precisava da 81ª rolava até o fim e não achava caminho |
 | Denominador do rodapé contando fora do recorte | "Exibindo 2 de 3888" com um filtro de 2 itens manda procurar 3.886 linhas que o filtro excluiu. O rodapé conta o que a LISTA mostra |
 | Página numerada em tela com rascunho | Trocar de página desmonta as linhas com preço digitado e o trabalho some sem aviso. Acrescente ao fim; quem grava é o botão |
+| Fluxo documentado com metade do caminho construído | Dava para INCLUIR e REMOVER item de pedido e não dava para mudar dois para cinco — a negociação emperrava numa operação que o §6 previa. Leia a tabela do documento inteira |
+| Teto de confirmação preso ao pedido original | O cliente aceitava o aumento e a confirmação recusava "mais do que foi pedido". O teto vem do ACORDO registrado, não do envio |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

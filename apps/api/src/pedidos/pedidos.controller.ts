@@ -6,6 +6,7 @@ import {
   devolucaoPedidoSchema,
   faturamentoPedidoSchema,
   filtroPedidosSchema,
+  ajusteQuantidadeItemSchema,
   inclusaoItemSchema,
   novoPedidoSchema,
   remocaoItemSchema,
@@ -16,6 +17,7 @@ import {
   type DevolucaoPedido,
   type FaturamentoPedido,
   type FiltroPedidos,
+  type AjusteQuantidadeItem,
   type InclusaoItem,
   type ItemCatalogo,
   type NovoPedido,
@@ -63,6 +65,18 @@ export class PedidosController {
     @PrincipalAtual() principal: Principal,
   ): Promise<Pedido> {
     return this.pedidos.incluirItem(id, dados, principal);
+  }
+
+  /** Dois para cinco: a negociacao que nao tinha caminho. docs/ORDERS.md §6. */
+  @Post(':id/itens/:itemId/quantidade')
+  @Permissoes(PERM.pedido.editarItens)
+  async ajustarQuantidadeItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body(new ZodPipe(ajusteQuantidadeItemSchema)) dados: AjusteQuantidadeItem,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<Pedido> {
+    return this.pedidos.ajustarQuantidadeItem(id, itemId, dados, principal);
   }
 
   @Post(':id/itens/:itemId/remover')

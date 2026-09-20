@@ -180,7 +180,7 @@ Enquanto o pedido está em `AGUARDANDO_CONFIRMACAO`, quem tem
 |---|---|
 | **Incluir item** | Entra com `origem = ADICIONADO_EQUIPE` e `quantidadeSolicitada = 0` — o cliente não pediu aquilo |
 | **Remover item** | `status = REMOVIDO`, com `motivoRemocao` e `removidoPorId` |
-| **Ajustar quantidade** | `quantidadeConfirmada`, como na conferência normal |
+| **Ajustar quantidade** | `quantidadeConfirmada`. Para CIMA também — é a negociação de dois para cinco |
 
 Remoção é **lógica**. Nunca `DELETE`. O item sai da conta e permanece na
 linha do tempo, com autor e motivo.
@@ -197,6 +197,42 @@ A distinção parece sutil e não é:
 Colapsar os dois num status só inutiliza o relatório de ruptura: toda
 negociação normal apareceria como falta de estoque, e a loja perderia o sinal
 do que realmente precisa repor.
+
+### Ajustar quantidade é edição, não conferência
+
+`POST /pedidos/:id/itens/:itemId/quantidade`, com `pedido.editar_itens`.
+
+São duas perguntas diferentes, e confundi-las custa caro:
+
+| | Pergunta | Quando |
+|---|---|---|
+| **Editar** | O que foi combinado com o cliente? | Antes, com o pedido aguardando |
+| **Conferir** | O que cabe no saldo? | Na confirmação |
+
+`quantidadeSolicitada` **nunca** é reescrita. Ela é a referência congelada do
+envio, e é contra ela que o consentimento é medido: reescrevê-la faria o
+pedido ser comparado consigo mesmo e nenhum aumento jamais apareceria.
+
+O preço da linha também não muda. As unidades a mais entram pelo preço
+congelado no envio — cobrar hoje por unidade que o cliente pediu há três dias
+seria reprecificar pelas costas. Quando a loja quer o preço de hoje, remove a
+linha e inclui outra, que entra precificada agora.
+
+Item `DEVOLVIDO` por falta que a equipe conseguiu atender volta a `PENDENTE`.
+Deixá-lo devolvido com quantidade o contaria como venda perdida no relatório
+de ruptura, e ela não se perdeu. Item `REMOVIDO` **não** volta por aqui: quem
+removeu escreveu um motivo, e desfazer isso é outra decisão.
+
+### O teto da confirmação é o acordado
+
+Na confirmação, `quantidadeConfirmada` não pode passar do **maior** entre o
+solicitado e o já acordado (`CONFIRMOU_MAIS_QUE_O_ACORDADO`).
+
+O teto existe: sem ele, um dedo errado na conferência inflaria o pedido no
+momento em que o cliente não está olhando. Mas ele vem do **acordo
+registrado** — que passou pelo aceite — e não do envio original. Enquanto vinha
+do envio, o pedido subia de dois para cinco, o cliente tocava em "aceito", e a
+confirmação respondia que não dava para confirmar mais do que foi pedido.
 
 ### Preço do item incluído
 

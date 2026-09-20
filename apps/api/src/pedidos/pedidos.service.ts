@@ -13,6 +13,7 @@ import type {
   DevolucaoPedido,
   FaturamentoPedido,
   FiltroPedidos,
+  AjusteQuantidadeItem,
   InclusaoItem,
   ItemCatalogo,
   NovoPedido,
@@ -462,6 +463,109 @@ export class PedidosService {
   }
 
   /**
+   * Ajusta a quantidade de um item que ja esta no pedido.
+   *
+   * Havia como INCLUIR item e como REMOVER item, e nao havia como mudar dois
+   * para cinco. A equipe alinhava por telefone e emperrava aqui: a unica
+   * saida era incluir uma segunda linha do mesmo SKU, que deixa o pedido com
+   * duas linhas iguais e preco possivelmente diferente.
+   *
+   * Mexe em `quantidadeConfirmada`. `quantidadeSolicitada` fica como esta: e
+   * o que o cliente pediu, e e contra ela que `marcarEdicao` compara. Reescreve-la
+   * faria o aumento desaparecer — o pedido seria comparado consigo mesmo.
+   *
+   * O preco da linha NAO muda. Ele foi congelado no envio, e as unidades a
+   * mais entram por ele: cobrar hoje por unidade que o cliente pediu ha tres
+   * dias seria reprecificar pelas costas. Quando a tabela mudou e a loja quer
+   * o preco novo, o caminho e remover a linha e incluir outra — que entra
+   * precificada hoje, como manda o §6.
+   *
+   * Subir o total dispara o aceite do cliente, como qualquer outra edicao.
+   */
+  async ajustarQuantidadeItem(
+    id: string,
+    itemId: string,
+    dados: AjusteQuantidadeItem,
+    principal: Principal,
+  ): Promise<Pedido> {
+    const contexto = exigirContexto();
+
+    await comEscopoAtual(this.prisma, async (tx) => {
+      const pedido = await this.exigirPedidoEditavel(tx, id);
+
+      const item = await tx.pedidoItem.findFirst({
+        where: { id: itemId, pedidoId: id },
+        include: { variacao: { select: { sku: true } } },
+      });
+
+      if (!item) {
+        throw new NotFoundException({
+          codigo: 'ITEM_NAO_ENCONTRADO',
+          mensagem: 'Item nao encontrado neste pedido.',
+        });
+      }
+
+      // Item retirado por acordo nao volta por um ajuste de quantidade: quem
+      // retirou escreveu um motivo, e desfazer isso e outra decisao.
+      if (item.status === 'REMOVIDO') {
+        throw new ConflictException({
+          codigo: 'ITEM_REMOVIDO',
+          mensagem: 'Este item foi removido do pedido. Inclua-o de novo para voltar a vende-lo.',
+        });
+      }
+
+      const nova = dec(dados.quantidade);
+      const anterior = dec(item.quantidadeConfirmada.toString()).greaterThan(0)
+        ? dec(item.quantidadeConfirmada.toString())
+        : dec(item.quantidadeSolicitada.toString());
+
+      if (nova.equals(anterior)) {
+        throw new ConflictException({
+          codigo: 'QUANTIDADE_IGUAL',
+          mensagem: `${item.variacao.sku}: a quantidade ja e essa.`,
+        });
+      }
+
+      const preco = dec(item.precoUnitario.toString());
+
+      await tx.pedidoItem.update({
+        where: { id: item.id },
+        data: {
+          quantidadeConfirmada: nova.toFixed(6),
+          totalItem: nova.times(preco).toFixed(2),
+          /*
+            Devolvido por falta que a equipe conseguiu atender volta para a
+            fila. Deixa-lo DEVOLVIDO com quantidade contaria a linha como
+            venda perdida no relatorio de ruptura, e ela nao se perdeu.
+          */
+          ...(item.status === 'DEVOLVIDO'
+            ? { status: 'PENDENTE' as const, motivoDevolucao: null }
+            : {}),
+        },
+      });
+
+      await this.recalcularConfirmado(tx, id);
+      await this.marcarEdicao(tx, id, principal, `Ajustou quantidade: ${dados.motivo}`);
+
+      const verbo = nova.greaterThan(anterior) ? 'Aumentou' : 'Reduziu';
+
+      await this.registrarEvento(tx, contexto, {
+        pedidoId: id,
+        deStatus: pedido.status,
+        paraStatus: pedido.status,
+        atorTipo: 'FUNCIONARIO',
+        atorId: principal.id,
+        atorNome: principal.nome,
+        motivo:
+          `${verbo} ${item.variacao.sku} de ${anterior.toFixed(0)} ` +
+          `para ${nova.toFixed(0)}: ${dados.motivo}`,
+      });
+    });
+
+    return this.detalhe(id, principal, true);
+  }
+
+  /**
    * Remocao e LOGICA e nao e devolucao.
    *
    * `REMOVIDO` = houve acordo com o cliente.
@@ -587,14 +691,29 @@ export class PedidosService {
 
           const confirmada = dec(linha.quantidadeConfirmada);
           const solicitada = dec(item.quantidadeSolicitada.toString());
-          const desejada = solicitada.greaterThan(0)
-            ? solicitada
-            : dec(item.quantidadeConfirmada.toString());
+          const acordada = dec(item.quantidadeConfirmada.toString());
+
+          /*
+            O teto e o que foi ACORDADO, nao o que o cliente pediu.
+
+            O teto era `quantidadeSolicitada`, e isso impedia de confirmar um
+            aumento que a equipe negociou e o cliente aceitou: o pedido subia
+            de dois para cinco, o cliente tocava em "aceito", e a confirmacao
+            respondia "nao da para confirmar mais do que foi pedido".
+
+            O teto continua existindo, e ele importa: sem teto, um dedo errado
+            na conferencia inflaria o pedido no momento em que o cliente nao
+            esta olhando. O que mudou e de onde ele vem — do acordo registrado,
+            que passou pelo aceite, e nao do envio original.
+          */
+          const desejada = acordada.greaterThan(solicitada) ? acordada : solicitada;
 
           if (confirmada.greaterThan(desejada)) {
             throw new BadRequestException({
-              codigo: 'CONFIRMOU_MAIS_QUE_O_PEDIDO',
-              mensagem: `${item.variacao.sku}: não dá para confirmar mais do que foi pedido.`,
+              codigo: 'CONFIRMOU_MAIS_QUE_O_ACORDADO',
+              mensagem:
+                `${item.variacao.sku}: nao da para confirmar mais do que foi acordado ` +
+                `(${desejada.toFixed(0)}). Ajuste a quantidade do item antes de confirmar.`,
             });
           }
 
