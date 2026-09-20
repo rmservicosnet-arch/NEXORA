@@ -256,11 +256,27 @@ export const filtroPedidosSchema = z.object({
 });
 export type FiltroPedidos = z.infer<typeof filtroPedidosSchema>;
 
+/**
+ * Quantos pedidos em cada situacao, independente do filtro aplicado.
+ *
+ * As abas da fila mostram numero: contar a pagina carregada daria um numero
+ * que muda com o `limite` — e uma aba "Faturados 30" que na verdade sao 240.
+ */
+export const contagensPedidosSchema = z.object({
+  aguardando: z.number().int(),
+  comOCliente: z.number().int(),
+  confirmados: z.number().int(),
+  devolvidos: z.number().int(),
+  faturados: z.number().int(),
+});
+export type ContagensPedidos = z.infer<typeof contagensPedidosSchema>;
+
 export const paginaPedidosSchema = z.object({
   itens: z.array(pedidoSchema),
   proximoCursor: z.string().nullable(),
   /** Quantos aguardam acao da equipe agora. Vai no selo do menu. */
   naFila: z.number().int(),
+  contagens: contagensPedidosSchema,
 });
 export type PaginaPedidos = z.infer<typeof paginaPedidosSchema>;
 

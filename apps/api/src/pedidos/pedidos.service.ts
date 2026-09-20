@@ -885,6 +885,23 @@ export class PedidosService {
 
       const naFila = await tx.pedido.count({ where: { status: { in: [...NA_FILA] } } });
 
+      /**
+       * As contagens das abas saem do BANCO, nao da pagina carregada.
+       *
+       * Contar `itens.length` daria um numero que muda com o `limite` — uma
+       * aba "Faturados 30" que na verdade sao 240. E o escopo do RLS ja
+       * limita a empresa; `count` aqui conta o que a pessoa pode ver.
+       */
+      const [aguardando, comOCliente, confirmados, devolvidos, faturados] = await Promise.all([
+        tx.pedido.count({ where: { status: 'AGUARDANDO_CONFIRMACAO' } }),
+        tx.pedido.count({ where: { status: 'AGUARDANDO_ACEITE_CLIENTE' } }),
+        tx.pedido.count({
+          where: { status: { in: ['CONFIRMADO', 'CONFIRMADO_PARCIALMENTE'] } },
+        }),
+        tx.pedido.count({ where: { status: { in: ['DEVOLVIDO', 'RECUSADO'] } } }),
+        tx.pedido.count({ where: { status: { in: ['FATURADO', 'CONCLUIDO'] } } }),
+      ]);
+
       const itens: Pedido[] = [];
       for (const p of pagina) {
         itens.push(await this.paraContrato(tx, p, daEquipe));
@@ -894,6 +911,7 @@ export class PedidosService {
         itens,
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         naFila,
+        contagens: { aguardando, comOCliente, confirmados, devolvidos, faturados },
       };
     });
   }
