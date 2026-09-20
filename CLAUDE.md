@@ -164,6 +164,9 @@ o runtime.
 | Página que rola pelo CORPO | O menu lateral sobe junto e some. O shell trava a altura na tela; quem rola é a região de dentro |
 | `prisma migrate dev` interrompido | A conexão órfã segura `pg_advisory_lock` e toda migração seguinte expira. Encerre o backend `idle` que a detém; `migrate deploy` é o comando não interativo |
 | Tela que lista tudo, inclusive o desativado | 19 lojas de teste inativas empurraram as três de verdade para fora da tela. Filtre por ativo e ofereça "mostrar desativadas" |
+| `ORDER BY` por coluna não qualificada | O PostgreSQL prefere o nome de SAÍDA: `ORDER BY valor` com `valor::text` no SELECT ordena TEXTO. Qualifique (`b.valor`) quando houver cast |
+| Curva ABC classificada pela página | A acumulada só significa algo contra o conjunto inteiro. Janela sobre tudo, `LIMIT` depois — e o teste compara as letras de uma página de 5 com as da de 200 |
+| Margem calculada com custo zero | Dá 100% e parece lucro. Custo zero é item que nunca teve entrada com custo: a margem é nula, não cheia |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

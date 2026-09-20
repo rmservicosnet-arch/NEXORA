@@ -329,3 +329,20 @@ export {
   type StatusProduto,
   type VariacaoDetalhe,
 } from './produtos.js';
+
+export {
+  dimensaoVendasSchema,
+  filtroPosicaoSchema,
+  filtroVendasRelatorioSchema,
+  linhaPosicaoSchema,
+  linhaRankingSchema,
+  posicaoEstoqueSchema,
+  relatorioVendasSchema,
+  type DimensaoVendas,
+  type FiltroPosicao,
+  type FiltroVendasRelatorio,
+  type LinhaPosicao,
+  type LinhaRanking,
+  type PosicaoEstoque,
+  type RelatorioVendas,
+} from './relatorios.js';

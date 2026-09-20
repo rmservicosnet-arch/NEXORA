@@ -23,6 +23,8 @@ import { PedidoDetalhe } from './paginas/PedidoDetalhe';
 import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
+import { RelatorioEstoque } from './paginas/RelatorioEstoque';
+import { RelatorioVendas } from './paginas/RelatorioVendas';
 import { Relatorios } from './paginas/Relatorios';
 import { TabelasPreco } from './paginas/TabelasPreco';
 import { PortalCarrinho } from './paginas/portal/Carrinho';
@@ -154,6 +156,8 @@ function AreaDaEquipe() {
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="pedidos/:pedidoId" element={<PedidoDetalhe />} />
           <Route path="relatorios" element={<Relatorios />} />
+          <Route path="relatorios/estoque" element={<RelatorioEstoque />} />
+          <Route path="relatorios/vendas" element={<RelatorioVendas />} />
           <Route
             path="*"
             element={
