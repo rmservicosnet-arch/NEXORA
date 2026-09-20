@@ -1,10 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import {
   alteracaoTabelaPrecoSchema,
+  filtroItensTabelaSchema,
+  gravacaoPrecosTabelaSchema,
   novaTabelaPrecoSchema,
   PERM,
   type AlteracaoTabelaPreco,
+  type FiltroItensTabela,
+  type GravacaoPrecosTabela,
   type NovaTabelaPreco,
+  type PaginaItensTabela,
   type TabelaPreco,
 } from '@estoque/contracts';
 
@@ -36,6 +41,32 @@ export class TabelasController {
     @PrincipalAtual() principal: Principal,
   ): Promise<{ id: string }> {
     return this.tabelas.criar(dados, principal);
+  }
+
+  /**
+   * Os itens da tabela, com o preço de cada um.
+   *
+   * O custo só entra para quem tem `produto.ver_custo` — e com ele sai também
+   * a margem, que permitiria deduzi-lo.
+   */
+  @Get(':id/itens')
+  @Permissoes(PERM.preco.visualizar)
+  async itens(
+    @Param('id') id: string,
+    @Query(new ZodPipe(filtroItensTabelaSchema)) filtro: FiltroItensTabela,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<PaginaItensTabela> {
+    return this.tabelas.itens(id, filtro, principal.permissoes.has(PERM.produto.verCusto));
+  }
+
+  @Put(':id/itens')
+  @Permissoes(PERM.preco.editar)
+  async gravarPrecos(
+    @Param('id') id: string,
+    @Body(new ZodPipe(gravacaoPrecosTabelaSchema)) dados: GravacaoPrecosTabela,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<{ gravados: number; removidos: number }> {
+    return this.tabelas.gravarPrecos(id, dados, principal);
   }
 
   @Patch(':id')

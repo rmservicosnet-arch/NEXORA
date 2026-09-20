@@ -18,10 +18,12 @@ import { Lojas } from './paginas/Lojas';
 import { Login } from './paginas/Login';
 import { NovoProduto } from './paginas/NovoProduto';
 import { Pdv } from './paginas/Pdv';
+import { PrecosDaTabela } from './paginas/PrecosDaTabela';
 import { PedidoDetalhe } from './paginas/PedidoDetalhe';
 import { Pedidos } from './paginas/Pedidos';
 import { Produto } from './paginas/Produto';
 import { Produtos } from './paginas/Produtos';
+import { Relatorios } from './paginas/Relatorios';
 import { TabelasPreco } from './paginas/TabelasPreco';
 import { PortalCarrinho } from './paginas/portal/Carrinho';
 import { PortalCatalogo } from './paginas/portal/Catalogo';
@@ -115,6 +117,7 @@ function AreaDaEquipe() {
           <Route path="produtos/novo" element={<NovoProduto />} />
           <Route path="produtos/:produtoId" element={<Produto />} />
           <Route path="tabelas-preco" element={<TabelasPreco />} />
+          <Route path="tabelas-preco/:tabelaId" element={<PrecosDaTabela />} />
           <Route path="configuracoes" element={<Configuracoes />} />
           <Route
             path="compras"
@@ -149,6 +152,7 @@ function AreaDaEquipe() {
           <Route path="clientes/:clienteId" element={<Cliente />} />
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="pedidos/:pedidoId" element={<PedidoDetalhe />} />
+          <Route path="relatorios" element={<Relatorios />} />
           <Route
             path="*"
             element={

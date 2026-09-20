@@ -51,11 +51,19 @@ export {
 
 export {
   alteracaoTabelaPrecoSchema,
+  filtroItensTabelaSchema,
+  gravacaoPrecosTabelaSchema,
+  itemDaTabelaSchema,
   novaTabelaPrecoSchema,
+  paginaItensTabelaSchema,
   statusTabelaSchema,
   tabelaPrecoSchema,
   type AlteracaoTabelaPreco,
+  type FiltroItensTabela,
+  type GravacaoPrecosTabela,
+  type ItemDaTabela,
   type NovaTabelaPreco,
+  type PaginaItensTabela,
   type StatusTabela,
   type TabelaPreco,
 } from './tabelas.js';
