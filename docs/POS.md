@@ -100,13 +100,12 @@ que a próxima é a 87?".
 
 - **Devolução parcial.** `quantidade_devolvida` está no item, sem rota ainda.
   Hoje só há cancelamento total.
-- **Venda a prazo.** Pagar com `CARTEIRA` debita a conta corrente, mas lançar
-  a venda INTEIRA a prazo — o outro caminho do §6 de [WALLET.md](WALLET.md) —
-  ainda não existe. `cliente.usaCarteira` é gravado e ninguém o lê.
+- **Reimpressão de comprovante.** A venda guarda tudo; falta a rota.
 
 > **Construído desde que este documento foi escrito:** o caixa inteiro (ver
-> [CASHBOX.md](CASHBOX.md)) e o débito em carteira no pagamento com
-> `FormaPagamento.CARTEIRA` — `vendas.service.ts` chama `debitarPorVenda`.
+> [CASHBOX.md](CASHBOX.md)); o débito em carteira no pagamento com
+> `FormaPagamento.CARTEIRA`; e a venda a prazo, que lê `cliente.usaCarteira`
+> e gera débito na carteira OU título em contas a receber — nunca os dois.
 
 ## 11. Testes obrigatórios
 

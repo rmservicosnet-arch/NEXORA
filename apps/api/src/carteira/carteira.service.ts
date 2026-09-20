@@ -424,6 +424,13 @@ export class CarteiraService {
       readonly clienteId: string;
       readonly valor: Dec;
       readonly vendaId: string;
+      /**
+       * `PAGAMENTO_VENDA` e o cliente PAGANDO com o saldo que tem.
+       * `VENDA_A_PRAZO` e ele LEVANDO e ficando devendo. O saldo se move do
+       * mesmo jeito, mas o razao tem de dizer qual dos dois aconteceu — e o
+       * extrato dele e o que a cobranca lê depois.
+       */
+      readonly tipo?: 'PAGAMENTO_VENDA' | 'VENDA_A_PRAZO';
     },
     principal: Principal,
   ): Promise<DebitoDeVenda> {
@@ -444,7 +451,7 @@ export class CarteiraService {
       carteiraId: carteira.id,
       saldoAtual: carteira.saldo,
       sentido: 'DEBITO',
-      tipo: 'PAGAMENTO_VENDA',
+      tipo: params.tipo ?? 'PAGAMENTO_VENDA',
       valor: params.valor,
       principal,
       vendaId: params.vendaId,
@@ -456,8 +463,13 @@ export class CarteiraService {
         Quem revisasse depois via a marca e nenhuma explicacao.
       */
       ...(excedeu ? { justificativa: autorizacao } : {}),
-      // A chave impede que um reenvio da mesma venda debite duas vezes.
-      chaveIdempotencia: `venda:${params.vendaId}`,
+      /*
+        A chave impede que um reenvio da mesma venda debite duas vezes — e
+        carrega o TIPO porque uma venda pode ter as duas coisas: parte paga
+        com o saldo e parte levada a prazo. Sem o tipo na chave, o segundo
+        lancamento colidiria com o primeiro e sumiria em silencio.
+      */
+      chaveIdempotencia: `venda:${params.vendaId}:${params.tipo ?? 'PAGAMENTO_VENDA'}`,
     });
 
     return {

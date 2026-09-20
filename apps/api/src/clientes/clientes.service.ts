@@ -9,7 +9,12 @@ import {
   type PaginaClientes,
 } from '@estoque/contracts';
 import { dec } from '@estoque/core';
-import { comEscopoAtual, type PrismaClient, type ClienteEmTransacao } from '@estoque/db';
+import {
+  comEscopoAtual,
+  exigirContexto,
+  type ClienteEmTransacao,
+  type PrismaClient,
+} from '@estoque/db';
 
 import type { Principal } from '../auth/dominios';
 import { PRISMA } from '../infra/prisma/prisma.module';
@@ -143,8 +148,35 @@ export class ClientesService {
         select: { id: true },
       });
 
+      if (dados.usaCarteira) {
+        await this.garantirCarteira(tx, criado.id, principal.tenantId);
+      }
+
       return criado;
     });
+  }
+
+  /**
+   * Marcar `usaCarteira` CRIA a conta corrente, se ainda não houver.
+   *
+   * Sem isto a bandeira era promessa vazia: o cadastro dizia "usa carteira",
+   * não existia carteira nenhuma, e a venda a prazo caía no outro caminho sem
+   * ninguém notar. `usaCarteira` e `temCarteira` são campos separados no
+   * contrato justamente porque um não garantia o outro.
+   *
+   * Desmarcar NÃO apaga: a carteira guarda um razão imutável, e um saldo com
+   * histórico não some porque alguém desmarcou uma caixa. Ela só deixa de ser
+   * usada.
+   */
+  private async garantirCarteira(
+    tx: ClienteEmTransacao,
+    clienteId: string,
+    tenantId: string,
+  ): Promise<void> {
+    const existe = await tx.carteira.findFirst({ where: { clienteId }, select: { id: true } });
+    if (existe) return;
+
+    await tx.carteira.create({ data: { tenantId, clienteId } });
   }
 
   async alterar(id: string, dados: AlteracaoCliente): Promise<{ id: string }> {
@@ -187,6 +219,11 @@ export class ClientesService {
           ...(dados.usaCarteira !== undefined ? { usaCarteira: dados.usaCarteira } : {}),
         },
       });
+
+      // Ligar a bandeira cria a conta corrente; desligar não apaga nada.
+      if (dados.usaCarteira === true) {
+        await this.garantirCarteira(tx, id, exigirContexto().tenantId);
+      }
 
       return { id };
     });

@@ -828,9 +828,14 @@ export function Pdv() {
                 className="grid grid-cols-3 gap-1.5"
               >
                 {FORMAS.map((f) => {
-                  // CARTEIRA debita a conta corrente: sem cliente o servidor
-                  // recusa com CARTEIRA_EXIGE_CLIENTE. Melhor dizer antes.
-                  const exigeCliente = f.valor === 'CARTEIRA' && !cliente;
+                  /*
+                    CARTEIRA debita a conta corrente e PRAZO deixa alguém
+                    devendo: as duas exigem cliente, e o servidor recusa com
+                    `CARTEIRA_EXIGE_CLIENTE` / `PRAZO_EXIGE_CLIENTE`. Melhor
+                    dizer antes do que deixar o carrinho montado e a pessoa
+                    esperando.
+                  */
+                  const exigeCliente = (f.valor === 'CARTEIRA' || f.valor === 'PRAZO') && !cliente;
                   const ativa = pagamentos[0]?.forma === f.valor;
                   return (
                     <button
@@ -839,7 +844,11 @@ export function Pdv() {
                       aria-pressed={ativa}
                       disabled={exigeCliente}
                       title={
-                        exigeCliente ? 'Identifique o cliente para usar a carteira' : undefined
+                        exigeCliente
+                          ? f.valor === 'PRAZO'
+                            ? 'Identifique o cliente: alguém tem de dever'
+                            : 'Identifique o cliente para usar a carteira'
+                          : undefined
                       }
                       onClick={() => escolherForma(f.valor)}
                       className={juntar(
@@ -962,7 +971,9 @@ export function Pdv() {
                       className="h-9 min-w-0 flex-1 rounded-md border border-neutral-200 bg-white px-2 text-[13px]"
                     >
                       <option value="">+ outra forma…</option>
-                      {FORMAS.filter((f) => f.valor !== 'CARTEIRA' || cliente).map((f) => (
+                      {FORMAS.filter(
+                        (f) => (f.valor !== 'CARTEIRA' && f.valor !== 'PRAZO') || cliente,
+                      ).map((f) => (
                         <option key={f.valor} value={f.valor}>
                           {f.rotulo}
                         </option>

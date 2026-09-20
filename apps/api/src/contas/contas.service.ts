@@ -39,6 +39,15 @@ import { PRISMA } from '../infra/prisma/prisma.module';
  * Dois lugares registrando o mesmo débito com números diferentes seria a pior
  * coisa que este sistema poderia ganhar.
  */
+/**
+ * Prazo padrao de uma venda a prazo sem vencimento informado.
+ *
+ * Trinta dias e a convencao do varejo brasileiro. Fica aqui, com nome, em vez
+ * de um `30` solto no meio do codigo da venda — e no dia em que virar
+ * configuracao de empresa, e esta constante que sai.
+ */
+const PRAZO_PADRAO_DIAS = 30;
+
 @Injectable()
 export class ContasService {
   constructor(
@@ -417,9 +426,61 @@ export class ContasService {
     return this.detalhe(id);
   }
 
+  /**
+   * O titulo de uma venda levada a prazo.
+   *
+   * Vive AQUI, e nao na venda, porque a regra de como um titulo nasce e desta
+   * casa. Recebe o `tx` de quem chama: a venda e o titulo entram na mesma
+   * transacao ou nao entram — mercadoria saindo sem a divida registrada e o
+   * pior desfecho possivel.
+   *
+   * So para cliente SEM carteira. Quem tem carteira leva o debito no razao
+   * dela; gerar os dois contaria a mesma divida duas vezes, que e o erro que
+   * o docs/WALLET.md §6 existe para impedir.
+   */
+  async tituloDeVendaAPrazo(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly clienteId: string;
+      readonly vendaId: string;
+      readonly numeroVenda: number;
+      readonly lojaId: string;
+      readonly valor: string;
+      readonly vencimento?: string | undefined;
+    },
+    contexto: { readonly tenantId: string },
+  ): Promise<string> {
+    const vencimento = params.vencimento
+      ? new Date(`${params.vencimento}T00:00:00Z`)
+      : this.daquiADias(PRAZO_PADRAO_DIAS);
+
+    const titulo = await tx.tituloFinanceiro.create({
+      data: {
+        tenantId: contexto.tenantId,
+        tipo: 'RECEBER',
+        origem: 'VENDA',
+        lojaId: params.lojaId,
+        clienteId: params.clienteId,
+        vendaId: params.vendaId,
+        descricao: `Venda ${String(params.numeroVenda)} a prazo`,
+        vencimento,
+        valor: params.valor,
+      },
+      select: { id: true },
+    });
+
+    return titulo.id;
+  }
+
   // -------------------------------------------------------------------------
   // Apoio
   // -------------------------------------------------------------------------
+
+  private daquiADias(dias: number): Date {
+    const d = this.hoje();
+    d.setUTCDate(d.getUTCDate() + dias);
+    return d;
+  }
 
   /** Meia-noite de hoje, em UTC. É contra ela que o vencimento se compara. */
   private hoje(): Date {

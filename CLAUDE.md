@@ -218,6 +218,8 @@ o runtime.
 | Fuso da sessão do banco deixado no padrão | O PostgreSQL renderiza `timestamptz` no fuso da SESSÃO e o adaptador do Prisma descartava o deslocamento: escrita +3 h, leitura −3 h. Os dois se cancelam na ida e volta, então as telas pareciam certas — só quebrava contra `now()` em SQL. `options: '-c timezone=UTC'` na conexão |
 | Medir ida e volta pelo caminho que se quer testar | Escrever errado e ler errado dá zero. Quem mede tem de ser outro: o driver `pg` cru provou o desvio de 180 min que o próprio Prisma escondia |
 | Documento que envelhece sem ninguém notar | Três `docs/` diziam que faltava o que já existia — alguém reconstruiria o caixa e o débito em carteira. Ao construir o que um documento lista como pendente, risque o item no MESMO commit |
+| Bandeira que promete um recurso que não existe | `usaCarteira: true` não criava carteira nenhuma: o cadastro dizia "usa carteira", a venda a prazo procurava uma e caía no outro caminho. Ligar a bandeira CRIA o recurso; desligar não apaga o razão |
+| Chave de idempotência sem o que distingue os lançamentos | `venda:${id}` colidia quando a mesma venda tinha parte paga com saldo e parte a prazo: o segundo débito sumia em silêncio. A chave carrega o TIPO |
 
 ## Testes
 

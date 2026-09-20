@@ -15,5 +15,8 @@ import { ContasService } from './contas.service';
   imports: [CarteiraModule, CaixaModule],
   controllers: [ContasController],
   providers: [ContasService],
+  // A venda a prazo de cliente SEM carteira cria titulo por este servico:
+  // a regra de como um titulo nasce fica nesta casa. docs/WALLET.md §6.
+  exports: [ContasService],
 })
 export class ContasModule {}

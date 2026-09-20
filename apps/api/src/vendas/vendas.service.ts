@@ -29,6 +29,7 @@ import {
 import type { Principal } from '../auth/dominios';
 import { CaixaService } from '../caixa/caixa.service';
 import { CarteiraService } from '../carteira/carteira.service';
+import { ContasService } from '../contas/contas.service';
 import { AuditoriaService } from '../comum/auditoria.service';
 import { EstoqueService } from '../estoque/estoque.service';
 import { PRISMA } from '../infra/prisma/prisma.module';
@@ -56,6 +57,7 @@ export class VendasService {
     private readonly estoque: EstoqueService,
     private readonly caixa: CaixaService,
     private readonly carteira: CarteiraService,
+    private readonly contas: ContasService,
     private readonly auditoria: AuditoriaService,
   ) {}
 
@@ -285,6 +287,77 @@ export class VendasService {
           avisosColetados.push({
             codigo: 'DEBITADO_EM_CARTEIRA',
             mensagem: `R$ ${emCarteira.toFixed(2)} debitados. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
+          });
+        }
+      }
+
+      /*
+        VENDA A PRAZO — a metade que faltava do docs/WALLET.md §6.
+
+        Ate aqui o PDV aceitava a forma `PRAZO` e NAO lancava nada: a venda
+        fechava, a mercadoria saia e o cliente nao devia em lugar nenhum. O
+        mesmo buraco que `CARTEIRA` teve.
+
+        Quem decide o caminho e `cliente.usaCarteira` — o campo que a tela de
+        clientes grava e que, ate agora, ninguem lia:
+
+          com carteira → DEBITO `VENDA_A_PRAZO` no razao dela
+          sem carteira → TITULO em contas a receber, com vencimento
+
+        Nunca os dois. Fazer os dois infla o ativo pelo dobro, que e o erro
+        contabil mais caro que um ERP pequeno costuma cometer.
+      */
+      const aPrazo = dados.pagamentos
+        .filter((p) => p.forma === 'PRAZO')
+        .reduce((soma, p) => soma.plus(dec(p.valor)), dec(0));
+
+      if (aPrazo.greaterThan(0)) {
+        if (!clienteId) {
+          throw new BadRequestException({
+            codigo: 'PRAZO_EXIGE_CLIENTE',
+            mensagem: 'Venda a prazo exige identificar o cliente: alguem tem de dever.',
+          });
+        }
+
+        const cliente = await tx.cliente.findFirst({
+          where: { id: clienteId },
+          select: { usaCarteira: true },
+        });
+
+        const temCarteira =
+          cliente?.usaCarteira === true &&
+          (await this.carteira.carteiraDoCliente(tx, clienteId)) !== null;
+
+        if (temCarteira) {
+          const debito = await this.carteira.debitarPorVenda(
+            tx,
+            { clienteId, valor: aPrazo, vendaId: venda.id, tipo: 'VENDA_A_PRAZO' },
+            principal,
+          );
+
+          avisosColetados.push({
+            codigo: 'LANCADO_NA_CARTEIRA',
+            mensagem: `R$ ${aPrazo.toFixed(2)} a prazo na conta corrente. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
+          });
+        } else {
+          const vencimento = dados.pagamentos.find((p) => p.forma === 'PRAZO')?.vencimento;
+
+          await this.contas.tituloDeVendaAPrazo(
+            tx,
+            {
+              clienteId,
+              vendaId: venda.id,
+              numeroVenda: numero,
+              lojaId: dados.lojaId,
+              valor: aPrazo.toFixed(2),
+              vencimento,
+            },
+            contexto,
+          );
+
+          avisosColetados.push({
+            codigo: 'TITULO_A_RECEBER_GERADO',
+            mensagem: `R$ ${aPrazo.toFixed(2)} viraram titulo em contas a receber.`,
           });
         }
       }

@@ -186,21 +186,19 @@ feita por script de manutenção passa por cima da aplicação — não do banco
 
 ## 11. O que ainda não existe
 
-- **Venda a prazo** (`VENDA_A_PRAZO`): hoje só `PAGAMENTO_VENDA`, quando o
-  cliente paga usando a conta. Lançar a venda inteira na conta corrente é a
-  outra metade do §6.
 - **Devolução gerando crédito** (`DEVOLUCAO_VENDA`): o cancelamento de venda
   ainda não devolve dinheiro à carteira.
-- **`cliente.usaCarteira` é gravado e NINGUÉM o lê.** O campo existe, a tela
-  de clientes o edita e o comentário do schema promete que ele decide entre
-  carteira e título. Nenhuma linha da venda o consulta. É a metade que falta
-  do item acima — e, até existir, o campo é uma promessa que o sistema não
-  cumpre.
+- **Aging FIFO** dos débitos da carteira, pela data de cada débito ainda não
+  coberto por créditos posteriores. O aging que existe hoje é de TÍTULOS, em
+  `/relatorios/financeiro/aging` — cliente com carteira não aparece lá, e é
+  exatamente esse que falta.
 
-> **Construído desde que este documento foi escrito:** o aging de títulos em
-> aberto, por faixa de vencimento, em
-> `/relatorios/financeiro/aging` — mas ele lê `titulo_financeiro`, não o razão
-> da carteira. O aging FIFO dos débitos da CARTEIRA continua sem existir.
+> **Construído desde que este documento foi escrito:** a venda a prazo do §6
+> inteira. `FormaPagamento.PRAZO` agora lê `cliente.usaCarteira` e escolhe o
+> caminho — débito `VENDA_A_PRAZO` no razão da carteira, ou título em contas
+> a receber com vencimento. Nunca os dois. E marcar `usaCarteira` passou a
+> CRIAR a conta corrente: antes a bandeira era promessa vazia, porque
+> `usaCarteira` e `temCarteira` podiam discordar.
 
 ## 12. Testes obrigatórios
 

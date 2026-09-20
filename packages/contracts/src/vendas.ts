@@ -67,6 +67,17 @@ export const pagamentoVendaSchema = z.object({
     .regex(/^\d{4}$/, 'Informe os quatro últimos dígitos')
     .optional(),
   autorizacao: z.string().trim().max(60).optional(),
+  /**
+   * So em `PRAZO`, e so para cliente SEM carteira: e o vencimento do titulo
+   * que a venda gera. Omitido, vale o prazo padrao de 30 dias.
+   *
+   * Cliente COM carteira nao usa este campo — a divida dele vira debito no
+   * razao da carteira, que nao tem vencimento por compra. docs/WALLET.md §6.
+   */
+  vencimento: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD')
+    .optional(),
 });
 export type PagamentoVenda = z.infer<typeof pagamentoVendaSchema>;
 
