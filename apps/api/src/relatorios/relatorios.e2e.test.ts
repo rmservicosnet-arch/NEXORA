@@ -169,6 +169,26 @@ interface Cancelamentos {
   }[];
 }
 
+interface Comparativo {
+  dias: number;
+  faturamento: string;
+  vendas: number;
+  lojas: {
+    loja: string;
+    vendas: number;
+    faturamento: string;
+    participacao: string;
+    ticketMedio: string;
+    itens: string;
+    itensPorVenda: string;
+    clientes: number;
+    taxaDesconto: string;
+    canceladas: number;
+    taxaCancelamento: string;
+    margem?: string | null;
+  }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -887,5 +907,82 @@ describe.runIf(temBanco)('cancelamentos e devolu\u00e7\u00f5es', () => {
       .expect(400);
 
     await http.get('/api/relatorios/cancelamentos').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('comparativo entre lojas', () => {
+  it('as lojas somam o faturamento do grupo', async () => {
+    const r = await http
+      .get('/api/relatorios/comparativo-lojas?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const c = r.body as Comparativo;
+
+    expect(c.lojas.reduce((s, l) => s + Number(l.faturamento), 0)).toBeCloseTo(
+      Number(c.faturamento),
+      2,
+    );
+    expect(c.lojas.reduce((s, l) => s + l.vendas, 0)).toBe(c.vendas);
+
+    if (c.lojas.length > 0) {
+      const partes = c.lojas.reduce((s, l) => s + Number(l.participacao), 0);
+      expect(partes).toBeGreaterThan(99);
+      expect(partes).toBeLessThan(101);
+    }
+  });
+
+  /** Ticket medio e faturamento dividido por vendas. Se nao bate, um dos dois mente. */
+  it('o ticket medio fecha com faturamento e vendas', async () => {
+    const r = await http
+      .get('/api/relatorios/comparativo-lojas?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const l of (r.body as Comparativo).lojas) {
+      if (l.vendas > 0) {
+        expect(Number(l.ticketMedio)).toBeCloseTo(Number(l.faturamento) / l.vendas, 1);
+        expect(Number(l.itensPorVenda)).toBeCloseTo(Number(l.itens) / l.vendas, 1);
+      }
+      expect(Number(l.taxaCancelamento)).toBeLessThanOrEqual(100);
+      expect(Number(l.taxaDesconto)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  /** O comparativo e o relatorio de vendas contam o MESMO faturamento. */
+  it('o total bate com o relatorio de vendas', async () => {
+    const [comparativo, vendas] = await Promise.all([
+      http
+        .get('/api/relatorios/comparativo-lojas?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+      http
+        .get('/api/relatorios/vendas?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+    ]);
+
+    expect(Number((comparativo.body as Comparativo).faturamento)).toBeCloseTo(
+      Number((vendas.body as Vendas).total),
+      2,
+    );
+  });
+
+  it('a vendedora nao recebe margem', async () => {
+    const r = await http
+      .get('/api/relatorios/comparativo-lojas?dias=30')
+      .set('Authorization', `Bearer ${tokenVendedora}`)
+      .expect(200);
+
+    expect(JSON.stringify((r.body as Comparativo).lojas)).not.toContain('margem');
+  });
+
+  it('exige sessao e recusa periodo invalido', async () => {
+    await http
+      .get('/api/relatorios/comparativo-lojas?dias=0')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/comparativo-lojas').expect(401);
   });
 });

@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import {
   filtroCancelamentosSchema,
+  filtroComparativoSchema,
   filtroDescontosSchema,
   filtroFormasSchema,
   filtroGiroSchema,
@@ -9,6 +10,7 @@ import {
   filtroVendasRelatorioSchema,
   PERM,
   type FiltroCancelamentos,
+  type FiltroComparativo,
   type FiltroDescontos,
   type FiltroFormas,
   type FiltroGiro,
@@ -17,6 +19,7 @@ import {
   type FiltroVendasRelatorio,
   type PosicaoEstoque,
   type RelatorioCancelamentos,
+  type RelatorioComparativo,
   type RelatorioDescontos,
   type RelatorioFormas,
   type RelatorioGiro,
@@ -65,6 +68,16 @@ export class RelatoriosController {
    * `ordem=parado` inverte a leitura. Duas rotas seriam duas consultas que
    * precisariam concordar sobre o que é girar.
    */
+  /** A mesma metrica, lojas lado a lado. Sem filtro de loja, de proposito. */
+  @Get('comparativo-lojas')
+  @Permissoes(PERM.relatorio.visualizar)
+  async comparativo(
+    @Query(new ZodPipe(filtroComparativoSchema)) filtro: FiltroComparativo,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<RelatorioComparativo> {
+    return this.relatorios.comparativo(filtro, principal.permissoes.has(PERM.relatorio.verCusto));
+  }
+
   /** O que foi desfeito, e quanto tempo depois. */
   @Get('cancelamentos')
   @Permissoes(PERM.relatorio.visualizar)

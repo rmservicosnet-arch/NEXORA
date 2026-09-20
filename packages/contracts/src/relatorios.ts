@@ -388,3 +388,41 @@ export const relatorioCancelamentosSchema = z.object({
   itens: z.array(linhaCancelamentoSchema),
 });
 export type RelatorioCancelamentos = z.infer<typeof relatorioCancelamentosSchema>;
+
+// ---------------------------------------------------------------------------
+// Comparativo entre lojas
+// ---------------------------------------------------------------------------
+
+export const filtroComparativoSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+});
+export type FiltroComparativo = z.infer<typeof filtroComparativoSchema>;
+
+export const linhaLojaComparadaSchema = z.object({
+  lojaId: z.string(),
+  loja: z.string(),
+  vendas: z.number().int(),
+  faturamento: z.string(),
+  /** Participacao no faturamento do grupo, em pontos percentuais. */
+  participacao: z.string(),
+  ticketMedio: z.string(),
+  itens: z.string(),
+  /** Unidades por venda. Distingue ticket alto de carrinho cheio. */
+  itensPorVenda: z.string(),
+  /** Clientes DISTINTOS atendidos. Venda sem cliente nao conta ninguem. */
+  clientes: z.number().int(),
+  taxaDesconto: z.string(),
+  canceladas: z.number().int(),
+  taxaCancelamento: z.string(),
+  /** Ausente sem `relatorio.ver_custo`. Nula quando nao ha custo a vista. */
+  margem: z.string().nullable().optional(),
+});
+export type LinhaLojaComparada = z.infer<typeof linhaLojaComparadaSchema>;
+
+export const relatorioComparativoSchema = z.object({
+  dias: z.number().int(),
+  faturamento: z.string(),
+  vendas: z.number().int(),
+  lojas: z.array(linhaLojaComparadaSchema),
+});
+export type RelatorioComparativo = z.infer<typeof relatorioComparativoSchema>;

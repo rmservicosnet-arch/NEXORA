@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   FiltroCancelamentos,
+  FiltroComparativo,
   FiltroDescontos,
   FiltroFormas,
   FiltroGiro,
@@ -14,6 +15,7 @@ import type {
   LinhaForma,
   PosicaoEstoque,
   RelatorioCancelamentos,
+  RelatorioComparativo,
   RelatorioDescontos,
   RelatorioFormas,
   RelatorioGiro,
@@ -279,6 +281,122 @@ export class RelatoriosService {
         porLoja,
         dimensao: filtro.dimensao,
         ranking,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Comparativo entre lojas
+  // -------------------------------------------------------------------------
+
+  /**
+   * A mesma métrica, lojas lado a lado.
+   *
+   * Faturamento sozinho premia a loja maior. Ticket médio, itens por venda e
+   * taxa de desconto é que dizem SE a loja vende melhor ou só vende mais —
+   * uma loja pode faturar o dobro descontando o triplo.
+   *
+   * Não tem filtro de loja: um comparativo de uma loja só é um relatório de
+   * vendas com outro nome.
+   */
+  async comparativo(
+    filtro: FiltroComparativo,
+    podeVerCusto: boolean,
+  ): Promise<RelatorioComparativo> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          loja_id: string;
+          loja: string;
+          vendas: bigint;
+          faturamento: string;
+          itens: string;
+          clientes: bigint;
+          bruto: string;
+          desconto: string;
+          custo: string;
+          canceladas: bigint;
+        }[]
+      >(
+        `
+        WITH dentro AS (
+          SELECT v.id, v.loja_id, v.total, v.status, v.subtotal, v.desconto, v.cliente_id
+            FROM venda v
+           WHERE (v.status = 'CONCLUIDA'
+                  AND (v.concluida_em AT TIME ZONE 'America/Sao_Paulo')::date
+                      > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int)
+              OR (v.status = 'CANCELADA'
+                  AND (v.cancelada_em AT TIME ZONE 'America/Sao_Paulo')::date
+                      > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int)
+        ),
+        itens AS (
+          SELECT d.id,
+                 sum(i.quantidade) AS quantidade,
+                 sum(i.desconto_item) AS desconto_itens,
+                 sum(i.quantidade * i.custo_unitario) AS custo
+            FROM dentro d
+            JOIN venda_item i ON i.venda_id = d.id
+           WHERE d.status = 'CONCLUIDA'
+           GROUP BY d.id
+        )
+        SELECT lj.id AS loja_id,
+               lj.nome AS loja,
+               count(*) FILTER (WHERE d.status = 'CONCLUIDA') AS vendas,
+               coalesce(sum(d.total) FILTER (WHERE d.status = 'CONCLUIDA'), 0)::text
+                 AS faturamento,
+               coalesce(sum(i.quantidade), 0)::text AS itens,
+               count(DISTINCT d.cliente_id) FILTER (WHERE d.status = 'CONCLUIDA') AS clientes,
+               coalesce(sum(d.subtotal + coalesce(i.desconto_itens, 0))
+                          FILTER (WHERE d.status = 'CONCLUIDA'), 0)::text AS bruto,
+               coalesce(sum(d.desconto + coalesce(i.desconto_itens, 0))
+                          FILTER (WHERE d.status = 'CONCLUIDA'), 0)::text AS desconto,
+               coalesce(sum(i.custo), 0)::text AS custo,
+               count(*) FILTER (WHERE d.status = 'CANCELADA') AS canceladas
+          FROM dentro d
+          JOIN loja lj ON lj.id = d.loja_id
+          LEFT JOIN itens i ON i.id = d.id
+         GROUP BY lj.id, lj.nome
+         ORDER BY sum(d.total) FILTER (WHERE d.status = 'CONCLUIDA') DESC NULLS LAST
+        `,
+        filtro.dias,
+      );
+
+      const faturamento = linhas.reduce((soma, l) => soma.plus(dec(l.faturamento)), dec(0));
+
+      return {
+        dias: filtro.dias,
+        faturamento: faturamento.toFixed(2),
+        vendas: linhas.reduce((soma, l) => soma + Number(l.vendas), 0),
+        lojas: linhas.map((l) => {
+          const valor = dec(l.faturamento);
+          const vendas = Number(l.vendas);
+          const canceladas = Number(l.canceladas);
+          const fechadas = vendas + canceladas;
+          const bruto = dec(l.bruto);
+
+          return {
+            lojaId: l.loja_id,
+            loja: l.loja,
+            vendas,
+            faturamento: valor.toFixed(2),
+            participacao: faturamento.greaterThan(0)
+              ? valor.dividedBy(faturamento).times(100).toFixed(1)
+              : '0.0',
+            ticketMedio: vendas > 0 ? valor.dividedBy(vendas).toFixed(2) : '0.00',
+            itens: dec(l.itens).toFixed(0),
+            /* Ticket alto com carrinho vazio e ticket alto com carrinho cheio
+               são lojas diferentes: uma vende caro, a outra vende junto. */
+            itensPorVenda: vendas > 0 ? dec(l.itens).dividedBy(vendas).toFixed(1) : '0.0',
+            clientes: Number(l.clientes),
+            taxaDesconto: bruto.greaterThan(0)
+              ? dec(l.desconto).dividedBy(bruto).times(100).toFixed(1)
+              : '0.0',
+            canceladas,
+            taxaCancelamento:
+              fechadas > 0 ? dec(canceladas).dividedBy(fechadas).times(100).toFixed(1) : '0.0',
+            ...(podeVerCusto ? { margem: this.margem(valor, dec(l.custo)) } : {}),
+          };
+        }),
       };
     });
   }
