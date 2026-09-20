@@ -98,7 +98,7 @@ export class CarteiraService {
         orderBy: { saldo: 'asc' },
         take: filtro.limite + 1,
         ...(filtro.cursor ? { cursor: { id: filtro.cursor }, skip: 1 } : {}),
-        include: { cliente: { select: { nome: true } } },
+        include: { cliente: { select: { nome: true, tabelaPreco: { select: { nome: true } } } } },
       });
 
       const temMais = linhas.length > filtro.limite;
@@ -126,7 +126,7 @@ export class CarteiraService {
     return comEscopoAtual(this.prisma, async (tx) => {
       const carteira = await tx.carteira.findFirst({
         where: { clienteId },
-        include: { cliente: { select: { nome: true } } },
+        include: { cliente: { select: { nome: true, tabelaPreco: { select: { nome: true } } } } },
       });
 
       if (!carteira) {
@@ -463,7 +463,7 @@ export class CarteiraService {
   async carteiraDoCliente(tx: ClienteEmTransacao, clienteId: string): Promise<Carteira | null> {
     const carteira = await tx.carteira.findFirst({
       where: { clienteId, status: 'ATIVO' },
-      include: { cliente: { select: { nome: true } } },
+      include: { cliente: { select: { nome: true, tabelaPreco: { select: { nome: true } } } } },
     });
 
     return carteira ? this.paraContrato(carteira) : null;
@@ -613,7 +613,8 @@ export class CarteiraService {
     bloqueadaParaCompra: boolean;
     status: string;
     observacao: string | null;
-    cliente: { nome: string };
+    criadoEm: Date;
+    cliente: { nome: string; tabelaPreco: { nome: string } | null };
   }): Carteira {
     const saldo = dec(c.saldo.toString());
     const limite = dec(c.limiteCredito.toString());
@@ -628,6 +629,8 @@ export class CarteiraService {
       bloqueadaParaCompra: c.bloqueadaParaCompra,
       status: c.status as Carteira['status'],
       observacao: c.observacao,
+      criadoEm: c.criadoEm.toISOString(),
+      tabelaPreco: c.cliente.tabelaPreco?.nome ?? null,
     };
   }
 

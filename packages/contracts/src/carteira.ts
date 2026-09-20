@@ -132,6 +132,10 @@ export const carteiraSchema = z.object({
   bloqueadaParaCompra: z.boolean(),
   status: z.enum(['ATIVO', 'INATIVO']),
   observacao: z.string().nullable(),
+  /** Desde quando a conta corrente existe. */
+  criadoEm: z.string(),
+  /** A tabela de preço do cliente — o que ele paga, e por isso o que deve. */
+  tabelaPreco: z.string().nullable(),
 });
 export type Carteira = z.infer<typeof carteiraSchema>;
 
