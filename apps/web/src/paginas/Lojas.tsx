@@ -35,7 +35,7 @@ export function Lojas() {
           </p>
         </div>
 
-        <section className="min-h-0 flex-1 overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+        <section className="min-h-0 flex-1 overflow-y-auto rounded-md border border-neutral-100 bg-white shadow-sm">
           {consulta.isPending ? <EstadoCarregando titulo="Carregando lojas…" /> : null}
 
           {consulta.isError ? (

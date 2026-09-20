@@ -12,9 +12,54 @@ import { Link } from 'react-router';
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { useSessao } from '../auth/sessao';
 import { Aviso } from '../ui/Aviso';
+import { Botao } from '../ui/Botao';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 import { Foto } from '../ui/Foto';
 import { juntar } from '../ui/juntar';
+
+/** O portal roda na mesma origem da aplicação, em `/portal`. */
+function enderecoDoPortal(): string {
+  return `${globalThis.location?.origin ?? ''}/portal`;
+}
+
+function Compartilhar() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+      <path d="M12 3v13" />
+      <path d="m8 7 4-4 4 4" />
+    </svg>
+  );
+}
+
+function Elo() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 13a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1.1 1" />
+      <path d="M14 11a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1.1-1" />
+    </svg>
+  );
+}
 
 function brl(v: string | number): string {
   return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -30,6 +75,8 @@ export function Catalogo() {
   const [tabelaId, setTabelaId] = useState<string | null>(null);
   const [soSemFoto, setSoSemFoto] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [compartilhar, setCompartilhar] = useState(false);
+  const [copiado, setCopiado] = useState(false);
 
   const podePublicar = pode(PERM.produto.publicarCatalogo);
 
@@ -145,21 +192,63 @@ export function Catalogo() {
               ) : null}
             </p>
           </div>
+
+          <Botao variante="primario" onClick={() => setCompartilhar((v) => !v)}>
+            <Compartilhar />
+            Compartilhar catálogo
+          </Botao>
         </div>
 
         {/*
-          A proposta tem aqui a faixa do catálogo público: endereço,
-          "Copiar link", "Enviar por WhatsApp". Nada disso existe — não há
-          rota pública, nem endereço, nem compartilhamento. Mostrar um link
-          falso seria pior do que dizer que ele não existe.
+          O endereço é o do PORTAL, que existe — não um catálogo público, que
+          não existe. O selo diz isso em vez de prometer "Público": o cliente
+          precisa do acesso dele, e cada um vê a própria tabela de preço.
         */}
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-neutral-200 bg-neutral-25 px-3.5 py-2.5">
-          <span className="text-[12.5px] text-neutral-500">
-            <strong className="font-medium text-neutral-700">Catálogo público</strong> — endereço
-            para compartilhar com o cliente — ainda não existe. Hoje o cliente vê o catálogo
-            entrando no portal com o acesso dele.
-          </span>
-        </div>
+        {compartilhar ? (
+          <div className="flex flex-wrap items-center gap-2.5 rounded-md border border-neutral-100 bg-white px-3.5 py-2.5">
+            <span className="shrink-0 text-primary-600">
+              <Elo />
+            </span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-neutral-700">
+              {enderecoDoPortal()}
+            </span>
+
+            <span className="inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-atencao-fundo)] px-2.5 text-[11.5px] font-semibold text-[var(--color-atencao)]">
+              <span className="size-1.5 rounded-full bg-current" />
+              Exige o acesso do cliente
+            </span>
+
+            <Botao
+              tamanho="compacto"
+              onClick={() => {
+                void navigator.clipboard.writeText(enderecoDoPortal()).then(() => {
+                  setCopiado(true);
+                  setTimeout(() => setCopiado(false), 2000);
+                });
+              }}
+            >
+              {copiado ? 'Copiado' : 'Copiar link'}
+            </Botao>
+
+            <Botao tamanho="compacto" comoFilho>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `Nosso catálogo: ${enderecoDoPortal()} — entre com o seu acesso para ver os preços da sua tabela.`,
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="no-underline"
+              >
+                Enviar por WhatsApp
+              </a>
+            </Botao>
+
+            <p className="w-full text-[11.5px] text-neutral-500">
+              Catálogo público, sem login, ainda não existe. Este endereço é o portal: cada cliente
+              entra com o acesso dele e vê os preços da tabela dele.
+            </p>
+          </div>
+        ) : null}
 
         {erro ? (
           <Aviso tom="perigo" titulo="Não foi possível concluir">
@@ -225,8 +314,14 @@ export function Catalogo() {
           />
         ) : null}
 
+        {/*
+          `auto-rows` e `content-start` não são enfeite: numa grade de altura
+          definida, a linha automática é ESTICADA para caber, e 60 cartões
+          viram 60 faixas de 34px com o conteúdo cortado pelo
+          `overflow-hidden` do cartão.
+        */}
         {itens.length > 0 ? (
-          <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid min-h-0 flex-1 auto-rows-[288px] content-start gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {itens.map((p) => (
               <Cartao
                 key={p.id}

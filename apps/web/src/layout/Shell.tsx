@@ -322,7 +322,12 @@ export function Shell() {
     .join('');
 
   return (
-    <div className="flex min-h-dvh">
+    /*
+      Altura travada na tela, e quem rola é a página — não o corpo.
+      Com o corpo rolando, o menu lateral sobe junto e some: numa lista de
+      60 produtos a pessoa perde a navegação inteira para voltar.
+    */
+    <div className="flex h-dvh overflow-hidden">
       {menuAberto ? (
         <button
           type="button"
@@ -425,7 +430,7 @@ export function Shell() {
         </div>
       </nav>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* A equipe confirma pedido pelo celular — é requisito, não adaptação.
             Acima de `md` esta barra some e a navegação volta a ser a coluna. */}
         <div className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-neutral-100 bg-white px-3 md:hidden">
