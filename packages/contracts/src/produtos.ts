@@ -25,6 +25,22 @@ export const filtroProdutosSchema = z.object({
   marcaId: z.string().uuid().optional(),
   /** Só produtos com alguma variação em saldo negativo. */
   apenasDivergencia: z.coerce.boolean().optional(),
+  /**
+   * Só produtos SEM foto utilizável.
+   *
+   * É o que trava a publicação: produto sem foto não vai ao catálogo. A tela
+   * do catálogo precisa listar exatamente esses para resolvê-los.
+   */
+  semFoto: z.coerce.boolean().optional(),
+  /** Só publicados, ou só não publicados. */
+  publicado: z.coerce.boolean().optional(),
+  /**
+   * De qual tabela sai `precoMinimo`.
+   *
+   * Sem ela, a padrao. O catalogo precisa pre-visualizar o que cada tipo de
+   * cliente ve — e um item sem preco na tabela dele nao existe para ele.
+   */
+  tabelaPrecoId: z.string().uuid().optional(),
   /** Paginação por cursor: id do último item da página anterior. */
   cursor: z.string().uuid().optional(),
   limite: z.coerce.number().int().min(1).max(100).default(25),

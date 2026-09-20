@@ -50,6 +50,13 @@ export class ProdutosService {
         ...(filtro.status ? { status: filtro.status } : {}),
         ...(filtro.categoriaId ? { categoriaId: filtro.categoriaId } : {}),
         ...(filtro.marcaId ? { marcaId: filtro.marcaId } : {}),
+        ...(filtro.publicado !== undefined ? { publicadoNoCatalogo: filtro.publicado } : {}),
+        // "Sem foto" é ausência de imagem VIVA e PRONTA: excluída não conta,
+        // e a que falhou no envio também não — senão o produto apareceria
+        // resolvido sem ter foto nenhuma utilizável.
+        ...(filtro.semFoto
+          ? { imagens: { none: { excluidoEm: null, status: 'PRONTA' as const } } }
+          : {}),
         ...(filtro.busca
           ? {
               OR: [
@@ -100,7 +107,7 @@ export class ProdutosService {
 
       const [agregados, precos] = await Promise.all([
         this.agregarEstoque(tx, ids),
-        this.menorPreco(tx, ids),
+        this.menorPreco(tx, ids, filtro.tabelaPrecoId),
       ]);
 
       let itens: ProdutoLista[] = pagina.map((p) => {
@@ -324,6 +331,7 @@ export class ProdutosService {
   private async menorPreco(
     tx: ClienteEmTransacao,
     produtoIds: readonly string[],
+    tabelaPrecoId?: string,
   ): Promise<Map<string, Dec>> {
     if (produtoIds.length === 0) {
       return new Map();
@@ -331,7 +339,10 @@ export class ProdutosService {
 
     const precos = await tx.precoItem.findMany({
       where: {
-        tabelaPreco: { padrao: true },
+        // Sem tabela informada, a padrão. Com ela, a pré-visualização do que
+        // aquele tipo de cliente enxerga — item sem preço na tabela dele fica
+        // sem `precoMinimo`, que é exatamente o que acontece no catálogo.
+        ...(tabelaPrecoId ? { tabelaPrecoId } : { tabelaPreco: { padrao: true } }),
         variacao: { produtoId: { in: [...produtoIds] } },
       },
       select: { preco: true, variacao: { select: { produtoId: true } } },

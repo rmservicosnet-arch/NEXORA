@@ -8,6 +8,7 @@ import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
 import { Carteiras } from './paginas/Carteiras';
+import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
 import { Clientes } from './paginas/Clientes';
 import { Configuracoes } from './paginas/Configuracoes';
@@ -28,6 +29,7 @@ import { PortalEntrar } from './paginas/portal/Entrar';
 import { PortalMeuPedido } from './paginas/portal/MeuPedido';
 import { PortalMeusPedidos } from './paginas/portal/MeusPedidos';
 import { PortalSenha } from './paginas/portal/Senha';
+import { ModuloPendente } from './paginas/ModuloPendente';
 import { EstadoVazio } from './ui/Estados';
 
 const cliente = new QueryClient({
@@ -79,11 +81,38 @@ function AreaDaEquipe() {
         <Route element={<Shell />}>
           <Route index element={<Inicio />} />
           <Route path="lojas" element={<Lojas />} />
+          <Route path="catalogo" element={<Catalogo />} />
           <Route path="produtos" element={<Produtos />} />
           <Route path="produtos/novo" element={<NovoProduto />} />
           <Route path="produtos/:produtoId" element={<Produto />} />
           <Route path="tabelas-preco" element={<TabelasPreco />} />
           <Route path="configuracoes" element={<Configuracoes />} />
+          <Route
+            path="compras"
+            element={
+              <ModuloPendente
+                titulo="Compras"
+                oQueFaz="Pedido ao fornecedor, recebimento e entrada de nota — é por aqui que a mercadoria entra com custo, alimentando o custo médio."
+                ondeEstaHoje={{
+                  texto: 'Hoje a entrada é lançada manualmente em Movimentações.',
+                  para: '/estoque',
+                }}
+              />
+            }
+          />
+          <Route
+            path="financeiro"
+            element={
+              <ModuloPendente
+                titulo="Contas"
+                oQueFaz="Contas a pagar e a receber, com baixa e conciliação."
+                ondeEstaHoje={{
+                  texto: 'A dívida do cliente que usa conta corrente está em Carteiras.',
+                  para: '/carteiras',
+                }}
+              />
+            }
+          />
           <Route path="estoque" element={<Estoque />} />
           <Route path="pdv" element={<Pdv />} />
           <Route path="caixa" element={<Caixa />} />

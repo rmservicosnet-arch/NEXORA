@@ -1,7 +1,9 @@
-﻿import { PERM } from '@estoque/contracts';
+﻿import { PERM, type PaginaPedidos, type PaginaProdutos } from '@estoque/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
 
+import { pedir } from '../api/cliente';
 import { useSessao } from '../auth/sessao';
 import { juntar } from '../ui/juntar';
 import { Marca } from './Marca';
@@ -14,6 +16,8 @@ interface ItemMenu {
   readonly permissoes: readonly string[];
   // React 19 deixou de expor o namespace `JSX` global.
   readonly icone: ReactElement;
+  /** Qual contagem aparece no selo, quando houver. */
+  readonly selo?: 'pedidos' | 'negativos';
 }
 
 const ICONE = {
@@ -75,6 +79,27 @@ const ICONE = {
       <path d="M10 13l-3 3 3 3" />
     </>
   ),
+  catalogo: (
+    <>
+      <path d="M4 5h16v14H4z" />
+      <path d="M4 10h16" />
+      <path d="M10 10v9" />
+    </>
+  ),
+  compra: (
+    <>
+      <path d="M4 5h2l2.2 9.5a1.6 1.6 0 0 0 1.6 1.3h7.4a1.6 1.6 0 0 0 1.6-1.2L20 8H7" />
+      <circle cx="10" cy="19.5" r="1.3" />
+      <circle cx="17" cy="19.5" r="1.3" />
+    </>
+  ),
+  carteira: (
+    <>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <circle cx="17" cy="14.5" r="1.2" />
+    </>
+  ),
   etiqueta: (
     <>
       <path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9z" />
@@ -105,6 +130,16 @@ const ICONE = {
   ),
 } as const;
 
+/**
+ * O menu da proposta, nos cinco grupos dela.
+ *
+ * `Compras` e `Contas` ainda não existem como módulo. Aparecem porque o menu
+ * é o mapa do sistema — omitir faz o mapa mentir por omissão —, e levam a uma
+ * página que diz o que falta, não a uma tela inventada.
+ *
+ * `Lojas` e `Tabelas de preço` não estão no desenho. Ficam em Cadastros: a
+ * primeira já existia, a segunda foi pedida depois.
+ */
 const MENU: readonly ItemMenu[] = [
   {
     rotulo: 'Visão geral',
@@ -114,13 +149,6 @@ const MENU: readonly ItemMenu[] = [
     icone: ICONE.painel,
   },
   {
-    rotulo: 'Lojas',
-    para: '/lojas',
-    grupo: 'Operação',
-    permissoes: [PERM.estoque.visualizar],
-    icone: ICONE.loja,
-  },
-  {
     rotulo: 'PDV',
     para: '/pdv',
     grupo: 'Operação',
@@ -128,26 +156,21 @@ const MENU: readonly ItemMenu[] = [
     icone: ICONE.caixaRegistradora,
   },
   {
-    rotulo: 'Caixa',
-    para: '/caixa',
-    grupo: 'Operação',
-    permissoes: [PERM.caixa.abrir],
-    icone: ICONE.gaveta,
-  },
-  {
     rotulo: 'Pedidos',
     para: '/pedidos',
     grupo: 'Operação',
     permissoes: [PERM.pedido.visualizarFila],
     icone: ICONE.pedido,
+    selo: 'pedidos',
   },
   {
-    rotulo: 'Estoque',
-    para: '/estoque',
+    rotulo: 'Catálogo',
+    para: '/catalogo',
     grupo: 'Operação',
-    permissoes: [PERM.estoque.visualizar],
-    icone: ICONE.movimento,
+    permissoes: [PERM.produto.visualizar],
+    icone: ICONE.catalogo,
   },
+
   {
     rotulo: 'Produtos',
     para: '/produtos',
@@ -170,12 +193,51 @@ const MENU: readonly ItemMenu[] = [
     icone: ICONE.cliente,
   },
   {
-    rotulo: 'Carteiras',
-    para: '/carteiras',
-    grupo: 'Gestão',
-    permissoes: [PERM.carteira.visualizar],
+    rotulo: 'Lojas',
+    para: '/lojas',
+    grupo: 'Cadastros',
+    permissoes: [PERM.estoque.visualizar],
+    icone: ICONE.loja,
+  },
+
+  {
+    rotulo: 'Movimentações',
+    para: '/estoque',
+    grupo: 'Estoque',
+    permissoes: [PERM.estoque.visualizar],
+    icone: ICONE.movimento,
+    selo: 'negativos',
+  },
+  {
+    rotulo: 'Compras',
+    para: '/compras',
+    grupo: 'Estoque',
+    permissoes: [PERM.compra.visualizar],
+    icone: ICONE.compra,
+  },
+
+  {
+    rotulo: 'Contas',
+    para: '/financeiro',
+    grupo: 'Financeiro',
+    permissoes: [PERM.financeiro.visualizar],
     icone: ICONE.conta,
   },
+  {
+    rotulo: 'Carteiras',
+    para: '/carteiras',
+    grupo: 'Financeiro',
+    permissoes: [PERM.carteira.visualizar],
+    icone: ICONE.carteira,
+  },
+  {
+    rotulo: 'Caixa',
+    para: '/caixa',
+    grupo: 'Financeiro',
+    permissoes: [PERM.caixa.abrir],
+    icone: ICONE.gaveta,
+  },
+
   {
     rotulo: 'Relatórios',
     para: '/relatorios',
@@ -196,6 +258,31 @@ export function Shell() {
   const { usuario, restaurando, sair, pode } = useSessao();
   const local = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
+
+  /**
+   * Os dois selos do menu: pedidos esperando a equipe e itens em saldo
+   * negativo. São os números que fazem alguém abrir a tela sem ser chamado.
+   *
+   * `limite=1` porque só a contagem interessa; a lista vem na própria tela.
+   */
+  const fila = useQuery({
+    queryKey: ['pedidos', 'selo'],
+    queryFn: () => pedir<PaginaPedidos>('/pedidos?apenasFila=true&limite=1'),
+    enabled: pode(PERM.pedido.visualizarFila),
+    refetchInterval: 60_000,
+  });
+
+  const negativos = useQuery({
+    queryKey: ['produtos', 'selo-negativos'],
+    queryFn: () => pedir<PaginaProdutos>('/produtos?apenasDivergencia=true&limite=1'),
+    enabled: pode(PERM.estoque.visualizar),
+    refetchInterval: 60_000,
+  });
+
+  const contagem: Record<'pedidos' | 'negativos', number | undefined> = {
+    pedidos: fila.data?.contagens.aguardando,
+    negativos: negativos.data?.total,
+  };
 
   // Fechar ao navegar. No celular o menu cobre a tela inteira; deixá-lo aberto
   // sobre a página recém-aberta esconde exatamente o que a pessoa foi ver.
@@ -292,7 +379,12 @@ export function Shell() {
                     >
                       {item.icone}
                     </svg>
-                    {item.rotulo}
+                    <span className="flex-1">{item.rotulo}</span>
+                    {item.selo && (contagem[item.selo] ?? 0) > 0 ? (
+                      <span className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-full bg-white px-1.5 font-mono text-[11px] font-medium text-primary-700">
+                        {contagem[item.selo]}
+                      </span>
+                    ) : null}
                   </NavLink>
                 ))}
             </div>
