@@ -3,6 +3,7 @@ import {
   type EdicaoCompra,
   type EstornoCompra,
   type FiltroCompras,
+  type AlteracaoFornecedor,
   type BuscaItemCompra,
   type Fornecedor,
   type ItemCompraResumo,
@@ -602,6 +603,70 @@ export class ComprasService {
       email: criado.email,
       telefone: criado.telefone,
       ativo: criado.status === 'ATIVO',
+    };
+  }
+
+  /**
+   * Editar fornecedor, inclusive desativar.
+   *
+   * Desativar NAO apaga: o fornecedor aparece em notas ja recebidas, e apagar
+   * deixaria compras orfas. Ele so sai da lista de escolha.
+   */
+  async alterarFornecedor(
+    id: string,
+    dados: AlteracaoFornecedor,
+    principal: Principal,
+  ): Promise<Fornecedor> {
+    const contexto = exigirContexto();
+
+    const alterado = await comEscopoAtual(this.prisma, async (tx) => {
+      const atual = await tx.fornecedor.findFirst({ where: { id }, select: { id: true } });
+
+      if (!atual) {
+        throw new NotFoundException({
+          codigo: 'FORNECEDOR_NAO_ENCONTRADO',
+          mensagem: 'Fornecedor nao encontrado.',
+        });
+      }
+
+      return tx.fornecedor
+        .update({
+          where: { id },
+          data: {
+            ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+            ...(dados.documento !== undefined ? { documento: dados.documento || null } : {}),
+            ...(dados.email !== undefined ? { email: dados.email || null } : {}),
+            ...(dados.telefone !== undefined ? { telefone: dados.telefone || null } : {}),
+            ...(dados.ativo !== undefined ? { status: dados.ativo ? 'ATIVO' : 'INATIVO' } : {}),
+          },
+        })
+        .catch((erro: unknown) => {
+          if (this.ehP2002(erro)) {
+            throw new ConflictException({
+              codigo: 'FORNECEDOR_DUPLICADO',
+              mensagem: 'Ja existe um fornecedor com este documento.',
+            });
+          }
+          throw erro;
+        });
+    });
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'FORNECEDOR_ALTERADO',
+      entidade: 'fornecedor',
+      entidadeId: id,
+      atorNome: principal.nome,
+      depois: { nome: alterado.nome, ativo: alterado.status === 'ATIVO' },
+    });
+
+    return {
+      id: alterado.id,
+      nome: alterado.nome,
+      documento: alterado.documento,
+      email: alterado.email,
+      telefone: alterado.telefone,
+      ativo: alterado.status === 'ATIVO',
     };
   }
 

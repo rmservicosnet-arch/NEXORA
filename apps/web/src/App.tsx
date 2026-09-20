@@ -9,6 +9,7 @@ import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
 import { Compras } from './paginas/Compras';
 import { Contas } from './paginas/Contas';
+import { Fornecedores } from './paginas/Fornecedores';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -148,6 +149,7 @@ function AreaDaEquipe() {
           <Route path="tabelas-preco/:tabelaId" element={<PrecosDaTabela />} />
           <Route path="configuracoes" element={<Configuracoes />} />
           <Route path="compras" element={<Compras />} />
+          <Route path="fornecedores" element={<Fornecedores />} />
           <Route path="financeiro" element={<Contas />} />
           <Route path="estoque" element={<Estoque />} />
           <Route path="caixa" element={<Caixa />} />

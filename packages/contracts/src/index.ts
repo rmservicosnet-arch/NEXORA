@@ -466,6 +466,7 @@ export {
 } from './relatorios.js';
 
 export {
+  alteracaoFornecedorSchema,
   buscaItemCompraSchema,
   compraSchema,
   contagensComprasSchema,
@@ -481,6 +482,7 @@ export {
   paginaComprasSchema,
   resumoComprasSchema,
   statusCompraSchema,
+  type AlteracaoFornecedor,
   type BuscaItemCompra,
   type Compra,
   type ContagensCompras,

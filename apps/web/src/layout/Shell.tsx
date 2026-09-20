@@ -193,6 +193,13 @@ const MENU: readonly ItemMenu[] = [
     icone: ICONE.cliente,
   },
   {
+    rotulo: 'Fornecedores',
+    para: '/fornecedores',
+    grupo: 'Cadastros',
+    permissoes: [PERM.compra.visualizar],
+    icone: ICONE.compra,
+  },
+  {
     rotulo: 'Lojas',
     para: '/lojas',
     grupo: 'Cadastros',

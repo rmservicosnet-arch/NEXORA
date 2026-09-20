@@ -189,6 +189,21 @@ export const novoFornecedorSchema = z.object({
 });
 export type NovoFornecedor = z.infer<typeof novoFornecedorSchema>;
 
+/**
+ * Editar fornecedor — inclusive desativar.
+ *
+ * Desativar não apaga: o fornecedor aparece em notas recebidas, e apagá-lo
+ * deixaria compras órfãs. Ele só some da lista de escolha.
+ */
+export const alteracaoFornecedorSchema = z.object({
+  nome: z.string().trim().min(2, 'Informe o nome').max(160).optional(),
+  documento: z.string().trim().max(20).nullable().optional(),
+  email: z.string().trim().max(180).nullable().optional(),
+  telefone: z.string().trim().max(30).nullable().optional(),
+  ativo: z.boolean().optional(),
+});
+export type AlteracaoFornecedor = z.infer<typeof alteracaoFornecedorSchema>;
+
 // ---------------------------------------------------------------------------
 // Busca de item para comprar
 // ---------------------------------------------------------------------------

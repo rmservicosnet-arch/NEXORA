@@ -1,11 +1,13 @@
 import {
   PERM,
+  alteracaoFornecedorSchema,
   buscaItemCompraSchema,
   edicaoCompraSchema,
   estornoCompraSchema,
   filtroComprasSchema,
   novaCompraSchema,
   novoFornecedorSchema,
+  type AlteracaoFornecedor,
   type BuscaItemCompra,
   type Compra,
   type EdicaoCompra,
@@ -56,6 +58,16 @@ export class ComprasController {
     @Query(new ZodPipe(buscaItemCompraSchema)) busca: BuscaItemCompra,
   ): Promise<ItemParaComprar[]> {
     return this.compras.buscarItens(busca);
+  }
+
+  @Put('fornecedores/:id')
+  @Permissoes(PERM.compra.receber)
+  async alterarFornecedor(
+    @Param('id') id: string,
+    @Body(new ZodPipe(alteracaoFornecedorSchema)) dados: AlteracaoFornecedor,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<Fornecedor> {
+    return this.compras.alterarFornecedor(id, dados, principal);
   }
 
   @Get()
