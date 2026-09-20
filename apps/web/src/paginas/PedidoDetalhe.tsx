@@ -66,6 +66,8 @@ export function PedidoDetalhe() {
   const [sucesso, setSucesso] = useState<string | null>(null);
   const [buscaItem, setBuscaItem] = useState('');
   const [motivoInclusao, setMotivoInclusao] = useState('');
+  /** Quantas unidades incluir. A API sempre aceitou; a tela mandava 1 fixo. */
+  const [qtdInclusao, setQtdInclusao] = useState('1');
   const [removendo, setRemovendo] = useState<string | null>(null);
   const [motivoRemocao, setMotivoRemocao] = useState('');
 
@@ -185,7 +187,11 @@ export function PedidoDetalhe() {
     mutationFn: (variacaoId: string) =>
       pedir<Pedido>(`/pedidos/${pedidoId ?? ''}/itens`, {
         method: 'POST',
-        body: { variacaoId, quantidade: '1', motivo: motivoInclusao.trim() },
+        body: {
+          variacaoId,
+          quantidade: String(Math.max(1, Number(qtdInclusao) || 1)),
+          motivo: motivoInclusao.trim(),
+        },
       }),
     onSuccess: async (p) => {
       setSucesso(
@@ -195,6 +201,7 @@ export function PedidoDetalhe() {
       );
       setBuscaItem('');
       setMotivoInclusao('');
+      setQtdInclusao('1');
       await recarregar();
     },
     onError: aoFalhar,
@@ -444,6 +451,15 @@ export function PedidoDetalhe() {
                     placeholder="Buscar no catálogo"
                     className="h-8 w-[180px] rounded-md border border-neutral-200 px-2.5 text-[12.5px]"
                   />
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11.5px] text-neutral-500">qtd.</span>
+                    <input
+                      value={qtdInclusao}
+                      onChange={(e) => setQtdInclusao(e.target.value.replace(/\D/g, ''))}
+                      aria-label="Quantidade a incluir"
+                      className="h-8 w-[56px] rounded-md border border-neutral-200 px-2 text-right font-mono text-[12.5px]"
+                    />
+                  </span>
                 </div>
 
                 {catalogo.data && catalogo.data.length > 0 ? (

@@ -863,13 +863,21 @@ export class PedidosService {
     daEquipe: boolean,
   ): Promise<PaginaPedidos> {
     return comEscopoAtual(this.prisma, async (tx) => {
+      // Um so recorte de status, resolvido aqui: `statusEm` (varios), `status`
+      // (um) ou `apenasFila` (o que espera acao da equipe). Espalhar os tres
+      // pelo objeto fazia o ultimo sobrescrever o anterior em silencio.
+      const recorte = filtro.statusEm
+        ? { status: { in: filtro.statusEm } }
+        : filtro.status
+          ? { status: filtro.status }
+          : filtro.apenasFila
+            ? { status: { in: [...NA_FILA] } }
+            : { NOT: { status: 'RASCUNHO' as const } };
+
       const onde = {
-        ...(filtro.status ? { status: filtro.status } : {}),
+        ...recorte,
         ...(filtro.lojaId ? { lojaId: filtro.lojaId } : {}),
         ...(filtro.clienteId && daEquipe ? { clienteId: filtro.clienteId } : {}),
-        ...(filtro.apenasFila ? { status: { in: [...NA_FILA] } } : {}),
-        // Rascunho e estado interno; nunca aparece em lista nenhuma.
-        ...(filtro.status ? {} : { NOT: { status: 'RASCUNHO' as const } }),
       };
 
       const linhas = await tx.pedido.findMany({

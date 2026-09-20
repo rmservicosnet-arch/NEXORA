@@ -56,16 +56,40 @@ export function SeloStatus({ status }: { readonly status: StatusPedido }) {
   );
 }
 
+/**
+ * Cada aba lista EXATAMENTE o que a contagem dela conta.
+ *
+ * A primeira usava `apenasFila=true`, que inclui confirmado e confirmado em
+ * parte — a aba dizia "Aguardando confirmação" e abria pedido já confirmado,
+ * sem os controles de conferência. O número ao lado, esse, contava só os
+ * aguardando: rótulo, contagem e lista discordavam entre si.
+ */
 const ABAS = [
-  { chave: 'fila', rotulo: 'Aguardando confirmação', query: '?apenasFila=true&limite=60' },
+  {
+    chave: 'fila',
+    rotulo: 'Aguardando confirmação',
+    query: '?statusEm=AGUARDANDO_CONFIRMACAO&limite=60',
+  },
   {
     chave: 'cliente',
     rotulo: 'Com o cliente',
-    query: '?status=AGUARDANDO_ACEITE_CLIENTE&limite=60',
+    query: '?statusEm=AGUARDANDO_ACEITE_CLIENTE&limite=60',
   },
-  { chave: 'confirmados', rotulo: 'Confirmados', query: '?status=CONFIRMADO&limite=60' },
-  { chave: 'devolvidos', rotulo: 'Devolvidos', query: '?status=DEVOLVIDO&limite=60' },
-  { chave: 'faturados', rotulo: 'Faturados', query: '?status=FATURADO&limite=60' },
+  {
+    chave: 'confirmados',
+    rotulo: 'Confirmados',
+    query: '?statusEm=CONFIRMADO,CONFIRMADO_PARCIALMENTE&limite=60',
+  },
+  {
+    chave: 'devolvidos',
+    rotulo: 'Devolvidos',
+    query: '?statusEm=DEVOLVIDO,RECUSADO&limite=60',
+  },
+  {
+    chave: 'faturados',
+    rotulo: 'Faturados',
+    query: '?statusEm=FATURADO,CONCLUIDO&limite=60',
+  },
 ] as const;
 
 type Aba = (typeof ABAS)[number]['chave'];

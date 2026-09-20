@@ -249,6 +249,19 @@ export type Pedido = z.infer<typeof pedidoSchema>;
 
 export const filtroPedidosSchema = z.object({
   status: statusPedidoSchema.optional(),
+  /**
+   * Varios status de uma vez, separados por virgula.
+   *
+   * As abas da fila agrupam: "Confirmados" e CONFIRMADO mais
+   * CONFIRMADO_PARCIALMENTE; "Devolvidos" e DEVOLVIDO mais RECUSADO. Sem
+   * isto, a contagem da aba (que ja agrupava) discordava da lista que ela
+   * abria — o numero dizia uma coisa e as linhas outra.
+   */
+  statusEm: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').filter(Boolean) : undefined))
+    .pipe(z.array(statusPedidoSchema).min(1).max(11).optional()),
   lojaId: z.string().uuid().optional(),
   clienteId: z.string().uuid().optional(),
   /** Apenas os que esperam acao da equipe. E a fila de trabalho. */
