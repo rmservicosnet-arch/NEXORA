@@ -45,7 +45,7 @@ export function RelatorioAReceberTela() {
     <>
       <CabecalhoRelatorio
         titulo="Notas a receber"
-        comCusto={false}
+        comCusto
         aoExportar={exportar}
         podeExportar={Boolean(dados)}
       />

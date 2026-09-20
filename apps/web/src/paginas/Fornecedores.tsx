@@ -231,7 +231,7 @@ export function Fornecedores() {
 
         {lista.length > 0 ? (
           <section className="overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
-            <div className="hidden grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px_120px] items-center gap-3 border-b border-neutral-100 bg-neutral-25 px-4 py-2.5 lg:grid">
+            <div className="hidden grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px_170px] items-center gap-3 border-b border-neutral-100 bg-neutral-25 px-4 py-2.5 lg:grid">
               <Coluna>Nome</Coluna>
               <Coluna>Documento</Coluna>
               <Coluna>E-mail</Coluna>
@@ -243,7 +243,7 @@ export function Fornecedores() {
               <div
                 key={f.id}
                 className={juntar(
-                  'flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5 last:border-0 lg:grid lg:grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px_120px]',
+                  'flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5 last:border-0 lg:grid lg:grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px_170px]',
                   !f.ativo && 'bg-neutral-25',
                 )}
               >
@@ -309,15 +309,25 @@ export function Fornecedores() {
           Tela que lista tudo, inclusive o desativado, empurra o que importa
           para fora da vista. Filtra por ativo e oferece mostrar o resto.
         */}
-        <button
-          type="button"
-          onClick={() => setMostrarInativos(!mostrarInativos)}
-          className="w-fit text-[12.5px] text-neutral-500 underline underline-offset-2 hover:text-neutral-700"
-        >
-          {mostrarInativos
-            ? `Esconder desativados${inativos > 0 ? ` (${String(inativos)})` : ''}`
-            : 'Mostrar desativados'}
-        </button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button
+            type="button"
+            onClick={() => setMostrarInativos(!mostrarInativos)}
+            className="text-[12.5px] text-neutral-500 underline underline-offset-2 hover:text-neutral-700"
+          >
+            {mostrarInativos
+              ? `Esconder desativados${inativos > 0 ? ` (${String(inativos)})` : ''}`
+              : 'Mostrar desativados'}
+          </button>
+          {/*
+            O botão diz "Desativar" e não diz o que isso faz. Sem a frase, quem
+            clica supõe que apaga — e hesita, ou apaga achando que some.
+          */}
+          <span className="text-[12px] text-neutral-400">
+            Desativar não apaga — o fornecedor continua nas notas já recebidas; ele só sai da lista
+            da nova entrada.
+          </span>
+        </div>
       </main>
     </>
   );

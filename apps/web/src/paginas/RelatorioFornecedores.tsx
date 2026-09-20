@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
+import { Aviso } from '../ui/Aviso';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 import { juntar } from '../ui/juntar';
 import {
@@ -46,6 +47,16 @@ export function RelatorioFornecedoresTela() {
   const dados = consulta.data;
   const maior = dados?.itens[0];
 
+  /*
+    Fornecedor sem data de emissão não tem prazo — a coluna escreve "sem
+    emissão" em vez de zero. Mas quem lê a MÉDIA da tela precisa saber que
+    ela ignora essas linhas, e a coluna sozinha não diz isso.
+
+    O aviso é condicional de propósito: faixa que aparece sempre vira parede
+    de aviso e ninguém lê.
+  */
+  const semEmissao = dados?.itens.filter((i) => i.prazoMedio === null).length ?? 0;
+
   function exportar() {
     if (!dados) return;
 
@@ -68,7 +79,7 @@ export function RelatorioFornecedoresTela() {
     <>
       <CabecalhoRelatorio
         titulo="Compras por fornecedor"
-        comCusto={false}
+        comCusto
         aoExportar={exportar}
         podeExportar={Boolean(dados)}
       />
@@ -134,6 +145,17 @@ export function RelatorioFornecedoresTela() {
               />
             </div>
 
+            {semEmissao > 0 ? (
+              <Aviso tom="atencao" titulo="Prazo sem data de emissão">
+                {semEmissao === 1
+                  ? 'Um fornecedor não informou a data de emissão em nenhuma nota.'
+                  : `${String(semEmissao)} fornecedores não informaram a data de emissão.`}{' '}
+                Sem ela não há prazo: zero afirmaria que a mercadoria chegou no mesmo dia. A coluna
+                escreve <strong className="font-semibold">sem emissão</strong> e a linha fica fora
+                da média.
+              </Aviso>
+            ) : null}
+
             <Painel>
               <div className="flex min-h-0 flex-1 flex-col lg:min-w-[920px]">
                 <Cabecalho />
@@ -168,7 +190,7 @@ export function RelatorioFornecedoresTela() {
   );
 }
 
-const GRADE = 'lg:grid-cols-[minmax(200px,1fr)_72px_72px_96px_140px_120px_110px]';
+const GRADE = 'lg:grid-cols-[minmax(200px,1fr)_72px_72px_96px_140px_150px_110px]';
 
 function Cabecalho() {
   const colunas = ['Fornecedor', 'Notas', 'Itens', 'Unidades', 'Valor', 'Participação', 'Prazo'];
@@ -223,13 +245,14 @@ function Linha({ item }: { readonly item: LinhaFornecedor }) {
       </span>
 
       <span className="flex items-center gap-2">
-        <span className="hidden h-1.5 w-full max-w-[56px] overflow-hidden rounded-full bg-neutral-100 lg:block">
+        {/* `min-w-0` porque item de flex não encolhe abaixo do conteúdo. */}
+        <span className="hidden h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-100 lg:block">
           <span
             className="block h-full rounded-full bg-primary-500"
             style={{ width: `${item.participacao}%` }}
           />
         </span>
-        <span className="font-mono text-[12px] tabular-nums text-neutral-600">
+        <span className="shrink-0 font-mono text-[12px] tabular-nums text-neutral-600">
           {brl(item.participacao)}%
         </span>
       </span>

@@ -239,19 +239,29 @@ describe.runIf(temBanco)('relatórios de compras e contas', () => {
     expect(so.itens.every((i) => i.perfil === 'PROFESSOR')).toBe(true);
   });
 
-  it('o custo de aquisição exige relatorio.ver_custo', async () => {
-    const vendedora = (
-      (
-        await http
-          .post('/api/auth/login')
-          .send({ email: 'marina@lojacentro.com.br', senha: 'Estoque@2026', canal: 'app' })
-          .expect(200)
-      ).body as { tokenAcesso: string }
-    ).tokenAcesso;
+  /**
+   * Os TRES de compras, nao so o que tem "custo" no nome.
+   *
+   * "Compras por fornecedor" devolve valor e unidades lado a lado: dividir um
+   * pelo outro da o custo unitario medio. "Notas a receber" devolve o valor
+   * parado, que e o mesmo numero antes de entrar no estoque.
+   */
+  it.each([['compras/custo-aquisicao'], ['compras/fornecedores'], ['compras/a-receber']])(
+    '%s exige relatorio.ver_custo',
+    async (rota) => {
+      const vendedora = (
+        (
+          await http
+            .post('/api/auth/login')
+            .send({ email: 'marina@lojacentro.com.br', senha: 'Estoque@2026', canal: 'app' })
+            .expect(200)
+        ).body as { tokenAcesso: string }
+      ).tokenAcesso;
 
-    await http
-      .get('/api/relatorios/compras/custo-aquisicao')
-      .set('Authorization', `Bearer ${vendedora}`)
-      .expect(403);
-  });
+      await http
+        .get(`/api/relatorios/${rota}`)
+        .set('Authorization', `Bearer ${vendedora}`)
+        .expect(403);
+    },
+  );
 });

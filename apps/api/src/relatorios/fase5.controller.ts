@@ -30,8 +30,14 @@ import { RelatoriosFase5Service } from './fase5.service';
  *
  * O aging e o fluxo exigem `financeiro.visualizar` alem de
  * `relatorio.visualizar`: quanto a loja deve a cada fornecedor nao e dado de
- * relatorio comum. O custo de aquisicao exige `relatorio.ver_custo` pelo
- * mesmo motivo de sempre.
+ * relatorio comum.
+ *
+ * Os TRES de compras exigem `relatorio.ver_custo`. Nao e so o relatorio que
+ * tem "custo" no nome: "compras por fornecedor" devolve o valor comprado ao
+ * lado das unidades, e quem divide um pelo outro tem o custo unitario medio
+ * do fornecedor; "notas a receber" devolve o valor parado, que e o mesmo
+ * numero antes de entrar no estoque. Restringir so o do nome obvio e a
+ * mesma falha da coluna de custo que apareceu para uma vendedora.
  */
 @Controller('relatorios')
 export class RelatoriosFase5Controller {
@@ -65,7 +71,7 @@ export class RelatoriosFase5Controller {
   }
 
   @Get('compras/fornecedores')
-  @Permissoes(PERM.relatorio.visualizar, PERM.compra.visualizar)
+  @Permissoes(PERM.relatorio.visualizar, PERM.compra.visualizar, PERM.relatorio.verCusto)
   async comprasPorFornecedor(
     @Query(new ZodPipe(filtroComprasFornecedorSchema)) filtro: FiltroComprasFornecedor,
   ): Promise<RelatorioComprasFornecedor> {
@@ -81,7 +87,7 @@ export class RelatoriosFase5Controller {
   }
 
   @Get('compras/a-receber')
-  @Permissoes(PERM.relatorio.visualizar, PERM.compra.visualizar)
+  @Permissoes(PERM.relatorio.visualizar, PERM.compra.visualizar, PERM.relatorio.verCusto)
   async notasAReceber(
     @Query(new ZodPipe(filtroAReceberSchema)) filtro: FiltroAReceber,
   ): Promise<RelatorioAReceber> {
