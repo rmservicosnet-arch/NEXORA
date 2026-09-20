@@ -159,6 +159,7 @@ o runtime.
 | RLS de cliente só onde há coluna `cliente_id` | Tabela filha precisa da política via `EXISTS` no pai; senão o portal esconde o pedido e mostra os itens |
 | Ciclo de vida escrito como `if`s espalhados | Tabela `TRANSICOES` única. Transição não listada é proibida |
 | Cabeçalho com "Salvar" e campo que grava no `blur` | Os dois controles nascem decorativos e "alterações não salvas" nunca acende. Quem grava é o botão |
+| Barra de gráfico com altura em % dentro de `items-end` | O pai desliga o `stretch`, a porcentagem vira `auto` e o gráfico fica vazio. O trilho precisa de `h-full` |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

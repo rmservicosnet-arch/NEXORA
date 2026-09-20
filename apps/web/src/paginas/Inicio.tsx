@@ -362,7 +362,12 @@ function Grafico({ dados }: { readonly dados: VisaoGeral }) {
               return (
                 <div
                   key={p.dia}
-                  className="group flex flex-1 items-end"
+                  /*
+                    `h-full` não é enfeite: o pai tem `items-end`, que
+                    desliga o `stretch`. Sem altura, a porcentagem da barra
+                    vira `auto` e o gráfico aparece vazio.
+                  */
+                  className="group flex h-full flex-1 items-end"
                   title={`${new Date(`${p.dia}T12:00:00`).toLocaleDateString('pt-BR')} · R$ ${brl(p.total)} · ${String(p.vendas)} ${p.vendas === 1 ? 'venda' : 'vendas'}`}
                 >
                   <div
