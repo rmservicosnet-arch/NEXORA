@@ -8,7 +8,7 @@ import {
   type SituacaoTitulo,
   type Titulo,
 } from '@estoque/contracts';
-import { dec } from '@estoque/core';
+import { dec, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -710,6 +710,78 @@ export class ContasService {
    * alguem precisa decidir se devolve ou se vira credito, e essa decisao nao e
    * desta funcao.
    */
+  /**
+   * Abate os titulos de uma venda por causa de uma devolucao.
+   *
+   * Primeiro destino da cascata: se o cliente ainda DEVE pela venda, a
+   * mercadoria que voltou diminui a divida antes de virar dinheiro de volta.
+   * Devolver dinheiro a quem ainda nao pagou seria pagar duas vezes.
+   *
+   * O valor de face do titulo DIMINUI — nao ha baixa, porque nao entrou
+   * dinheiro. Baixar seria dizer que alguem pagou. E se a devolucao cobrir
+   * tudo o que falta, o titulo e CANCELADO: cobrar zero nao e cobrar.
+   *
+   * Nunca abaixo do que ja foi pago: o titulo de R$ 500,00 com R$ 300,00
+   * pagos so aceita abatimento de R$ 200,00. O resto segue a cascata.
+   */
+  async abaterPorDevolucao(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly vendaId: string;
+      readonly valor: Dec;
+      readonly motivo: string;
+    },
+  ): Promise<{ abatido: Dec; titulos: number }> {
+    if (!params.valor.greaterThan(dec(0))) {
+      return { abatido: dec(0), titulos: 0 };
+    }
+
+    const titulos = await tx.tituloFinanceiro.findMany({
+      where: { vendaId: params.vendaId, status: 'ABERTO' },
+      orderBy: { vencimento: 'asc' },
+      select: { id: true, valor: true, valorPago: true, observacao: true },
+    });
+
+    let restante = params.valor;
+    let tocados = 0;
+
+    for (const t of titulos) {
+      if (!restante.greaterThan(dec(0))) break;
+
+      const valor = dec(t.valor.toFixed(2));
+      const pago = dec(t.valorPago.toFixed(2));
+      const emAberto = valor.minus(pago);
+
+      if (!emAberto.greaterThan(dec(0))) continue;
+
+      const abate = restante.greaterThan(emAberto) ? emAberto : restante;
+      const novoValor = valor.minus(abate);
+
+      const nota = `${t.observacao ? `${t.observacao}
+` : ''}${params.motivo}`.slice(0, 400);
+
+      await tx.tituloFinanceiro.update({
+        where: { id: t.id },
+        data: {
+          valor: novoValor.toFixed(2),
+          observacao: nota,
+          ...(novoValor.lessThanOrEqualTo(pago)
+            ? {
+                status: 'CANCELADO' as const,
+                canceladoEm: new Date(),
+                motivoCancelamento: params.motivo.slice(0, 200),
+              }
+            : {}),
+        },
+      });
+
+      restante = restante.minus(abate);
+      tocados += 1;
+    }
+
+    return { abatido: params.valor.minus(restante), titulos: tocados };
+  }
+
   async cancelarTitulosDeVenda(
     tx: ClienteEmTransacao,
     params: {

@@ -2,11 +2,14 @@
 import {
   buscaItemVendaSchema,
   cancelamentoVendaSchema,
+  devolucaoVendaSchema,
   filtroVendasSchema,
   novaVendaSchema,
   PERM,
   type BuscaItemVenda,
   type CancelamentoVenda,
+  type DevolucaoVenda,
+  type ResultadoDevolucao,
   type ContextoPdv,
   type FiltroVendas,
   type ItemParaVenda,
@@ -63,6 +66,26 @@ export class VendasController {
     @PrincipalAtual() principal: Principal,
   ): Promise<ResultadoVenda> {
     return this.vendas.criar(dados, principal);
+  }
+
+  /**
+   * Devolucao PARCIAL.
+   *
+   * `venda.devolver` existia como permissao, o VENDEDOR ja a tinha e nenhuma
+   * rota a exigia — devolver dois de dez so era possivel cancelando a venda
+   * inteira.
+   *
+   * A resposta traz os DESTINOS do dinheiro, nao so o total: quem chama
+   * precisa saber que parte abateu um titulo e parte saiu da gaveta.
+   */
+  @Post(':id/devolucoes')
+  @Permissoes(PERM.venda.devolver)
+  async devolver(
+    @Param('id') id: string,
+    @Body(new ZodPipe(devolucaoVendaSchema)) dados: DevolucaoVenda,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<ResultadoDevolucao> {
+    return this.vendas.devolver(id, dados, principal);
   }
 
   @Post(':id/cancelar')

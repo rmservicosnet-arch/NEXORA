@@ -10,6 +10,9 @@ import type {
   BuscaItemVenda,
   CancelamentoVenda,
   ContextoPdv,
+  DestinoDevolucao,
+  DevolucaoVenda,
+  ResultadoDevolucao,
   ItemParaVenda,
   FiltroVendas,
   NovaVenda,
@@ -528,6 +531,327 @@ export class VendasService {
     return this.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));
   }
 
+  /**
+   * DEVOLUCAO PARCIAL.
+   *
+   * `venda_item.quantidade_devolvida` estava no banco desde o inicio,
+   * `DEVOLVIDA_PARCIAL` e `DEVOLVIDA_TOTAL` estavam no enum, e nada gravava
+   * nem um nem outro: devolver dois de dez so era possivel cancelando a venda
+   * inteira — o que apaga o faturamento e o resto da mercadoria, que continua
+   * com o cliente.
+   *
+   * O estoque reentra pelo custo CONGELADO na saida (COST_POLICY §5).
+   *
+   * O dinheiro desce uma cascata, na ordem INVERSA da venda:
+   *
+   *   1. TITULO em aberto — o cliente ainda devia por esta venda. A divida
+   *      diminui antes de qualquer devolucao em dinheiro; devolver dinheiro a
+   *      quem nao pagou seria pagar duas vezes.
+   *   2. CARTEIRA — o debito que esta venda lancou, ate o que dela resta.
+   *   3. O que sobrar ja foi PAGO. Volta em dinheiro pela gaveta, ate o que a
+   *      venda recebeu em dinheiro; o restante vira credito na carteira.
+   *
+   * Sem carteira e sem dinheiro na venda — cartao ou PIX —, a API RECUSA. O
+   * estorno acontece na maquineta, fora daqui, e gravar o numero num lugar
+   * qualquer so para a operacao passar e exatamente o dinheiro sem dono que o
+   * resto do sistema evita.
+   */
+  async devolver(
+    id: string,
+    dados: DevolucaoVenda,
+    principal: Principal,
+  ): Promise<ResultadoDevolucao> {
+    const contexto = exigirContexto();
+
+    const venda = await comEscopoAtual(this.prisma, async (tx) =>
+      tx.venda.findFirst({ where: { id }, include: { itens: true, pagamentos: true } }),
+    );
+
+    if (!venda) {
+      throw new NotFoundException({
+        codigo: 'VENDA_NAO_ENCONTRADA',
+        mensagem: 'Venda não encontrada.',
+      });
+    }
+
+    if (venda.status === 'CANCELADA') {
+      throw new ConflictException({
+        codigo: 'VENDA_CANCELADA',
+        mensagem: 'Esta venda foi cancelada: não há o que devolver.',
+      });
+    }
+
+    if (venda.status === 'RASCUNHO') {
+      throw new ConflictException({
+        codigo: 'VENDA_NAO_CONCLUIDA',
+        mensagem: 'Só uma venda concluída tem mercadoria para voltar.',
+      });
+    }
+
+    /*
+      Quanto cada item devolve, com o desconto do item carregado junto:
+      `totalItem / quantidade` e o preco EFETIVO da unidade. Usar
+      `precoUnitario` devolveria mais do que o cliente pagou.
+    */
+    const porItem = new Map<string, { quantidade: Dec; valor: Dec }>();
+    let valorDevolvido = dec(0);
+
+    for (const pedido of dados.itens) {
+      const item = venda.itens.find((i) => i.id === pedido.itemId);
+
+      if (!item) {
+        throw new BadRequestException({
+          codigo: 'ITEM_NAO_E_DESTA_VENDA',
+          mensagem: 'Um dos itens informados não pertence a esta venda.',
+        });
+      }
+
+      if (porItem.has(item.id)) {
+        throw new BadRequestException({
+          codigo: 'ITEM_REPETIDO',
+          mensagem: 'O mesmo item aparece duas vezes na devolução. Some as quantidades.',
+        });
+      }
+
+      const quantidade = dec(pedido.quantidade);
+      const vendida = dec(item.quantidade.toString());
+      const jaVolta = dec(item.quantidadeDevolvida.toString());
+      const disponivel = vendida.minus(jaVolta);
+
+      if (quantidade.greaterThan(disponivel)) {
+        throw new ConflictException({
+          codigo: 'DEVOLUCAO_ACIMA_DO_VENDIDO',
+          mensagem: `Foram vendidas ${vendida.toFixed(0)} unidades e ${jaVolta.toFixed(0)} já voltaram. Restam ${disponivel.toFixed(0)}.`,
+        });
+      }
+
+      const unitario = dec(item.totalItem.toString()).dividedBy(vendida);
+      const valor = dec(unitario.times(quantidade).toFixed(2));
+
+      porItem.set(item.id, { quantidade, valor });
+      valorDevolvido = valorDevolvido.plus(valor);
+    }
+
+    /*
+      O caixa e lido ANTES da transacao de escrita porque `meuCaixaAberto`
+      abre a dele. Buscado sempre que a venda teve dinheiro: se a cascata
+      chegar ate a gaveta e nao houver caixa, a operacao para com um erro que
+      diz isso, em vez de mandar o dinheiro para outro lugar.
+    */
+    const recebidoEmDinheiro = venda.pagamentos
+      .filter((p) => p.forma === 'DINHEIRO')
+      .reduce((soma, pg) => soma.plus(dec(pg.valor.toString())), dec(0))
+      .minus(dec(venda.troco.toString()));
+
+    const caixaAberto = recebidoEmDinheiro.greaterThan(dec(0))
+      ? await this.caixa.meuCaixaAberto(venda.lojaId, principal)
+      : null;
+
+    const clienteId = venda.clienteId;
+
+    const temCarteira = clienteId
+      ? (await comEscopoAtual(this.prisma, async (tx) =>
+          this.carteira.carteiraDoCliente(tx, clienteId),
+        )) !== null
+      : false;
+
+    const destinos: DestinoDevolucao[] = [];
+    const motivo = `Devolução da venda ${String(venda.numero)}: ${dados.motivo}`;
+
+    await comEscopoAtual(
+      this.prisma,
+      async (tx) => {
+        const local = await this.estoque.resolverLocalDaLoja(tx, venda.localId, venda.lojaId);
+
+        const originais = await tx.movimentoEstoque.findMany({
+          where: { documentoTipo: 'VENDA', documentoId: venda.id, tipo: 'SAIDA_VENDA' },
+          select: { id: true, variacaoId: true },
+        });
+
+        for (const [itemId, devolucao] of porItem) {
+          const item = venda.itens.find((i) => i.id === itemId);
+          if (!item) continue;
+
+          const original = originais.find((m) => m.variacaoId === item.variacaoId);
+
+          await this.estoque.estornarSaidaDeVenda(
+            tx,
+            {
+              movimentoOriginalId: original?.id ?? '',
+              variacaoId: item.variacaoId,
+              local,
+              quantidade: devolucao.quantidade.toFixed(6),
+              // Custo CONGELADO na saída, não o médio de hoje: uma compra cara
+              // feita depois faria a devolução valorizar mercadoria barata.
+              custoUnitario: dec(item.custoUnitario.toString()).toFixed(6),
+              vendaId: venda.id,
+              numeroVenda: String(venda.numero),
+              motivo,
+            },
+            principal,
+          );
+
+          await tx.vendaItem.update({
+            where: { id: itemId },
+            data: {
+              quantidadeDevolvida: dec(item.quantidadeDevolvida.toString())
+                .plus(devolucao.quantidade)
+                .toFixed(6),
+            },
+          });
+        }
+
+        // --- a cascata do dinheiro ---------------------------------------
+        let restante = valorDevolvido;
+
+        const noTitulo = await this.contas.abaterPorDevolucao(tx, {
+          vendaId: venda.id,
+          valor: restante,
+          motivo,
+        });
+
+        if (noTitulo.abatido.greaterThan(dec(0))) {
+          restante = restante.minus(noTitulo.abatido);
+          destinos.push({
+            onde: 'TITULO',
+            valor: noTitulo.abatido.toFixed(2),
+            descricao:
+              noTitulo.titulos === 1
+                ? 'Abatido do título desta venda'
+                : `Abatido de ${String(noTitulo.titulos)} títulos desta venda`,
+          });
+        }
+
+        if (restante.greaterThan(dec(0)) && clienteId && temCarteira) {
+          const naCarteira = await this.carteira.creditarPorDevolucao(
+            tx,
+            { clienteId, vendaId: venda.id, valor: restante, motivo },
+            principal,
+          );
+
+          if (naCarteira.greaterThan(dec(0))) {
+            restante = restante.minus(naCarteira);
+            destinos.push({
+              onde: 'CARTEIRA',
+              valor: naCarteira.toFixed(2),
+              descricao: 'Abatido do débito que esta venda deixou na carteira',
+            });
+          }
+        }
+
+        if (restante.greaterThan(dec(0))) {
+          /*
+            O que sobrou o cliente JA pagou. Em dinheiro, sai da gaveta — ate
+            o que a venda recebeu em dinheiro, descontado o que devolucoes
+            anteriores ja tiraram. O desconto e conservador de proposito: na
+            duvida devolve menos pela gaveta e mais pela carteira, porque
+            tirar dinheiro que nao entrou ali quebra a conferencia do turno.
+          */
+          const jaDevolvido = venda.itens.reduce((soma, i) => {
+            const q = dec(i.quantidadeDevolvida.toString());
+            if (!q.greaterThan(dec(0))) return soma;
+            const unit = dec(i.totalItem.toString()).dividedBy(dec(i.quantidade.toString()));
+            return soma.plus(dec(unit.times(q).toFixed(2)));
+          }, dec(0));
+
+          const gavetaDisponivel = recebidoEmDinheiro.minus(jaDevolvido);
+          const emDinheiro = restante.greaterThan(gavetaDisponivel) ? gavetaDisponivel : restante;
+
+          if (emDinheiro.greaterThan(dec(0))) {
+            if (!caixaAberto) {
+              throw new ConflictException({
+                codigo: 'CAIXA_FECHADO',
+                mensagem:
+                  'Esta venda foi paga em dinheiro e a devolução sai da gaveta. Abra o seu caixa: dinheiro que sai sem aparecer na conferência do turno vira falta no fechamento.',
+              });
+            }
+
+            await this.caixa.movimentarEm(
+              tx,
+              caixaAberto.id,
+              { tipo: 'SANGRIA', valor: emDinheiro.toFixed(2), motivo: motivo.slice(0, 400) },
+              principal,
+            );
+
+            restante = restante.minus(emDinheiro);
+            destinos.push({
+              onde: 'CAIXA',
+              valor: emDinheiro.toFixed(2),
+              descricao: 'Devolvido em dinheiro, pela gaveta',
+            });
+          }
+        }
+
+        if (restante.greaterThan(dec(0))) {
+          if (!clienteId || !temCarteira) {
+            throw new ConflictException({
+              codigo: 'DEVOLUCAO_SEM_DESTINO',
+              mensagem: `Restam R$ ${restante.toFixed(2)} para devolver e não há onde: a venda não foi em dinheiro e o cliente não tem carteira. O estorno no cartão ou no PIX acontece fora do sistema — cadastre a carteira do cliente para o crédito ficar registrado.`,
+            });
+          }
+
+          const creditado = await this.carteira.creditarPorDevolucao(
+            tx,
+            { clienteId, vendaId: venda.id, valor: restante, motivo },
+            principal,
+          );
+
+          if (!creditado.greaterThanOrEqualTo(restante)) {
+            /*
+              A carteira so aceita ate o que esta venda deixou nela. O que
+              passa disso entrou por cartao ou PIX, e o estorno acontece fora
+              do sistema: recusar e melhor do que creditar um valor que a
+              venda nunca gerou.
+            */
+            throw new ConflictException({
+              codigo: 'DEVOLUCAO_SEM_DESTINO',
+              mensagem: `Restam R$ ${restante.minus(creditado).toFixed(2)} sem destino. O valor entrou por cartão ou PIX e o estorno acontece fora do sistema.`,
+            });
+          }
+
+          destinos.push({
+            onde: 'CARTEIRA',
+            valor: creditado.toFixed(2),
+            descricao: 'Creditado na carteira do cliente',
+          });
+        }
+
+        // --- a venda passa a dizer o que aconteceu ------------------------
+        const tudoVoltou = venda.itens.every((i) => {
+          const agora = porItem.get(i.id)?.quantidade ?? dec(0);
+          return dec(i.quantidadeDevolvida.toString())
+            .plus(agora)
+            .greaterThanOrEqualTo(dec(i.quantidade.toString()));
+        });
+
+        await tx.venda.update({
+          where: { id: venda.id },
+          data: { status: tudoVoltou ? 'DEVOLVIDA_TOTAL' : 'DEVOLVIDA_PARCIAL' },
+        });
+      },
+      { tempoLimiteMs: 30_000 },
+    );
+
+    await this.auditoria.registrar({
+      contexto,
+      acao: 'VENDA_DEVOLVIDA',
+      entidade: 'venda',
+      entidadeId: id,
+      atorNome: principal.nome,
+      motivo: dados.motivo,
+      depois: {
+        valor: valorDevolvido.toFixed(2),
+        destinos: destinos.map((d) => `${d.onde} ${d.valor}`),
+      },
+    });
+
+    return {
+      venda: await this.detalhe(id, principal.permissoes.has(PERM.produto.verCusto)),
+      valorDevolvido: valorDevolvido.toFixed(2),
+      destinos,
+    };
+  }
+
   // -------------------------------------------------------------------------
   // Consultas
   // -------------------------------------------------------------------------
@@ -996,6 +1320,7 @@ export class VendasService {
         produto: i.variacao.produto.nome,
         descricaoVariacao: i.variacao.descricao,
         quantidade: dec(i.quantidade.toString()).toFixed(6),
+        quantidadeDevolvida: dec(i.quantidadeDevolvida.toString()).toFixed(6),
         precoUnitario: dec(i.precoUnitario.toString()).toFixed(2),
         descontoItem: dec(i.descontoItem.toString()).toFixed(2),
         totalItem: dec(i.totalItem.toString()).toFixed(2),
@@ -1060,6 +1385,7 @@ interface VendaComRelacoes {
     id: string;
     variacaoId: string;
     quantidade: Numerico;
+    quantidadeDevolvida: Numerico;
     precoUnitario: Numerico;
     descontoItem: Numerico;
     totalItem: Numerico;

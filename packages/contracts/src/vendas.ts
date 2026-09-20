@@ -104,6 +104,38 @@ export const cancelamentoVendaSchema = z.object({
 });
 export type CancelamentoVenda = z.infer<typeof cancelamentoVendaSchema>;
 
+/**
+ * Devolução PARCIAL de uma venda.
+ *
+ * Item a item, com quantidade. Devolver dois de dez não é cancelar a venda:
+ * cancelar apaga o faturamento inteiro e o resto da mercadoria continua com o
+ * cliente.
+ *
+ * Para onde vai o dinheiro é decidido pelo servidor, na ordem inversa da
+ * venda: abate primeiro o que o cliente ainda DEVE — título em aberto, depois
+ * débito na carteira — e só o que sobrar volta como dinheiro.
+ */
+export const devolucaoVendaSchema = z.object({
+  motivo: z.string().trim().min(5, 'Descreva o motivo da devolução').max(400),
+  itens: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        quantidade,
+      }),
+    )
+    .min(1, 'Escolha ao menos um item'),
+});
+export type DevolucaoVenda = z.infer<typeof devolucaoVendaSchema>;
+
+/** O que a devolução fez com o dinheiro. A tela mostra linha a linha. */
+export const destinoDevolucaoSchema = z.object({
+  onde: z.enum(['TITULO', 'CARTEIRA', 'CAIXA']),
+  valor: z.string(),
+  descricao: z.string(),
+});
+export type DestinoDevolucao = z.infer<typeof destinoDevolucaoSchema>;
+
 // ---------------------------------------------------------------------------
 // Saída
 // ---------------------------------------------------------------------------
@@ -115,6 +147,13 @@ export const itemVendaResumoSchema = z.object({
   produto: z.string(),
   descricaoVariacao: z.string(),
   quantidade: z.string(),
+  /**
+   * Quanto deste item já voltou.
+   *
+   * A coluna existia no banco desde o início e nenhuma tela a lia: devolver
+   * dois de dez só era possível cancelando a venda inteira.
+   */
+  quantidadeDevolvida: z.string(),
   precoUnitario: z.string(),
   descontoItem: z.string(),
   totalItem: z.string(),
@@ -161,6 +200,20 @@ export const vendaSchema = z.object({
   margem: z.string().optional(),
 });
 export type Venda = z.infer<typeof vendaSchema>;
+
+/**
+ * O que a devolução devolveu, e para onde.
+ *
+ * Os destinos vêm na RESPOSTA, não só na tela: quem chama a API precisa saber
+ * que R$ 180,00 abateram um título e R$ 40,00 saíram da gaveta. Devolver só o
+ * total faria o dinheiro mudar de lugar em silêncio.
+ */
+export const resultadoDevolucaoSchema = z.object({
+  venda: vendaSchema,
+  valorDevolvido: z.string(),
+  destinos: z.array(destinoDevolucaoSchema),
+});
+export type ResultadoDevolucao = z.infer<typeof resultadoDevolucaoSchema>;
 
 export const resultadoVendaSchema = z.object({
   venda: vendaSchema,

@@ -52,6 +52,14 @@ function autenticado(metodo: 'get' | 'post' | 'patch', rota: string) {
 */
 const criados: string[] = [];
 
+/**
+ * Numeros das vendas criadas aqui.
+ *
+ * Cada venda a prazo deixa um titulo a receber ABERTO, e titulo de teste
+ * acumulado empurra os de verdade para fora da primeira pagina de Contas.
+ */
+const vendas: number[] = [];
+
 async function clienteCom(usaCarteira: boolean): Promise<string> {
   const criado = (
     await autenticado('post', '/api/clientes')
@@ -116,6 +124,28 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  // Titulo em aberto se CANCELA, cadastro se DESATIVA — pelas acoes do
+  // dominio, nunca por `delete` escondido.
+  for (const numero of vendas) {
+    try {
+      const abertos = (
+        await autenticado(
+          'get',
+          `/api/financeiro/titulos?tipo=RECEBER&recorte=abertos&termo=Venda%20${String(numero)}%20a%20prazo`,
+        )
+      ).body as { itens?: { id: string; descricao: string }[] };
+
+      for (const t of abertos.itens ?? []) {
+        if (!t.descricao.includes(`Venda ${String(numero)} a prazo`)) continue;
+        await autenticado('post', `/api/financeiro/titulos/${t.id}/cancelar`).send({
+          motivo: 'Limpeza do teste de ponta a ponta',
+        });
+      }
+    } catch {
+      /* ambiente ja derrubado */
+    }
+  }
+
   for (const id of criados) {
     // Pela rota do dominio, nunca por `delete` escondido. Falha aqui nao
     // derruba a suite: o que importa ja foi verificado.
@@ -159,12 +189,14 @@ describe.runIf(temBanco)('venda a prazo', () => {
         .expect(201)
     ).body as { venda: { id: string; numero: number }; avisos: { codigo: string }[] };
 
+    vendas.push(resultado.venda.numero);
+
     expect(resultado.avisos.some((a) => a.codigo === 'TITULO_A_RECEBER_GERADO')).toBe(true);
 
     const titulos = (
       await autenticado(
         'get',
-        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+        `/api/financeiro/titulos?tipo=RECEBER&recorte=todos&termo=Venda%20${String(resultado.venda.numero)}%20a%20prazo`,
       ).expect(200)
     ).body as {
       itens: { origem: string; valor: string; descricao: string; contraparte: string }[];
@@ -194,6 +226,8 @@ describe.runIf(temBanco)('venda a prazo', () => {
         .expect(201)
     ).body as { venda: { numero: number }; avisos: { codigo: string }[] };
 
+    vendas.push(resultado.venda.numero);
+
     expect(resultado.avisos.some((a) => a.codigo === 'LANCADO_NA_CARTEIRA')).toBe(true);
 
     // O razão da carteira recebeu o débito, com o tipo que diz o que foi.
@@ -219,7 +253,7 @@ describe.runIf(temBanco)('venda a prazo', () => {
     const titulos = (
       await autenticado(
         'get',
-        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+        `/api/financeiro/titulos?tipo=RECEBER&recorte=todos&termo=Venda%20${String(resultado.venda.numero)}%20a%20prazo`,
       ).expect(200)
     ).body as { itens: { descricao: string }[] };
 
@@ -245,10 +279,17 @@ describe.runIf(temBanco)('venda a prazo', () => {
         .expect(201)
     ).body as { venda: { numero: number } };
 
+    vendas.push(resultado.venda.numero);
+
+    /*
+      Pelo TERMO, nao por pagina. Procurar a agulha numa pagina de 100 passa
+      enquanto o banco e novo e falha no dia em que cabem 101 titulos — foi o
+      que aconteceu assim que os testes de devolucao entraram.
+    */
     const titulos = (
       await autenticado(
         'get',
-        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+        `/api/financeiro/titulos?tipo=RECEBER&recorte=todos&termo=Venda%20${String(resultado.venda.numero)}%20a%20prazo`,
       ).expect(200)
     ).body as { itens: { descricao: string; vencimento: string }[] };
 
@@ -325,6 +366,8 @@ describe.runIf(temBanco)('venda a prazo', () => {
         .expect(201)
     ).body as { venda: { id: string; numero: number } };
 
+    vendas.push(resultado.venda.numero);
+
     await autenticado('post', `/api/vendas/${resultado.venda.id}/cancelar`)
       .send({ motivo: 'Erro de digitação no pedido' })
       .expect(201);
@@ -358,6 +401,8 @@ describe.runIf(temBanco)('venda a prazo', () => {
         })
         .expect(201)
     ).body as { venda: { id: string; numero: number } };
+
+    vendas.push(resultado.venda.numero);
 
     const titulos = (
       await autenticado(

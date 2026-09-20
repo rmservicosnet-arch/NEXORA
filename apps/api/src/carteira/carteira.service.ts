@@ -480,6 +480,65 @@ export class CarteiraService {
   }
 
   /**
+   * Credita a carteira por uma DEVOLUCAO de venda.
+   *
+   * Segundo destino da cascata. Diferente de `estornarPorVendaCancelada`:
+   * la a venda inteira deixa de existir e o estorno aponta para o movimento
+   * original; aqui parte da mercadoria voltou, e o lancamento e um CREDITO
+   * proprio, do tipo `DEVOLUCAO_VENDA` — que ja existia no enum e nunca
+   * tinha sido gravado por ninguem.
+   *
+   * O teto e o que esta venda ainda deve na carteira: debitos dela, menos o
+   * que devolucoes anteriores ja creditaram. Sem o teto, devolver dez vezes
+   * um item de R$ 10,00 numa venda de R$ 100,00 creditaria R$ 100,00 alem do
+   * que a venda levou.
+   */
+  async creditarPorDevolucao(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly clienteId: string;
+      readonly vendaId: string;
+      readonly valor: Dec;
+      readonly motivo: string;
+    },
+    principal: Principal,
+  ): Promise<Dec> {
+    if (!params.valor.greaterThan(dec(0))) return dec(0);
+
+    const movimentos = await tx.carteiraMovimento.findMany({
+      where: { vendaId: params.vendaId },
+      select: { sentido: true, tipo: true, valor: true },
+    });
+
+    let devido = dec(0);
+    for (const m of movimentos) {
+      const v = dec(m.valor.toString());
+      if (m.sentido === 'DEBITO') devido = devido.plus(v);
+      else devido = devido.minus(v);
+    }
+
+    if (!devido.greaterThan(dec(0))) return dec(0);
+
+    const valor = params.valor.greaterThan(devido) ? devido : params.valor;
+
+    const contexto = exigirContexto();
+    const carteira = await this.travar(tx, params.clienteId);
+
+    await this.gravarMovimento(tx, contexto, {
+      carteiraId: carteira.id,
+      saldoAtual: carteira.saldo,
+      sentido: 'CREDITO',
+      tipo: 'DEVOLUCAO_VENDA',
+      valor,
+      principal,
+      vendaId: params.vendaId,
+      justificativa: params.motivo,
+    });
+
+    return valor;
+  }
+
+  /**
    * Estorna os debitos que esta venda lancou na carteira.
    *
    * Dentro da transacao de QUEM CANCELA, pelo mesmo motivo do debito: venda
