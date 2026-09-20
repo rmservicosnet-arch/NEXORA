@@ -211,11 +211,15 @@ describe.runIf(temBanco)('checkout e carteira', () => {
   it('documento repetido é recusado com o nome de quem já o tem', async () => {
     const sufixo = Math.random().toString(36).toUpperCase().slice(2, 9);
 
-    await http
-      .post('/api/clientes')
-      .set('Authorization', `Bearer ${tokenAdmin}`)
-      .send({ nome: `Primeiro ${sufixo}`, documento: `DUP${sufixo}` })
-      .expect(201);
+    criados.push(
+      (
+        await http
+          .post('/api/clientes')
+          .set('Authorization', `Bearer ${tokenAdmin}`)
+          .send({ nome: `Primeiro ${sufixo}`, documento: `DUP${sufixo}` })
+          .expect(201)
+      ).body.id as string,
+    );
 
     const recusa = await http
       .post('/api/clientes')
@@ -245,11 +249,15 @@ describe.runIf(temBanco)('permissões', () => {
   it('a vendedora cadastra cliente, como o perfil dela prevê', async () => {
     const sufixo = Math.random().toString(36).toUpperCase().slice(2, 9);
 
-    await http
-      .post('/api/clientes')
-      .set('Authorization', `Bearer ${tokenVendedora}`)
-      .send({ nome: `Cadastro no balcão ${sufixo}`, documento: `BAL${sufixo}` })
-      .expect(201);
+    criados.push(
+      (
+        await http
+          .post('/api/clientes')
+          .set('Authorization', `Bearer ${tokenVendedora}`)
+          .send({ nome: `Cadastro no balcão ${sufixo}`, documento: `BAL${sufixo}` })
+          .expect(201)
+      ).body.id as string,
+    );
   });
 
   it('quem não tem cliente.visualizar não lista', async () => {

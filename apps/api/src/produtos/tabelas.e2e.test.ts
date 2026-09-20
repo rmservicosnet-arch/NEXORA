@@ -92,6 +92,15 @@ async function criar(nome: string): Promise<string> {
   return id;
 }
 
+/*
+  Todo cadastro de cliente criado aqui sai DESATIVADO no fim.
+
+  Sem isso o teste degrada o ambiente que ele proprio usa: cadastro de teste
+  acumulado empurra os clientes de verdade para fora da primeira pagina.
+  Desativar, nao apagar — cliente aparece em venda, pedido e titulo.
+*/
+const criados: string[] = [];
+
 beforeAll(async () => {
   if (!temBanco) return;
 
@@ -113,6 +122,14 @@ afterAll(async () => {
       // aqui não pode derrubar a suíte — a limpeza é higiene, não asserção.
       await http
         .patch(`/api/tabelas-preco/${id}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ status: 'INATIVO' })
+        .catch(() => undefined);
+    }
+
+    for (const id of criados) {
+      await http
+        .patch(`/api/clientes/${id}`)
         .set('Authorization', `Bearer ${tokenAdmin}`)
         .send({ status: 'INATIVO' })
         .catch(() => undefined);
@@ -224,6 +241,8 @@ describe.runIf(temBanco)('desativar', () => {
         .send({ nome: `Cliente da tabela ${sufixo()}`, tabelaPrecoId: id })
         .expect(201)
     ).body as { id: string };
+
+    criados.push(cliente.id);
 
     const recusa = await http
       .patch(`/api/tabelas-preco/${id}`)

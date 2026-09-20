@@ -67,8 +67,18 @@ async function acessoDescartavel(): Promise<{ email: string; senha: string; clie
       .expect(201)
   ).body as { senhaProvisoria: string };
 
+  criados.push(cliente.id);
   return { email, senha: criado.senhaProvisoria, clienteId: cliente.id };
 }
+
+/*
+  Todo cadastro de cliente criado aqui sai DESATIVADO no fim.
+
+  Sem isso o teste degrada o ambiente que ele proprio usa: cadastro de teste
+  acumulado empurra os clientes de verdade para fora da primeira pagina.
+  Desativar, nao apagar — cliente aparece em venda, pedido e titulo.
+*/
+const criados: string[] = [];
 
 beforeAll(async () => {
   if (!temBanco) return;
@@ -84,8 +94,17 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  if (app) await app.close();
-});
+  if (app) {
+    for (const id of criados) {
+      await http
+        .patch(`/api/clientes/${id}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ status: 'INATIVO' });
+    }
+
+    await app.close();
+  }
+}, 60_000);
 
 describe.runIf(temBanco)('o cliente troca a própria senha', () => {
   it('troca, a nova entra e a antiga não', async () => {

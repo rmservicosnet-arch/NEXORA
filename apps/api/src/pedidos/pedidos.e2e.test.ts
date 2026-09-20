@@ -43,6 +43,15 @@ interface ItemCatalogo {
   disponivel: boolean;
 }
 
+/*
+  Copia local do contrato, de proposito: o teste compara o que a ROTA devolve,
+  e usar o tipo do pacote esconderia um campo que sumiu da resposta.
+
+  Mas copia que nao acompanha mente ao contrario: `motivo` e `aceiteClienteEm`
+  eram afirmados em dois testes e nao estavam aqui. `expect(undefined)
+  .not.toBeNull()` PASSA — o teste do aceite nao verificava nada havia
+  semanas, e ninguem viu porque `tsc` nem olhava arquivo de teste.
+*/
 interface Pedido {
   id: string;
   numero: number;
@@ -51,6 +60,8 @@ interface Pedido {
   valorConfirmado: string;
   diferenca: string;
   resumoAlteracao: string | null;
+  motivo: string | null;
+  aceiteClienteEm: string | null;
   vendaNumero: number | null;
   itens: {
     id: string;
