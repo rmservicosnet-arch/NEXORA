@@ -124,6 +124,18 @@ nada a ver com eles.
 > **Construído desde que este documento foi escrito:** o pagamento com
 > `FormaPagamento.CARTEIRA` debita a conta corrente — `vendas.service.ts`
 > chama `debitarPorVenda`.
+>
+> E três operações novas passaram a mexer na gaveta, todas pelo `CaixaService`
+> em vez de escrever em `movimento_caixa` por conta própria:
+>
+> - **baixa de título em dinheiro** vira sangria (a pagar) ou suprimento (a
+>   receber), e exige caixa aberto — ver [ORDERS.md](ORDERS.md) §10.10;
+> - **estorno de baixa** lança o contrário. No caixa original enquanto ele
+>   estiver aberto; no caixa de hoje se já fechou, porque reabrir turno
+>   conferido para acertar o passado seria reescrever uma conferência
+>   assinada;
+> - **devolução de venda paga em dinheiro** sai como sangria, até o que a
+>   venda recebeu em dinheiro ([POS.md](POS.md) §10.1).
 
 ## 11. Testes obrigatórios
 

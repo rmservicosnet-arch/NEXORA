@@ -87,6 +87,14 @@ dois produz compra errada.
 
 Marcados com **[C]** exigem `relatorio.ver_custo`.
 
+> **Estado: 36 dos 37 construídos.** O único que falta é **Comissões
+> apuradas**, e ele não é trabalho de relatório: não existe modelo de comissão
+> no schema. Construí-lo antes seria inventar número.
+>
+> Os três de Compras exigem `relatorio.ver_custo`, não só o que tem "custo" no
+> nome: "compras por fornecedor" devolve valor e unidades lado a lado, e
+> dividir um pelo outro dá o custo unitário do fornecedor.
+
 ### Estoque
 
 | Relatório | Responde |
@@ -110,6 +118,7 @@ Marcados com **[C]** exigem `relatorio.ver_custo`.
 | **Ranking por produto** | O que mais sai, em valor e em quantidade |
 | **Ranking por cliente** | Quem compra mais; recorrência |
 | **Ranking por tabela de preço** | Professor, Aluno, Revendedor, Padrão — ver §4 |
+| **Ranking de revendedores** | Quem mais COMPROU da loja no período, por `cliente.perfil` — ver §4 |
 | **Ranking por categoria e marca** | Onde está o faturamento |
 | **Margem por dimensão** **[C]** | Margem bruta e % por produto, categoria, vendedor, tabela |
 | **Formas de pagamento** | Distribuição e prazo médio de recebimento |
@@ -148,7 +157,7 @@ precisa. Ver `docs/ORDERS.md` §6.
 |---|---|
 | **Compras por fornecedor** | Volume, valor, prazo de entrega |
 | **Evolução do custo de aquisição** **[C]** | Quanto o custo subiu, por item e fornecedor |
-| **Pedidos de compra em aberto** | O que foi pedido e ainda não chegou |
+| **Notas a receber** **[C]** | Nota emitida e ainda fora do estoque: custo assumido, saldo não subiu |
 
 ### Auditoria
 
@@ -160,17 +169,30 @@ precisa. Ver `docs/ORDERS.md` §6.
 
 ## 4. "Por professor ou tipo de usuário"
 
-No modelo atual, **a tabela de preços é o segmento**: Professor, Aluno,
-Revendedor e Padrão. O ranking por tabela responde a pergunta sem campo novo.
+**Decisão tomada: existe `cliente.perfil`**, independente da tabela de preços.
+`CONSUMIDOR` · `PROFESSOR` · `REVENDEDOR`.
 
-Isso basta enquanto segmento e preço andarem juntos. Deixa de bastar no dia em
-que existirem dois grupos com o mesmo preço — por exemplo Professor e
-Coordenador — e a loja quiser separá-los no relatório.
+Este documento dizia antes que a tabela de preços bastava como segmento, e
+que acrescentar um campo seria duplicá-la com outro nome. O caso que derrubou
+isso apareceu na operação: mover um professor para uma tabela promocional por
+um mês o tirava do ranking de revendedores — por um motivo que nada tem a ver
+com revenda.
 
-**Decisão pendente:** acrescentar `cliente.segmento`, uma dimensão livre
-independente da tabela de preços. Custo: uma coluna e um cadastro. Não
-implemento sem sua confirmação, porque hoje seria duplicar a tabela de preços
-com outro nome.
+**Tabela diz quanto ele PAGA; perfil diz quem ele É.** São perguntas
+diferentes e precisam de campos diferentes.
+
+### O que o "Ranking de revendedores" mede — e o que não mede
+
+Ele soma **o que o cliente comprou da loja**. A revenda que o professor faz
+acontece fora daqui e o sistema não a vê.
+
+Chamar a coluna de "quem mais vendeu" seria rótulo mais forte do que a conta —
+e é o número que vai premiar alguém. A tela diz `Comprado`, e a ressalva vem
+em faixa vermelha, não em nota de rodapé.
+
+Quem **parou** de comprar aparece à parte: uma lista de quem comprou não tem
+linha para quem sumiu, e é justamente desse que um programa de premiação
+precisa.
 
 ## 5. Desempenho
 

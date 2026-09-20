@@ -98,14 +98,50 @@ que a próxima é a 87?".
 
 ## 10. O que ainda não existe
 
-- **Devolução parcial.** `quantidade_devolvida` está no item, sem rota ainda.
-  Hoje só há cancelamento total.
 - **Reimpressão de comprovante.** A venda guarda tudo; falta a rota.
 
 > **Construído desde que este documento foi escrito:** o caixa inteiro (ver
 > [CASHBOX.md](CASHBOX.md)); o débito em carteira no pagamento com
-> `FormaPagamento.CARTEIRA`; e a venda a prazo, que lê `cliente.usaCarteira`
-> e gera débito na carteira OU título em contas a receber — nunca os dois.
+> `FormaPagamento.CARTEIRA`; a venda a prazo, que lê `cliente.usaCarteira` e
+> gera débito na carteira OU título em contas a receber — nunca os dois; a
+> **devolução parcial** (§10.1); e a tela de Vendas, que é por onde devolver
+> e cancelar passaram a ser possíveis — as rotas existiam e nenhuma tela as
+> chamava.
+
+### 10.1 Devolução parcial
+
+`POST /vendas/:id/devolucoes`, item a item, com quantidade e motivo.
+`venda_item.quantidade_devolvida`, os status `DEVOLVIDA_PARCIAL` e
+`DEVOLVIDA_TOTAL` e a permissão `venda.devolver` já existiam e nada os usava.
+
+O estoque reentra pelo **custo congelado na saída**
+([COST_POLICY.md](COST_POLICY.md) §5).
+
+O dinheiro desce uma cascata, na ordem **inversa** da venda:
+
+| Ordem | Destino | O que acontece |
+|---|---|---|
+| 1 | Título em aberto | O valor de **face** diminui. Não há baixa: não entrou dinheiro, e baixar diria que alguém pagou. Cobrindo o que falta, o título é cancelado |
+| 2 | Carteira | Crédito `DEVOLUCAO_VENDA`, limitado ao que esta venda ainda deve nela |
+| 3 | Gaveta | Sangria no caixa, até o que a venda recebeu em dinheiro |
+
+Devolver dinheiro a quem ainda não pagou seria pagar duas vezes — por isso a
+dívida vem primeiro.
+
+**Cartão e PIX entram por fora da gaveta** e o estorno acontece na maquineta.
+Sem carteira onde creditar, a API recusa com `DEVOLUCAO_SEM_DESTINO` e diz
+isso. Gravar o número num lugar qualquer só para a operação passar é o
+dinheiro sem dono que o resto do sistema evita.
+
+`POST /vendas/:id/devolucoes/previa` roda o **mesmo serviço** e desfaz no fim:
+a tela mostra para onde o dinheiro vai antes de alguém confirmar, e as recusas
+do caminho aparecem antes do botão. Calcular a prévia no navegador seria a
+regra de dinheiro escrita duas vezes.
+
+Cancelar continua existindo e é **outra coisa**: apaga o faturamento inteiro e
+devolve tudo, inclusive o que ficou com o cliente. Desde esta fase ele também
+desfaz o dinheiro — estorna o débito na carteira e cancela o título —, e
+**recusa** quando algum título da venda já recebeu pagamento.
 
 ## 11. Testes obrigatórios
 

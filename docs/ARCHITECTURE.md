@@ -3,6 +3,28 @@
 > Documento vivo. Deve refletir a implementação real. Se código e documento
 > divergirem, o documento está errado e precisa ser corrigido no mesmo commit.
 
+## 0. Mapa dos documentos
+
+A primeira regra do repositório é procurar a decisão aqui antes de escrever
+código. Sem um mapa, "procure em `docs/`" vira abrir treze arquivos.
+
+| Documento | Responde |
+|---|---|
+| [TENANCY.md](TENANCY.md) | Isolamento entre empresas, RLS, o `tenant_id` |
+| [STOCK.md](STOCK.md) | O razão de estoque, saldo, reserva |
+| [COST_POLICY.md](COST_POLICY.md) | Custo médio: entrada, saída, devolução, transferência |
+| [POS.md](POS.md) | PDV, a venda de balcão, e a **devolução parcial** |
+| [CASHBOX.md](CASHBOX.md) | O dinheiro físico da gaveta, turno e conferência |
+| [WALLET.md](WALLET.md) | A conta corrente do revendedor |
+| [PURCHASES.md](PURCHASES.md) | Compras: a mercadoria entrando **com custo** |
+| [PAYABLES.md](PAYABLES.md) | Contas a pagar e a receber, e a baixa |
+| [ORDERS.md](ORDERS.md) | Pedido com confirmação e o portal do cliente |
+| [MEDIA.md](MEDIA.md) | Fotos, derivadas e armazenamento de objetos |
+| [REPORTS.md](REPORTS.md) | Os 37 relatórios e o que cada número significa |
+| [MOBILE.md](MOBILE.md) | A decisão de aplicativo nativo (Fase 6) |
+| [NOTIFICATIONS.md](NOTIFICATIONS.md) | Push, fila de saída e privacidade do payload |
+| [DEPLOY.md](DEPLOY.md) | Contêiner, migração e o que quebra com duas instâncias |
+
 ## 1. Visão geral
 
 Plataforma SaaS multiempresa para varejo de artigos esportivos (judô, artes
@@ -300,10 +322,11 @@ definidos em `tenant_settings`.
 **Motivo:** requisito de produto SaaS — lojas com balcão único e lojas com
 vendedores dedicados têm operações incompatíveis.
 **Consequência:** fechamento, conferência e relatórios precisam tratar os dois
-modos. Ver `docs/CASH_REGISTER.md` (Fase 5).
+modos. Ver [CASHBOX.md](CASHBOX.md).
 
 ## 10. Não implementado nesta fase
 
 - Emissão fiscal (NFC-e/NF-e). A arquitetura mantém os campos e a separação
   necessários, mas nenhuma integração fiscal é construída agora.
-- Integração WhatsApp/IA. Ver `INTEGRATIONS.md` (Fase 6).
+- Integração WhatsApp/IA (Fase 6). O documento ainda não foi escrito —
+  link para arquivo inexistente manda procurar decisão que não existe.
