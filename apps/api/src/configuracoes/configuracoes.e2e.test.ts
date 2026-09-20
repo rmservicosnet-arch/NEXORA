@@ -118,13 +118,13 @@ describe.runIf(temBanco)('a configuração tem efeito', () => {
         .get('/api/portal/pedidos/catalogo?limite=1')
         .set('Authorization', `Bearer ${tokenCliente}`)
         .expect(200)
-    ).body as { variacaoId: string }[];
+    ).body as { itens: { variacaoId: string }[] };
 
     const pedido = (
       await http
         .post('/api/portal/pedidos')
         .set('Authorization', `Bearer ${tokenCliente}`)
-        .send({ itens: [{ variacaoId: catalogo[0]!.variacaoId, quantidade: '1' }] })
+        .send({ itens: [{ variacaoId: catalogo.itens[0]!.variacaoId, quantidade: '1' }] })
         .expect(201)
     ).body as { pedido: { validoAte: string } };
 

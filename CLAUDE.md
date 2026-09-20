@@ -188,6 +188,8 @@ o runtime.
 | Resultado de busca que desce num bloco de rodapé | Empurra o próprio campo de busca para fora da tela. Lista para cima |
 | Lista de escolha sem o que distingue as opções | Dois "Kimono Trançado Judô" com preços diferentes: faltavam SKU, variação e saldo, que é o que decide |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
+| Formato de resposta trocado e só o teste do módulo atualizado | O catálogo virou objeto e três arquivos de e2e continuaram chamando `.find` nele. Ao mudar o corpo de uma rota, procure a ROTA em todos os testes, não o tipo |
+| Pilha de avisos idênticos no topo da lista | Sessenta e nove faixas âmbar não chamam atenção para nada — é a parede de avisos de novo. Acima de um, um aviso só, com o número e o caminho até eles |
 
 ## Testes
 

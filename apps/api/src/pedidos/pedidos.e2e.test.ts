@@ -68,6 +68,19 @@ interface Pedido {
   eventos: { paraStatus: string; ator: string | null; motivo: string | null }[];
 }
 
+interface PaginaPedidos {
+  itens: Pedido[];
+  proximoCursor: string | null;
+  naFila: number;
+  contagens: {
+    aguardando: number;
+    comOCliente: number;
+    confirmados: number;
+    devolvidos: number;
+    faturados: number;
+  };
+}
+
 interface Catalogo {
   tabela: string;
   categorias: { id: string; nome: string }[];
@@ -317,6 +330,48 @@ describe.runIf(temBanco)('o que o cliente ve', () => {
     // O total da tabela nao muda com filtro: ele descreve a tabela, nao a busca.
     expect(so.totalNaTabela).toBe(todos.totalNaTabela);
   });
+
+  /**
+   * Cada recorte da tela do cliente lista EXATAMENTE o que a contagem dele conta.
+   *
+   * O numero e a lista saem de lugares diferentes — `count` por status no
+   * servidor, `statusEm` na consulta — e nada obriga os dois a cobrirem o
+   * mesmo conjunto. Ja aconteceu na fila da equipe: a aba dizia um numero e
+   * abria outra coisa.
+   *
+   * Quando a pagina termina (`proximoCursor` nulo) ela contem o conjunto
+   * inteiro: ai o tamanho tem de BATER com a contagem, nao so ser menor.
+   */
+  it('cada recorte lista exatamente o que a contagem dele conta', async () => {
+    const recortes = [
+      { campo: 'comOCliente', status: ['AGUARDANDO_ACEITE_CLIENTE'] },
+      { campo: 'aguardando', status: ['AGUARDANDO_CONFIRMACAO'] },
+      { campo: 'confirmados', status: ['CONFIRMADO', 'CONFIRMADO_PARCIALMENTE'] },
+      { campo: 'faturados', status: ['FATURADO', 'CONCLUIDO'] },
+      { campo: 'devolvidos', status: ['DEVOLVIDO', 'RECUSADO'] },
+    ] as const;
+
+    for (const recorte of recortes) {
+      const pagina = (
+        await http
+          .get(`/api/portal/pedidos?limite=100&statusEm=${recorte.status.join(',')}`)
+          .set('Authorization', `Bearer ${tokenCliente}`)
+          .expect(200)
+      ).body as PaginaPedidos;
+
+      const contagem = pagina.contagens[recorte.campo];
+
+      for (const pedido of pagina.itens) {
+        expect(recorte.status).toContain(pedido.status);
+      }
+
+      if (pagina.proximoCursor === null) {
+        expect(pagina.itens.length).toBe(contagem);
+      } else {
+        expect(contagem).toBeGreaterThan(pagina.itens.length);
+      }
+    }
+  }, 120_000);
 
   it('o pedido do cliente nao carrega disponivel, e o da equipe carrega', async () => {
     const variacaoId = await itemPublicado('50.00', '10');

@@ -144,9 +144,9 @@ async function noCatalogo(sku: string): Promise<{ disponivel: boolean } | undefi
       .get(`/api/portal/pedidos/catalogo?limite=60&termo=${sku}`)
       .set('Authorization', `Bearer ${tokenCliente}`)
       .expect(200)
-  ).body as { sku: string; disponivel: boolean }[];
+  ).body as { itens: { sku: string; disponivel: boolean }[] };
 
-  return catalogo.find((i) => i.sku === sku);
+  return catalogo.itens.find((i) => i.sku === sku);
 }
 
 beforeAll(async () => {

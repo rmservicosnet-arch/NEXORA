@@ -110,12 +110,16 @@ describe.runIf(temBanco)('criar acesso ao portal', () => {
       senha: criado.senhaProvisoria,
     });
 
-    const catalogo = await http
-      .get('/api/portal/pedidos/catalogo?limite=5')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const catalogo = (
+      await http
+        .get('/api/portal/pedidos/catalogo?limite=5')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+    ).body as { tabela: string; itens: unknown[] };
 
-    expect(Array.isArray(catalogo.body)).toBe(true);
+    // A credencial nova ve o catalogo DA TABELA dela — e a resposta diz qual e.
+    expect(Array.isArray(catalogo.itens)).toBe(true);
+    expect(catalogo.tabela.length).toBeGreaterThan(0);
   });
 
   it('a senha nunca volta na listagem', async () => {
