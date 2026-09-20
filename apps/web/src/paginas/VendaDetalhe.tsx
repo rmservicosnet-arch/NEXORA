@@ -5,7 +5,7 @@ import {
   type Venda,
 } from '@estoque/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
@@ -183,8 +183,21 @@ function Corpo({
     fixo: exigi-lo antes faria a tela ficar muda justamente enquanto quem opera
     ainda está decidindo.
   */
+  /*
+    A previa custa uma transacao no servidor — ela roda a devolucao inteira e
+    desfaz. Sem a espera, apertar "+" tres vezes abriria tres transacoes, e as
+    duas primeiras so existiriam para serem jogadas fora.
+  */
+  const chave = JSON.stringify(escolhas);
+  const [chaveEstavel, setChaveEstavel] = useState(chave);
+
+  useEffect(() => {
+    const id = setTimeout(() => setChaveEstavel(chave), 350);
+    return () => clearTimeout(id);
+  }, [chave]);
+
   const previa = useQuery({
-    queryKey: ['vendas', 'previa', venda.id, JSON.stringify(escolhas)],
+    queryKey: ['vendas', 'previa', venda.id, chaveEstavel],
     enabled: devolvendo && unidades > 0,
     retry: false,
     queryFn: () =>
@@ -424,7 +437,7 @@ function Corpo({
                         Para onde vai o dinheiro
                       </p>
 
-                      {previa.isFetching ? (
+                      {previa.isFetching || chaveEstavel !== chave ? (
                         <p className="text-[12px] text-neutral-400">Calculando no servidor…</p>
                       ) : recusa ? (
                         <Aviso tom="perigo" titulo="Esta devolução não pode ser feita">
@@ -486,7 +499,8 @@ function Corpo({
                     unidades === 0 ||
                     motivo.trim().length < MOTIVO_MINIMO ||
                     Boolean(recusa) ||
-                    previa.isFetching
+                    previa.isFetching ||
+                    chaveEstavel !== chave
                   }
                   onClick={() => devolver.mutate()}
                 >
