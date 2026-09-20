@@ -212,6 +212,9 @@ o runtime.
 | "Fluxo de caixa" misturando previsto com realizado | Título em aberto com vencimento no período é promessa. Somá-lo faz o fluxo mentir exatamente no mês em que ninguém pagou — e a ressalva vai na RESPOSTA, não só na tela |
 | Prazo de entrega zero quando falta a emissão | Zero afirma "chegou no mesmo dia". Sem a data de saída não há prazo: nulo, e a coluna escreve "sem emissão" |
 | Custo de aquisição lido do custo médio | A média mistura datas e fornecedores. O que se leva para negociar é o que o fornecedor COBROU, nota a nota — e custo inicial zero não vira "subiu infinito%" |
+| Classificar cliente pela tabela de preço | Tabela diz quanto ele PAGA; perfil diz quem ele É. Mover um professor para uma tabela promocional por um mês o tirava do ranking de revendedores por um motivo que nada tem a ver com revenda. Campos separados |
+| "Quem mais vendeu" quando o sistema só vê compra | A revenda do professor acontece fora daqui. Medir a compra e chamar de venda é rótulo mais forte do que a conta — e é o número que vai premiar alguém |
+| Ranking que esconde quem sumiu | Uma lista de quem comprou não tem linha para quem parou de comprar. O programa de premiação precisa justamente desse: conte à parte |
 
 ## Testes
 

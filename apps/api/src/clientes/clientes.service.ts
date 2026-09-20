@@ -135,6 +135,7 @@ export class ClientesService {
           documento,
           email: dados.email?.trim() ? dados.email.trim() : null,
           telefone: dados.telefone?.trim() ? dados.telefone.trim() : null,
+          perfil: dados.perfil,
           ...(dados.tabelaPrecoId ? { tabelaPrecoId: dados.tabelaPrecoId } : {}),
           ...(dados.modoCheckout ? { modoCheckout: dados.modoCheckout } : {}),
           usaCarteira: dados.usaCarteira,
@@ -180,6 +181,7 @@ export class ClientesService {
           ...(dados.email !== undefined ? { email: dados.email } : {}),
           ...(dados.telefone !== undefined ? { telefone: dados.telefone } : {}),
           ...(dados.status !== undefined ? { status: dados.status } : {}),
+          ...(dados.perfil !== undefined ? { perfil: dados.perfil } : {}),
           ...(dados.tabelaPrecoId !== undefined ? { tabelaPrecoId: dados.tabelaPrecoId } : {}),
           ...(dados.modoCheckout !== undefined ? { modoCheckout: dados.modoCheckout } : {}),
           ...(dados.usaCarteira !== undefined ? { usaCarteira: dados.usaCarteira } : {}),
@@ -239,6 +241,7 @@ export class ClientesService {
       email: string | null;
       telefone: string | null;
       status: string;
+      perfil: string;
       modoCheckout: string | null;
       usaCarteira: boolean;
       criadoEm: Date;
@@ -255,6 +258,7 @@ export class ClientesService {
       email: c.email,
       telefone: c.telefone,
       status: c.status === 'INATIVO' ? 'INATIVO' : 'ATIVO',
+      perfil: c.perfil as Cliente['perfil'],
       tabelaPrecoId: c.tabelaPreco?.id ?? null,
       tabelaPreco: c.tabelaPreco?.nome ?? null,
       modoCheckout: (c.modoCheckout as ModoCheckout | null) ?? null,

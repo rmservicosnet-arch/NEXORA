@@ -183,6 +183,62 @@ describe.runIf(temBanco)('relatórios de compras e contas', () => {
     expect(pagina.paradasHaMais15).toBeLessThanOrEqual(pagina.notas);
   });
 
+  /**
+   * O ranking mede COMPRA, não revenda — e o rótulo tem de bater com a conta.
+   * Quem sumiu não aparece numa lista de quem comprou, e é por isso que
+   * `semCompraNoPeriodo` existe.
+   */
+  it('o ranking de revendedores soma compras e conta quem NÃO comprou', async () => {
+    const r = (await autenticado('/api/relatorios/vendas/revendedores?dias=365').expect(200))
+      .body as {
+      itens: {
+        posicao: number;
+        perfil: string;
+        valor: string;
+        compras: number;
+        ticketMedio: string;
+        participacao: string;
+      }[];
+      total: string;
+      revendedores: number;
+      semCompraNoPeriodo: number;
+    };
+
+    // Só perfil de revenda entra: consumidor final fica de fora.
+    for (const i of r.itens) {
+      expect(['PROFESSOR', 'REVENDEDOR']).toContain(i.perfil);
+    }
+
+    // A posição acompanha a ordem, e o valor cai do primeiro para o último.
+    r.itens.forEach((i, indice) => {
+      expect(i.posicao).toBe(indice + 1);
+      if (indice > 0) {
+        expect(Number(i.valor)).toBeLessThanOrEqual(Number(r.itens[indice - 1]!.valor));
+      }
+    });
+
+    // Ticket médio é valor ÷ compras, não uma média de médias.
+    for (const i of r.itens) {
+      expect(Number(i.ticketMedio)).toBeCloseTo(Number(i.valor) / i.compras, 2);
+    }
+
+    // A participação soma 100 quando a página cobre o conjunto.
+    if (r.itens.length === r.revendedores && r.revendedores > 0) {
+      const soma = r.itens.reduce((s, i) => s + Number(i.participacao), 0);
+      expect(soma).toBeCloseTo(100, 1);
+    }
+
+    expect(r.semCompraNoPeriodo).toBeGreaterThanOrEqual(0);
+  });
+
+  it('o recorte por perfil devolve só aquele perfil', async () => {
+    const so = (
+      await autenticado('/api/relatorios/vendas/revendedores?dias=365&perfil=PROFESSOR').expect(200)
+    ).body as { itens: { perfil: string }[] };
+
+    expect(so.itens.every((i) => i.perfil === 'PROFESSOR')).toBe(true);
+  });
+
   it('o custo de aquisição exige relatorio.ver_custo', async () => {
     const vendedora = (
       (

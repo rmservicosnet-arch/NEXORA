@@ -4,11 +4,13 @@ import type {
   FiltroComprasFornecedor,
   FiltroCustoAquisicao,
   FiltroFluxo,
+  FiltroRevendedores,
   RelatorioAging,
   RelatorioAReceber,
   RelatorioComprasFornecedor,
   RelatorioCustoAquisicao,
   RelatorioFluxo,
+  RelatorioRevendedores,
 } from '@estoque/contracts';
 import { dec } from '@estoque/core';
 import { comEscopoAtual, type PrismaClient } from '@estoque/db';
@@ -393,6 +395,137 @@ export class RelatoriosFase5Service {
       });
 
       return { itens, subiram, cairam, estaveis };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Ranking de revendedores
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quem mais COMPROU no periodo.
+   *
+   * Nao "quem mais vendeu": a revenda do professor acontece fora daqui — ele
+   * compra da loja e vende para os alunos dele, e o sistema nao ve essa
+   * segunda venda. O rotulo tem de bater com a conta.
+   *
+   * A base e a VENDA faturada. Pedido confirmado e nao faturado e compromisso,
+   * nao compra — e como o pedido do portal VIRA venda no faturamento, contar a
+   * venda nao duplica nada.
+   */
+  async revendedores(filtro: FiltroRevendedores): Promise<RelatorioRevendedores> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const perfis = filtro.perfil === 'TODOS' ? ['PROFESSOR', 'REVENDEDOR'] : [filtro.perfil];
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          cliente_id: string;
+          cliente: string;
+          perfil: string;
+          tabela: string | null;
+          compras: bigint;
+          itens: bigint;
+          unidades: string;
+          valor: string;
+          ultima: string | null;
+          dias_sem_comprar: string | null;
+        }[]
+      >(
+        `
+        SELECT cl.id::text  AS cliente_id,
+               cl.nome      AS cliente,
+               cl.perfil::text,
+               tp.nome      AS tabela,
+               count(DISTINCT v.id)                  AS compras,
+               count(i.id)                           AS itens,
+               coalesce(sum(i.quantidade), 0)::text  AS unidades,
+               coalesce(sum(v.total), 0)::text       AS valor,
+               max(v.concluida_em)::text             AS ultima,
+               floor(
+                 EXTRACT(epoch FROM now() - max(v.concluida_em)) / 86400
+               )::text                               AS dias_sem_comprar
+          FROM cliente cl
+          JOIN venda v ON v.cliente_id = cl.id
+                      AND v.status = 'CONCLUIDA'
+                      AND v.concluida_em > now() - ($1::int * INTERVAL '1 day')
+          LEFT JOIN venda_item  i  ON i.venda_id = v.id
+          LEFT JOIN tabela_preco tp ON tp.id = cl.tabela_preco_id
+         WHERE cl.perfil::text = ANY($2::text[])
+         GROUP BY cl.id, cl.nome, cl.perfil, tp.nome
+         ORDER BY 8 DESC
+         LIMIT $3::int
+        `,
+        filtro.dias,
+        perfis,
+        filtro.limite,
+      );
+
+      /*
+        Os totais saem do BANCO, nao da pagina: "R$ 84 mil entre revendedores"
+        que muda com o `limite` e um numero que mente.
+
+        E `semCompraNoPeriodo` e o numero que o ranking ESCONDE — quem sumiu
+        nao aparece numa lista de quem comprou, e e justamente ele que um
+        programa de premiacao precisa enxergar.
+      */
+      const [resumo] = await tx.$queryRawUnsafe<
+        { total: string; revendedores: bigint; compras: bigint; cadastros: bigint }[]
+      >(
+        `
+        SELECT coalesce(sum(t.valor), 0)::text  AS total,
+               count(*)                         AS revendedores,
+               coalesce(sum(t.compras), 0)      AS compras,
+               (SELECT count(*) FROM cliente c2
+                 WHERE c2.status = 'ATIVO'
+                   AND c2.perfil::text = ANY($2::text[]))  AS cadastros
+          FROM (
+            SELECT v.cliente_id,
+                   sum(v.total)         AS valor,
+                   count(DISTINCT v.id) AS compras
+              FROM venda v
+              JOIN cliente cl ON cl.id = v.cliente_id
+             WHERE v.status = 'CONCLUIDA'
+               AND v.concluida_em > now() - ($1::int * INTERVAL '1 day')
+               AND cl.perfil::text = ANY($2::text[])
+             GROUP BY v.cliente_id
+          ) t
+        `,
+        filtro.dias,
+        perfis,
+      );
+
+      const total = dec(resumo?.total ?? '0');
+      const compraram = Number(resumo?.revendedores ?? 0);
+      const cadastros = Number(resumo?.cadastros ?? 0);
+
+      return {
+        itens: linhas.map((l, i) => {
+          const valor = dec(l.valor);
+          const compras = Number(l.compras);
+
+          return {
+            clienteId: l.cliente_id,
+            cliente: l.cliente,
+            perfil: l.perfil as 'CONSUMIDOR' | 'PROFESSOR' | 'REVENDEDOR',
+            tabelaPreco: l.tabela,
+            posicao: i + 1,
+            compras,
+            itens: Number(l.itens),
+            unidades: dec(l.unidades).toFixed(2),
+            valor: valor.toFixed(2),
+            // Compras nunca e zero aqui: a juncao com venda garante ao menos
+            // uma. A guarda existe para o dia em que a consulta mudar.
+            ticketMedio: compras === 0 ? '0.00' : valor.dividedBy(compras).toFixed(2),
+            participacao: total.isZero() ? '0.00' : valor.dividedBy(total).times(100).toFixed(2),
+            ultimaCompraEm: l.ultima,
+            diasSemComprar: l.dias_sem_comprar === null ? null : Number(l.dias_sem_comprar),
+          };
+        }),
+        total: total.toFixed(2),
+        revendedores: compraram,
+        compras: Number(resumo?.compras ?? 0),
+        semCompraNoPeriodo: Math.max(0, cadastros - compraram),
+      };
     });
   }
 

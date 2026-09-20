@@ -144,6 +144,11 @@ const GRUPOS: readonly Grupo[] = [
         para: '/relatorios/comparativo-lojas',
       },
       {
+        nome: 'Ranking de revendedores',
+        descricao: 'Quem mais COMPROU no período — professores e revendedores',
+        para: '/relatorios/vendas/revendedores',
+      },
+      {
         nome: 'Fechamento de caixa',
         descricao: 'Conferência e diferenças da gaveta',
         para: '/relatorios/fechamento-caixa',

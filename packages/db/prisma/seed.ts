@@ -930,6 +930,9 @@ async function main(): Promise<void> {
     data: {
       tenantId,
       nome: 'Academia Ippon — Judô',
+      // Professor que revende para os alunos: e o caso que o ranking de
+      // revendedores existe para medir.
+      perfil: 'PROFESSOR',
       documento: '98765432000155',
       email: 'contato@academiaippon.com.br',
       telefone: '+5511999990001',

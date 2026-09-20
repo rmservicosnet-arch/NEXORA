@@ -28,6 +28,16 @@ export const filtroClientesSchema = z.object({
 });
 export type FiltroClientes = z.infer<typeof filtroClientesSchema>;
 
+/**
+ * O que o cliente E para a loja.
+ *
+ * Diferente da TABELA DE PRECO, que diz quanto ele paga. Um professor movido
+ * para uma tabela promocional continua professor — e continua no ranking de
+ * quem mais compra.
+ */
+export const perfilClienteSchema = z.enum(['CONSUMIDOR', 'PROFESSOR', 'REVENDEDOR']);
+export type PerfilCliente = z.infer<typeof perfilClienteSchema>;
+
 export const clienteSchema = z.object({
   id: z.string(),
   nome: z.string(),
@@ -35,6 +45,8 @@ export const clienteSchema = z.object({
   email: z.string().nullable(),
   telefone: z.string().nullable(),
   status: statusClienteSchema,
+
+  perfil: perfilClienteSchema,
 
   tabelaPrecoId: z.string().nullable(),
   tabelaPreco: z.string().nullable(),
@@ -78,6 +90,7 @@ export const novoClienteSchema = z.object({
   documento: z.string().trim().max(20).optional(),
   email: z.string().trim().email().max(180).optional().or(z.literal('')),
   telefone: z.string().trim().max(30).optional(),
+  perfil: perfilClienteSchema.default('CONSUMIDOR'),
   tabelaPrecoId: z.string().uuid().optional(),
   modoCheckout: modoCheckoutSchema.optional(),
   usaCarteira: z.boolean().default(false),
@@ -90,6 +103,7 @@ export const alteracaoClienteSchema = z.object({
   email: z.string().trim().email().max(180).nullable().optional(),
   telefone: z.string().trim().max(30).nullable().optional(),
   status: statusClienteSchema.optional(),
+  perfil: perfilClienteSchema.optional(),
   /** `null` desvincula — e o cliente deixa de ter catalogo. */
   tabelaPrecoId: z.string().uuid().nullable().optional(),
   /** `null` volta a herdar o padrao da empresa. */

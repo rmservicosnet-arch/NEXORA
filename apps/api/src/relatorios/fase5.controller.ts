@@ -5,16 +5,19 @@ import {
   filtroComprasFornecedorSchema,
   filtroCustoAquisicaoSchema,
   filtroFluxoSchema,
+  filtroRevendedoresSchema,
   type FiltroAging,
   type FiltroAReceber,
   type FiltroComprasFornecedor,
   type FiltroCustoAquisicao,
   type FiltroFluxo,
+  type FiltroRevendedores,
   type RelatorioAging,
   type RelatorioAReceber,
   type RelatorioComprasFornecedor,
   type RelatorioCustoAquisicao,
   type RelatorioFluxo,
+  type RelatorioRevendedores,
 } from '@estoque/contracts';
 import { Controller, Get, Query } from '@nestjs/common';
 
@@ -44,6 +47,21 @@ export class RelatoriosFase5Controller {
   @Permissoes(PERM.relatorio.visualizar, PERM.financeiro.visualizar)
   async fluxo(@Query(new ZodPipe(filtroFluxoSchema)) filtro: FiltroFluxo): Promise<RelatorioFluxo> {
     return this.fase5.fluxo(filtro);
+  }
+
+  /**
+   * Quem mais comprou no periodo — professores e revendedores.
+   *
+   * Exige `cliente.visualizar` alem de `relatorio.visualizar`: e um ranking
+   * NOMINAL de quanto cada cliente comprou, e isso nao e dado de relatorio
+   * comum.
+   */
+  @Get('vendas/revendedores')
+  @Permissoes(PERM.relatorio.visualizar, PERM.cliente.visualizar)
+  async revendedores(
+    @Query(new ZodPipe(filtroRevendedoresSchema)) filtro: FiltroRevendedores,
+  ): Promise<RelatorioRevendedores> {
+    return this.fase5.revendedores(filtro);
   }
 
   @Get('compras/fornecedores')

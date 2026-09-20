@@ -673,6 +673,18 @@ model ChaveIdempotencia {
 // Clientes e fornecedores
 // ===========================================================================
 
+/// O que o cliente E para a loja.
+///
+/// Diferente da TABELA DE PRECO, que diz quanto ele paga, e diferente do
+/// `Perfil` da equipe, que e papel de permissao. Mover um professor para uma
+/// tabela promocional por um mes nao pode tira-lo do ranking de revendedores:
+/// sao perguntas diferentes, e uma nao responde a outra.
+enum PerfilCliente {
+  CONSUMIDOR
+  PROFESSOR
+  REVENDEDOR
+}
+
 model Cliente {
   id        String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
   tenantId  String         @map("tenant_id") @db.Uuid
@@ -682,6 +694,9 @@ model Cliente {
   email     String?        @db.VarChar(180)
   telefone  String?        @db.VarChar(30)
   status    StatusRegistro @default(ATIVO)
+
+  /// Quem ele e. Ver `PerfilCliente`.
+  perfil PerfilCliente @default(CONSUMIDOR)
 
   tabelaPrecoId String?      @map("tabela_preco_id") @db.Uuid
   tabelaPreco   TabelaPreco? @relation(fields: [tabelaPrecoId], references: [id], onDelete: SetNull)
@@ -710,6 +725,7 @@ model Cliente {
   @@unique([tenantId, documento])
   @@index([tenantId, nome])
   @@index([tenantId, status])
+  @@index([tenantId, perfil])
   @@map("cliente")
 }
 

@@ -1,4 +1,10 @@
-import { PERM, type ApoioCliente, type Cliente, type PaginaClientes } from '@estoque/contracts';
+import {
+  type PerfilCliente,
+  PERM,
+  type ApoioCliente,
+  type Cliente,
+  type PaginaClientes,
+} from '@estoque/contracts';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -54,6 +60,7 @@ export function Clientes() {
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [tabelaPrecoId, setTabelaPrecoId] = useState('');
+  const [perfil, setPerfil] = useState<PerfilCliente>('CONSUMIDOR');
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,6 +114,7 @@ export function Clientes() {
           ...(documento.trim() ? { documento: documento.trim() } : {}),
           ...(email.trim() ? { email: email.trim() } : {}),
           ...(telefone.trim() ? { telefone: telefone.trim() } : {}),
+          perfil,
           ...(tabelaPrecoId ? { tabelaPrecoId } : {}),
         },
       }),
@@ -257,6 +265,30 @@ export function Clientes() {
                 placeholder="(11) 98812-4410"
               />
             </div>
+
+            {/*
+              O perfil e a tabela sao perguntas DIFERENTES: uma diz quem ele
+              e, a outra quanto ele paga. Mover um professor para uma tabela
+              promocional nao pode tira-lo do ranking de revendedores.
+            */}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
+                Perfil
+              </span>
+              <select
+                value={perfil}
+                onChange={(e) => setPerfil(e.target.value as PerfilCliente)}
+                className="h-[42px] w-full max-w-[320px] rounded-md border border-neutral-200 bg-white px-3 text-[14px]"
+              >
+                <option value="CONSUMIDOR">Consumidor final</option>
+                <option value="PROFESSOR">Professor — revende para os alunos</option>
+                <option value="REVENDEDOR">Revendedor</option>
+              </select>
+              <span className="text-[12px] text-neutral-500">
+                Professor e revendedor entram no ranking de quem mais compra. Não confundir com a
+                tabela de preço, que diz quanto ele paga.
+              </span>
+            </label>
 
             <label className="flex flex-col gap-1.5">
               <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-neutral-600">

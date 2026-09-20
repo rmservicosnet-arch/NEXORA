@@ -193,3 +193,63 @@ export const relatorioAReceberSchema = z.object({
   paradasHaMais15: z.number().int(),
 });
 export type RelatorioAReceber = z.infer<typeof relatorioAReceberSchema>;
+
+// ---------------------------------------------------------------------------
+// Ranking de revendedores
+// ---------------------------------------------------------------------------
+
+/**
+ * Quem mais COMPROU no período.
+ *
+ * Não "quem mais vendeu": a revenda do professor acontece fora daqui — ele
+ * compra da loja e vende para os alunos dele, e o sistema não vê essa segunda
+ * venda. Chamar o ranking de "vendas do revendedor" seria rótulo mais forte do
+ * que a conta.
+ *
+ * A base é a VENDA faturada, não o pedido: pedido confirmado e não faturado é
+ * compromisso, não compra. E é a mesma linha que vira venda quando o pedido do
+ * portal é faturado, então não há contagem dupla.
+ */
+export const filtroRevendedoresSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(90),
+  /** Vazio = todos os perfis que não são consumidor final. */
+  perfil: z.enum(['PROFESSOR', 'REVENDEDOR', 'TODOS']).default('TODOS'),
+  limite: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type FiltroRevendedores = z.infer<typeof filtroRevendedoresSchema>;
+
+export const linhaRevendedorSchema = z.object({
+  clienteId: z.string(),
+  cliente: z.string(),
+  perfil: z.enum(['CONSUMIDOR', 'PROFESSOR', 'REVENDEDOR']),
+  tabelaPreco: z.string().nullable(),
+  /** Posição no ranking, já com empate resolvido pelo valor. */
+  posicao: z.number().int(),
+  compras: z.number().int(),
+  itens: z.number().int(),
+  unidades: z.string(),
+  valor: z.string(),
+  /** `valor / compras`. Quem compra muito de pouco em pouco aparece aqui. */
+  ticketMedio: z.string(),
+  participacao: z.string(),
+  ultimaCompraEm: z.string().nullable(),
+  /** Dias desde a última compra. Alto com valor alto é quem está sumindo. */
+  diasSemComprar: z.number().int().nullable(),
+});
+export type LinhaRevendedor = z.infer<typeof linhaRevendedorSchema>;
+
+export const relatorioRevendedoresSchema = z.object({
+  itens: z.array(linhaRevendedorSchema),
+  /** O conjunto inteiro, nunca a página. */
+  total: z.string(),
+  revendedores: z.number().int(),
+  compras: z.number().int(),
+  /**
+   * Quantos cadastros têm perfil de revenda mas NÃO compraram no período.
+   *
+   * É o número que um programa de premiação precisa e o ranking esconde: quem
+   * sumiu não aparece na lista de quem comprou.
+   */
+  semCompraNoPeriodo: z.number().int(),
+});
+export type RelatorioRevendedores = z.infer<typeof relatorioRevendedoresSchema>;
