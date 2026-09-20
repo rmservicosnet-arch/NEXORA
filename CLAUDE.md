@@ -147,6 +147,8 @@ o runtime.
 | Chave de configuração que não faz nada | Pior do que não existir: a pessoa configura, confia, e nada muda. Declare em `semEfeito` e desabilite na tela — esconder faz o campo parecer esquecido |
 | Id devolvido onde a tela espera nome | `movimento.ator` era o `ator_id`: a coluna "Usuário" mostrava uuid. Sem chave estrangeira (o razão é append-only), resolva o nome numa consulta por página |
 | BOM escrito literal no código-fonte | Vira erro de lint e some em qualquer cópia. Use `String.fromCharCode(0xfeff)` |
+| Teste que cria dado visível e não limpa | Tabela de preço criada em teste aparece na grade de TODO produto. Desative no `afterAll` — o teste não pode degradar o ambiente que usa |
+| `replace` sem conferir se o âncora existe | Troca silenciosa que não acontece: o arquivo fica sem a declaração e o erro só aparece em execução |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

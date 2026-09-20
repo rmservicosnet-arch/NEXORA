@@ -80,11 +80,25 @@ export const produtoListaSchema = z.object({
 });
 export type ProdutoLista = z.infer<typeof produtoListaSchema>;
 
+/**
+ * Os numeros do cabecalho da listagem.
+ *
+ * Contados sobre o MESMO filtro que a lista — um "3 sem foto" que ignorasse a
+ * busca mandaria o operador procurar item que nao esta na tela.
+ */
+export const resumoProdutosSchema = z.object({
+  variacoes: z.number().int(),
+  semFoto: z.number().int(),
+  comDivergencia: z.number().int(),
+});
+export type ResumoProdutos = z.infer<typeof resumoProdutosSchema>;
+
 export const paginaProdutosSchema = z.object({
   itens: z.array(produtoListaSchema),
   proximoCursor: z.string().nullable(),
   /** Quantos itens a empresa tem no filtro atual, para o rodapé. */
   total: z.number().int(),
+  resumo: resumoProdutosSchema,
 });
 export type PaginaProdutos = z.infer<typeof paginaProdutosSchema>;
 

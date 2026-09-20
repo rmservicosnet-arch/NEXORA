@@ -25,6 +25,16 @@ let http: ReturnType<typeof request>;
 let tokenAdmin: string;
 let tokenEstoquista: string;
 
+/**
+ * O que este arquivo criou.
+ *
+ * Tabela ativa aparece na grade de preço de TODO produto. Sem a limpeza,
+ * cada execução deixa mais uma "Promovida XYZ" no aviso "sem preço em…" —
+ * o teste degrada o ambiente que usa. Apagar não dá (não há rota, e seria
+ * destrutivo), então elas são desativadas no fim.
+ */
+const criadas: string[] = [];
+
 interface Tabela {
   id: string;
   nome: string;
@@ -61,7 +71,9 @@ async function criar(nome: string): Promise<string> {
     .set('Authorization', `Bearer ${tokenAdmin}`)
     .send({ nome })
     .expect(201);
-  return (resposta.body as { id: string }).id;
+  const id = (resposta.body as { id: string }).id;
+  criadas.push(id);
+  return id;
 }
 
 beforeAll(async () => {
@@ -79,6 +91,17 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  if (http) {
+    for (const id of criadas) {
+      // A padrão recusa desativação; a que ficou com cadastro também. Falhar
+      // aqui não pode derrubar a suíte — a limpeza é higiene, não asserção.
+      await http
+        .patch(`/api/tabelas-preco/${id}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ status: 'INATIVO' })
+        .catch(() => undefined);
+    }
+  }
   if (app) await app.close();
 });
 

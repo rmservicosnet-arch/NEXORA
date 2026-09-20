@@ -77,7 +77,23 @@ export class ProdutosService {
           : {}),
       };
 
-      const total = await tx.produto.count({ where: onde });
+      /**
+       * O total e os três números do cabeçalho, sobre o MESMO filtro.
+       *
+       * Um "3 sem foto" que ignorasse a busca mandaria o operador procurar
+       * item que não está na tela. `variacoes` conta as ativas: variação
+       * desligada não é trabalho a fazer.
+       */
+      const [total, variacoes, semFoto, comDivergencia] = await Promise.all([
+        tx.produto.count({ where: onde }),
+        tx.variacao.count({ where: { status: 'ATIVO', produto: onde } }),
+        tx.produto.count({
+          where: { ...onde, imagens: { none: { excluidoEm: null, status: 'PRONTA' } } },
+        }),
+        tx.produto.count({
+          where: { ...onde, variacoes: { some: { saldos: { some: { quantidade: { lt: 0 } } } } } },
+        }),
+      ]);
 
       // Cursor, não offset: com dado mudando sob os pés, offset repete e pula
       // registros. Ver docs/REPORTS.md §5.
@@ -160,6 +176,7 @@ export class ProdutosService {
         itens,
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         total,
+        resumo: { variacoes, semFoto, comDivergencia },
       };
     });
   }

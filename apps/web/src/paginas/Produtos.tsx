@@ -1,4 +1,9 @@
-import { PERM, type PaginaProdutos, type ProdutoLista } from '@estoque/contracts';
+import {
+  PERM,
+  type ApoioProduto,
+  type PaginaProdutos,
+  type ProdutoLista,
+} from '@estoque/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -10,8 +15,11 @@ import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 import { Foto } from '../ui/Foto';
 import { juntar } from '../ui/juntar';
 
+/** Quebra de linha do CSV, como constante: literal aqui confunde o editor. */
+const QUEBRA = String.fromCharCode(10);
+
 /** Largura em que todas as colunas ainda cabem sem se sobrepor. */
-const LARGURA_MINIMA = 'min-w-[900px]';
+const LARGURA_MINIMA = 'min-w-[930px]';
 
 const STATUS = [
   { valor: undefined, rotulo: 'Todos' },
@@ -25,19 +33,38 @@ export function Produtos() {
   const [busca, setBusca] = useState('');
   const [status, setStatus] = useState<string | undefined>(undefined);
   const [soDivergencia, setSoDivergencia] = useState(false);
+  const [categoriaId, setCategoriaId] = useState('');
+  const [marcaId, setMarcaId] = useState('');
+  /**
+   * O que está marcado.
+   *
+   * A proposta põe uma caixa de seleção por linha. Ela só existe aqui porque
+   * "Exportar" age sobre a seleção quando há uma — caixa de seleção sem ação
+   * é decoração, e decoração que parece controle engana.
+   */
+  const [marcados, setMarcados] = useState<ReadonlySet<string>>(new Set());
 
   const parametros = new URLSearchParams();
   if (busca.trim()) parametros.set('busca', busca.trim());
   if (status) parametros.set('status', status);
   if (soDivergencia) parametros.set('apenasDivergencia', 'true');
+  if (categoriaId) parametros.set('categoriaId', categoriaId);
+  if (marcaId) parametros.set('marcaId', marcaId);
 
   const consulta = useQuery({
-    queryKey: ['produtos', busca, status, soDivergencia],
+    queryKey: ['produtos', busca, status, soDivergencia, categoriaId, marcaId],
     queryFn: () => pedir<PaginaProdutos>(`/produtos?${parametros.toString()}`),
     placeholderData: keepPreviousData,
   });
 
+  const apoio = useQuery({
+    queryKey: ['produtos', 'apoio'],
+    queryFn: () => pedir<ApoioProduto>('/produtos/apoio'),
+    staleTime: 5 * 60_000,
+  });
+
   const itens = consulta.data?.itens ?? [];
+  const resumo = consulta.data?.resumo;
 
   // A coluna de custo existe porque o SERVIDOR mandou o campo. O front não
   // decide isso — ele reage. Quem não tem `produto.ver_custo` recebe um JSON
@@ -45,8 +72,63 @@ export function Produtos() {
   const mostrarCusto = itens.some((i) => i.valorEstoque !== undefined);
 
   const colunas = mostrarCusto
-    ? 'grid-cols-[40px_128px_minmax(0,1fr)_120px_60px_108px_104px_84px_92px]'
-    : 'grid-cols-[40px_128px_minmax(0,1fr)_120px_60px_104px_84px_92px]';
+    ? 'grid-cols-[32px_40px_124px_minmax(0,1fr)_114px_66px_98px_98px_74px_90px]'
+    : 'grid-cols-[32px_40px_124px_minmax(0,1fr)_114px_66px_98px_74px_90px]';
+
+  const todosMarcados = itens.length > 0 && itens.every((i) => marcados.has(i.id));
+
+  function alternarTodos() {
+    setMarcados(todosMarcados ? new Set() : new Set(itens.map((i) => i.id)));
+  }
+
+  function alternar(id: string) {
+    setMarcados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
+  /** Exporta a seleção; sem seleção, o que está na tela. */
+  function exportar() {
+    const alvo = marcados.size > 0 ? itens.filter((i) => marcados.has(i.id)) : itens;
+    const colunasCsv = [
+      'sku_base',
+      'nome',
+      'categoria',
+      'marca',
+      'variacoes',
+      ...(mostrarCusto ? ['custo_medio', 'valor_estoque'] : []),
+      'preco_minimo',
+      'saldo',
+      'status',
+    ];
+    const linhas = alvo.map((p) =>
+      [
+        p.skuBase,
+        p.nome.replaceAll(';', ','),
+        p.categoria ?? '',
+        p.marca ?? '',
+        String(p.totalVariacoes),
+        ...(mostrarCusto ? [p.custoMedio ?? '', p.valorEstoque ?? ''] : []),
+        p.precoMinimo ?? '',
+        p.saldoTotal,
+        p.status,
+      ].join(';'),
+    );
+    const marcaUtf8 = String.fromCharCode(0xfeff);
+    const url = URL.createObjectURL(
+      new Blob([marcaUtf8 + [colunasCsv.join(';'), ...linhas].join(QUEBRA)], {
+        type: 'text/csv;charset=utf-8',
+      }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'produtos.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <>
@@ -67,13 +149,66 @@ export function Produtos() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-6">
-        <div>
-          <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
-            Produtos
-          </h1>
-          <p className="mt-1 text-[13.5px] text-neutral-500">
-            {consulta.data ? `${consulta.data.total} produtos no filtro atual` : 'Carregando…'}
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
+              Produtos
+            </h1>
+            {/*
+              Os números do filtro atual, não da empresa. Um "3 sem foto" que
+              ignorasse a busca mandaria procurar item que não está na tela.
+            */}
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13.5px] text-neutral-500">
+              {consulta.data ? (
+                <>
+                  <span>
+                    {consulta.data.total} {consulta.data.total === 1 ? 'produto' : 'produtos'}
+                  </span>
+                  <span className="text-neutral-300">·</span>
+                  <span>
+                    {resumo?.variacoes ?? 0}{' '}
+                    {(resumo?.variacoes ?? 0) === 1 ? 'variação' : 'variações'}
+                  </span>
+                  {resumo && resumo.semFoto > 0 ? (
+                    <>
+                      <span className="text-neutral-300">·</span>
+                      <Link
+                        to="/catalogo"
+                        className="font-medium text-[var(--color-atencao)] no-underline hover:underline"
+                      >
+                        {resumo.semFoto} sem foto
+                      </Link>
+                    </>
+                  ) : null}
+                  {resumo && resumo.comDivergencia > 0 ? (
+                    <>
+                      <span className="text-neutral-300">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setSoDivergencia(true)}
+                        className="font-medium text-[var(--color-perigo)] underline decoration-transparent underline-offset-2 hover:decoration-current"
+                      >
+                        {resumo.comDivergencia} com divergência de saldo
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                'Carregando…'
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Botao variante="secundario" disabled={itens.length === 0} onClick={exportar}>
+              {marcados.size > 0 ? `Exportar ${String(marcados.size)}` : 'Exportar'}
+            </Botao>
+            <SePode permissoes={[PERM.produto.criar]}>
+              <Botao variante="primario" comoFilho>
+                <Link to="/produtos/novo">Novo produto</Link>
+              </Botao>
+            </SePode>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -85,6 +220,34 @@ export function Produtos() {
             aria-label="Buscar produto"
             className="h-[35px] w-[280px] rounded-md border border-neutral-200 bg-white px-3 text-[13px] placeholder:text-neutral-400"
           />
+
+          <select
+            value={categoriaId}
+            onChange={(e) => setCategoriaId(e.target.value)}
+            aria-label="Categoria"
+            className="h-[35px] rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
+          >
+            <option value="">Categoria: todas</option>
+            {apoio.data?.categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={marcaId}
+            onChange={(e) => setMarcaId(e.target.value)}
+            aria-label="Marca"
+            className="h-[35px] rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
+          >
+            <option value="">Marca: todas</option>
+            {apoio.data?.marcas.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nome}
+              </option>
+            ))}
+          </select>
 
           <div role="group" aria-label="Status" className="flex gap-1.5">
             {STATUS.map((s) => (
@@ -163,6 +326,13 @@ export function Produtos() {
                   colunas,
                 )}
               >
+                <input
+                  type="checkbox"
+                  checked={todosMarcados}
+                  onChange={alternarTodos}
+                  aria-label="Selecionar todos os produtos"
+                  className="size-3.5"
+                />
                 <Cabecalho>Foto</Cabecalho>
                 <Cabecalho>SKU base</Cabecalho>
                 <Cabecalho>Produto</Cabecalho>
@@ -176,7 +346,14 @@ export function Produtos() {
 
               <div className={juntar('min-h-0 flex-1 overflow-y-auto', LARGURA_MINIMA)}>
                 {itens.map((p) => (
-                  <Linha key={p.id} produto={p} colunas={colunas} mostrarCusto={mostrarCusto} />
+                  <Linha
+                    key={p.id}
+                    produto={p}
+                    colunas={colunas}
+                    mostrarCusto={mostrarCusto}
+                    marcado={marcados.has(p.id)}
+                    aoMarcar={() => alternar(p.id)}
+                  />
                 ))}
               </div>
 
@@ -229,81 +406,104 @@ function Linha({
   produto,
   colunas,
   mostrarCusto,
+  marcado,
+  aoMarcar,
 }: {
   readonly produto: ProdutoLista;
   readonly colunas: string;
   readonly mostrarCusto: boolean;
+  readonly marcado: boolean;
+  readonly aoMarcar: () => void;
 }) {
   const saldo = Number(produto.saldoTotal);
   const semFoto = produto.totalFotos === 0;
 
   return (
-    <Link
-      to={`/produtos/${produto.id}`}
+    <div
       className={juntar(
-        'grid h-[45px] items-center gap-2.5 border-b border-neutral-50 px-4 no-underline hover:bg-neutral-25',
+        'grid h-[45px] items-center gap-2.5 border-b border-neutral-50 px-4 hover:bg-neutral-25',
         produto.temSaldoNegativo && 'bg-[#fdf5f5] hover:bg-[#fbeeee]',
         colunas,
       )}
     >
-      <div
-        className={juntar(
-          'flex size-9 items-center justify-center overflow-hidden rounded',
-          semFoto ? 'border border-dashed border-[#d3a87a] bg-white' : 'bg-primary-50',
-        )}
-        title={semFoto ? 'Sem foto' : `${produto.totalFotos} foto(s)`}
+      {/*
+        A caixa fica FORA do link. Dentro, marcar um produto navegaria para
+        ele — e a seleção seria impossível de fazer.
+      */}
+      <input
+        type="checkbox"
+        checked={marcado}
+        onChange={aoMarcar}
+        aria-label={`Selecionar ${produto.nome}`}
+        className="size-3.5"
+      />
+      <Link
+        to={`/produtos/${produto.id}`}
+        className="contents no-underline"
+        aria-label={`Abrir ${produto.nome}`}
       >
-        {produto.imagemPrincipalId ? (
-          <Foto imagemId={produto.imagemPrincipalId} alt={produto.nome} className="size-full" />
-        ) : semFoto ? (
-          <IconeSemFoto />
-        ) : (
-          <IconeCaixa />
-        )}
-      </div>
+        <div
+          className={juntar(
+            'flex size-9 items-center justify-center overflow-hidden rounded',
+            semFoto ? 'border border-dashed border-[#d3a87a] bg-white' : 'bg-primary-50',
+          )}
+          title={semFoto ? 'Sem foto' : `${produto.totalFotos} foto(s)`}
+        >
+          {produto.imagemPrincipalId ? (
+            <Foto imagemId={produto.imagemPrincipalId} alt={produto.nome} className="size-full" />
+          ) : semFoto ? (
+            <IconeSemFoto />
+          ) : (
+            <IconeCaixa />
+          )}
+        </div>
 
-      <span className="font-mono text-[12.5px] text-neutral-600">{produto.skuBase}</span>
+        <span className="font-mono text-[12.5px] text-neutral-600">{produto.skuBase}</span>
 
-      <div className="min-w-0">
-        <p className="truncate text-[13.5px] font-medium text-neutral-900">{produto.nome}</p>
-        {produto.marca ? (
-          <p className="truncate text-[11.5px] text-neutral-400">{produto.marca}</p>
-        ) : null}
-      </div>
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-medium text-neutral-900">{produto.nome}</p>
+          {produto.marca ? (
+            <p className="truncate text-[11.5px] text-neutral-400">{produto.marca}</p>
+          ) : null}
+        </div>
 
-      <span className="truncate text-[13px] text-neutral-600">{produto.categoria ?? '—'}</span>
-      <span className="tabular text-center font-mono text-[12.5px] text-neutral-600">
-        {produto.totalVariacoes}
-      </span>
-
-      {mostrarCusto ? (
-        <span className="tabular text-right font-mono text-[12.5px] text-neutral-500">
-          {produto.custoMedio ? `R$ ${Number(produto.custoMedio).toFixed(2)}` : '—'}
+        <span className="truncate text-[13px] text-neutral-600">{produto.categoria ?? '—'}</span>
+        <span className="tabular text-center font-mono text-[12.5px] text-neutral-600">
+          {produto.totalVariacoes}
         </span>
-      ) : null}
 
-      <span className="tabular text-right font-mono text-[13px] font-medium text-neutral-900">
-        {produto.precoMinimo ? `R$ ${produto.precoMinimo}` : '—'}
-      </span>
+        {mostrarCusto ? (
+          <span className="tabular text-right font-mono text-[12.5px] text-neutral-500">
+            {produto.custoMedio ? `R$ ${Number(produto.custoMedio).toFixed(2)}` : '—'}
+          </span>
+        ) : null}
 
-      <span
-        className={juntar(
-          'tabular text-right font-mono text-[13px] font-medium',
-          saldo < 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-900',
-        )}
-      >
-        {saldo < 0 ? `−${Math.abs(saldo)}` : saldo}
-      </span>
+        <span className="tabular text-right font-mono text-[13px] font-medium text-neutral-900">
+          {produto.precoMinimo ? `R$ ${produto.precoMinimo}` : '—'}
+        </span>
 
-      <Selo status={produto.status} />
-    </Link>
+        <span
+          className={juntar(
+            'tabular text-right font-mono text-[13px] font-medium',
+            saldo < 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-900',
+          )}
+        >
+          {saldo < 0 ? `−${Math.abs(saldo)}` : saldo}
+        </span>
+
+        <Selo status={produto.status} />
+      </Link>
+    </div>
   );
 }
 
 function Selo({ status }: { readonly status: ProdutoLista['status'] }) {
   const mapa = {
     ATIVO: { texto: 'Ativo', cor: 'text-[var(--color-sucesso)] bg-[var(--color-sucesso-fundo)]' },
-    RASCUNHO: { texto: 'Rascunho', cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]' },
+    RASCUNHO: {
+      texto: 'Rascunho',
+      cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]',
+    },
     INATIVO: { texto: 'Inativo', cor: 'text-neutral-500 bg-neutral-50' },
   } as const;
 
