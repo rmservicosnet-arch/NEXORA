@@ -882,3 +882,55 @@ export const registroExportacaoSchema = z.object({
   linhas: z.number().int().min(0).max(1_000_000),
 });
 export type RegistroExportacao = z.infer<typeof registroExportacaoSchema>;
+
+// ---------------------------------------------------------------------------
+// Fechamento de caixa
+// ---------------------------------------------------------------------------
+
+export const filtroFechamentosSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  /** So os que fecharam com diferenca. E nesses que alguem precisa olhar. */
+  apenasComDiferenca: z.coerce.boolean().default(false),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroFechamentos = z.infer<typeof filtroFechamentosSchema>;
+
+export const linhaFechamentoSchema = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  loja: z.string(),
+  operador: z.string(),
+  abertoEm: z.string(),
+  fechadoEm: z.string().nullable(),
+  status: z.string(),
+  valorAbertura: z.string(),
+  valorEsperado: z.string().nullable(),
+  valorContado: z.string().nullable(),
+  /** `contado - esperado`. Negativo e falta, positivo e sobra. */
+  diferenca: z.string().nullable(),
+  conferidoPor: z.string().nullable(),
+  observacao: z.string().nullable(),
+});
+export type LinhaFechamento = z.infer<typeof linhaFechamentoSchema>;
+
+export const relatorioFechamentosSchema = z.object({
+  dias: z.number().int(),
+  fechados: z.number().int(),
+  conferidos: z.number().int(),
+  /** Ainda abertos agora. Nao entram na conta de diferenca. */
+  abertos: z.number().int(),
+  comDiferenca: z.number().int(),
+  /**
+   * Faltas e sobras contadas separadamente.
+   *
+   * Somadas, R$ 200 de falta e R$ 200 de sobra dariam zero numa loja onde
+   * dois operadores erram todo dia em direcoes opostas.
+   */
+  faltas: z.string(),
+  sobras: z.string(),
+  /** Sem conferencia o fechamento fica sem segunda assinatura. */
+  semConferencia: z.number().int(),
+  itens: z.array(linhaFechamentoSchema),
+});
+export type RelatorioFechamentos = z.infer<typeof relatorioFechamentosSchema>;

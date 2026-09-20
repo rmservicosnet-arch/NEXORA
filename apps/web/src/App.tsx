@@ -33,6 +33,7 @@ import { RelatorioComparativoTela } from './paginas/RelatorioComparativo';
 import { RelatorioConfirmacaoTela } from './paginas/RelatorioConfirmacao';
 import { RelatorioDescontosTela } from './paginas/RelatorioDescontos';
 import { RelatorioEstoque } from './paginas/RelatorioEstoque';
+import { RelatorioFechamentosTela } from './paginas/RelatorioFechamentos';
 import { RelatorioFilaTela } from './paginas/RelatorioFila';
 import { RelatorioLimiteTela } from './paginas/RelatorioLimite';
 import { RelatorioRupturaTela } from './paginas/RelatorioRuptura';
@@ -192,6 +193,7 @@ function AreaDaEquipe() {
           <Route path="relatorios/auditoria/trilha" element={<RelatorioTrilhaTela />} />
           <Route path="relatorios/auditoria/sensiveis" element={<RelatorioSensiveisTela />} />
           <Route path="relatorios/auditoria/acessos" element={<RelatorioAcessosTela />} />
+          <Route path="relatorios/fechamento-caixa" element={<RelatorioFechamentosTela />} />
           <Route path="relatorios/transferencias" element={<RelatorioTransferenciasTela />} />
           <Route path="relatorios/inventario" element={<RelatorioInventarioTela />} />
           <Route

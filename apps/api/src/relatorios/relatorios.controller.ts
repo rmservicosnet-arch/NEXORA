@@ -3,6 +3,7 @@ import {
   filtroCancelamentosSchema,
   filtroComparativoSchema,
   filtroDescontosSchema,
+  filtroFechamentosSchema,
   filtroFormasSchema,
   filtroGiroSchema,
   filtroMovimentoRelatorioSchema,
@@ -12,6 +13,7 @@ import {
   type FiltroCancelamentos,
   type FiltroComparativo,
   type FiltroDescontos,
+  type FiltroFechamentos,
   type FiltroFormas,
   type FiltroGiro,
   type FiltroMovimentoRelatorio,
@@ -21,6 +23,7 @@ import {
   type RelatorioCancelamentos,
   type RelatorioComparativo,
   type RelatorioDescontos,
+  type RelatorioFechamentos,
   type RelatorioFormas,
   type RelatorioGiro,
   type RelatorioInventario,
@@ -31,6 +34,7 @@ import {
 import type { Principal } from '../auth/dominios';
 import { Permissoes, PrincipalAtual } from '../comum/decoradores';
 import { ZodPipe } from '../comum/zod.pipe';
+import { RelatoriosFechamentosService } from './fechamentos.service';
 import { RelatoriosService } from './relatorios.service';
 
 /**
@@ -42,7 +46,10 @@ import { RelatoriosService } from './relatorios.service';
  */
 @Controller('relatorios')
 export class RelatoriosController {
-  constructor(private readonly relatorios: RelatoriosService) {}
+  constructor(
+    private readonly relatorios: RelatoriosService,
+    private readonly caixa: RelatoriosFechamentosService,
+  ) {}
 
   @Get('posicao-estoque')
   @Permissoes(PERM.relatorio.visualizar)
@@ -79,6 +86,15 @@ export class RelatoriosController {
   }
 
   /** O que foi desfeito, e quanto tempo depois. */
+  /** Confere o que a gaveta devia ter com o que ela tinha. */
+  @Get('fechamento-caixa')
+  @Permissoes(PERM.relatorio.visualizar)
+  async fechamentos(
+    @Query(new ZodPipe(filtroFechamentosSchema)) filtro: FiltroFechamentos,
+  ): Promise<RelatorioFechamentos> {
+    return this.caixa.fechamentos(filtro);
+  }
+
   @Get('cancelamentos')
   @Permissoes(PERM.relatorio.visualizar)
   async cancelamentos(

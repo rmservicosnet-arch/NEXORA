@@ -189,6 +189,25 @@ interface Comparativo {
   }[];
 }
 
+interface Fechamentos {
+  dias: number;
+  fechados: number;
+  conferidos: number;
+  abertos: number;
+  comDiferenca: number;
+  faltas: string;
+  sobras: string;
+  semConferencia: number;
+  itens: {
+    numero: number;
+    status: string;
+    valorEsperado: string | null;
+    valorContado: string | null;
+    diferenca: string | null;
+    conferidoPor: string | null;
+  }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -984,5 +1003,87 @@ describe.runIf(temBanco)('comparativo entre lojas', () => {
       .expect(400);
 
     await http.get('/api/relatorios/comparativo-lojas').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('fechamento de caixa', () => {
+  /**
+   * Falta e sobra contadas separadamente. Somadas, R$ 200 de cada dariam zero
+   * numa loja onde dois operadores erram todo dia em direcoes opostas.
+   */
+  it('falta e sobra nao se anulam', async () => {
+    const r = await http
+      .get('/api/relatorios/fechamento-caixa?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Fechamentos;
+
+    expect(Number(f.faltas)).toBeLessThanOrEqual(0);
+    expect(Number(f.sobras)).toBeGreaterThanOrEqual(0);
+    expect(f.comDiferenca).toBeLessThanOrEqual(f.fechados + f.abertos);
+  });
+
+  /** `diferenca` e `contado - esperado`, e nunca e ajustada em silencio. */
+  it('a diferenca bate com o contado menos o esperado', async () => {
+    const r = await http
+      .get('/api/relatorios/fechamento-caixa?dias=365&limite=200')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Fechamentos).itens) {
+      if (i.diferenca !== null && i.valorContado !== null && i.valorEsperado !== null) {
+        expect(Number(i.diferenca)).toBeCloseTo(
+          Number(i.valorContado) - Number(i.valorEsperado),
+          2,
+        );
+      }
+      // Caixa aberto ainda nao tem conta nenhuma.
+      if (i.status === 'ABERTO') expect(i.diferenca).toBeNull();
+    }
+  });
+
+  /**
+   * O recorte vale para a LISTA; o resumo continua contando tudo. Recortar o
+   * resumo junto faria "153 nao bateram de 153 fechados".
+   */
+  it('o recorte muda a lista e nao o resumo', async () => {
+    const [todos, sos] = await Promise.all([
+      http
+        .get('/api/relatorios/fechamento-caixa?dias=365')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+      http
+        .get('/api/relatorios/fechamento-caixa?dias=365&apenasComDiferenca=true')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+    ]);
+
+    const a = todos.body as Fechamentos;
+    const b = sos.body as Fechamentos;
+
+    expect(b.fechados).toBe(a.fechados);
+    expect(b.comDiferenca).toBe(a.comDiferenca);
+    for (const i of b.itens) expect(Number(i.diferenca)).not.toBe(0);
+  });
+
+  /** Fechado sem conferencia e fechamento com uma assinatura so. */
+  it('conferidos e sem conferencia somam os fechados', async () => {
+    const r = await http
+      .get('/api/relatorios/fechamento-caixa?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Fechamentos;
+    expect(f.conferidos + f.semConferencia).toBe(f.fechados);
+  });
+
+  it('exige sessao e recusa periodo invalido', async () => {
+    await http
+      .get('/api/relatorios/fechamento-caixa?dias=0')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/fechamento-caixa').expect(401);
   });
 });

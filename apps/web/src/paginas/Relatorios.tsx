@@ -143,6 +143,11 @@ const GRUPOS: readonly Grupo[] = [
         descricao: 'Mesma métrica, lojas lado a lado',
         para: '/relatorios/comparativo-lojas',
       },
+      {
+        nome: 'Fechamento de caixa',
+        descricao: 'Conferência e diferenças da gaveta',
+        para: '/relatorios/fechamento-caixa',
+      },
     ],
   },
   {
@@ -221,13 +226,12 @@ const GRUPOS: readonly Grupo[] = [
     ],
   },
   {
-    nome: 'Financeiro e caixa',
+    nome: 'Financeiro',
     fase: 'Fase 5',
     itens: [
       { nome: 'Contas a receber por vencimento', descricao: 'Aging: a vencer, 1–30, 31–60, 60+' },
       { nome: 'Contas a pagar por vencimento', descricao: 'Idem, do outro lado' },
       { nome: 'Fluxo de caixa realizado', descricao: 'Entrou e saiu, por período' },
-      { nome: 'Fechamento de caixa', descricao: 'Conferência e diferenças' },
       { nome: 'Comissões apuradas', descricao: 'Por vendedor, com status de pagamento' },
     ],
   },
