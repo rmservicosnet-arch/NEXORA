@@ -291,3 +291,46 @@ export const relatorioFormasSchema = z.object({
   parcelamento: z.array(linhaParcelamentoSchema),
 });
 export type RelatorioFormas = z.infer<typeof relatorioFormasSchema>;
+
+// ---------------------------------------------------------------------------
+// Descontos concedidos
+// ---------------------------------------------------------------------------
+
+export const filtroDescontosSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+});
+export type FiltroDescontos = z.infer<typeof filtroDescontosSchema>;
+
+export const linhaDescontoSchema = z.object({
+  vendedorId: z.string(),
+  vendedor: z.string(),
+  vendas: z.number().int(),
+  /** Quantas dessas vendas sairam com algum desconto. */
+  comDesconto: z.number().int(),
+  /** `preco x quantidade`, antes de qualquer desconto. */
+  bruto: z.string(),
+  /** Desconto de item MAIS desconto do fechamento. */
+  desconto: z.string(),
+  /** Acrescimo. Sem ele, dar 10% e somar 15% pareceria generosidade. */
+  acrescimo: z.string(),
+  liquido: z.string(),
+  /** `desconto / bruto`, em pontos percentuais. */
+  taxa: z.string(),
+  /** A venda com o maior desconto proporcional, em pontos percentuais. */
+  maiorTaxa: z.string(),
+});
+export type LinhaDesconto = z.infer<typeof linhaDescontoSchema>;
+
+export const relatorioDescontosSchema = z.object({
+  dias: z.number().int(),
+  bruto: z.string(),
+  desconto: z.string(),
+  acrescimo: z.string(),
+  liquido: z.string(),
+  taxa: z.string(),
+  vendas: z.number().int(),
+  comDesconto: z.number().int(),
+  vendedores: z.array(linhaDescontoSchema),
+});
+export type RelatorioDescontos = z.infer<typeof relatorioDescontosSchema>;

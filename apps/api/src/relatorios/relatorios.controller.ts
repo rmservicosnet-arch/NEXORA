@@ -1,17 +1,20 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import {
+  filtroDescontosSchema,
   filtroFormasSchema,
   filtroGiroSchema,
   filtroMovimentoRelatorioSchema,
   filtroPosicaoSchema,
   filtroVendasRelatorioSchema,
   PERM,
+  type FiltroDescontos,
   type FiltroFormas,
   type FiltroGiro,
   type FiltroMovimentoRelatorio,
   type FiltroPosicao,
   type FiltroVendasRelatorio,
   type PosicaoEstoque,
+  type RelatorioDescontos,
   type RelatorioFormas,
   type RelatorioGiro,
   type RelatorioInventario,
@@ -59,6 +62,15 @@ export class RelatoriosController {
    * `ordem=parado` inverte a leitura. Duas rotas seriam duas consultas que
    * precisariam concordar sobre o que é girar.
    */
+  /** Controle, nao curiosidade: quem desconta quanto, e quanto cobra a mais. */
+  @Get('descontos')
+  @Permissoes(PERM.relatorio.visualizar)
+  async descontos(
+    @Query(new ZodPipe(filtroDescontosSchema)) filtro: FiltroDescontos,
+  ): Promise<RelatorioDescontos> {
+    return this.relatorios.descontos(filtro);
+  }
+
   /** Como o dinheiro entrou. Sem custo envolvido: ninguem precisa da margem. */
   @Get('formas-pagamento')
   @Permissoes(PERM.relatorio.visualizar)

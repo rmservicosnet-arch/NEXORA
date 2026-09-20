@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  FiltroDescontos,
   FiltroFormas,
   FiltroGiro,
   FiltroMovimentoRelatorio,
@@ -8,8 +9,10 @@ import type {
   LinhaPosicao,
   LinhaRanking,
   LinhaTransferencia,
+  LinhaDesconto,
   LinhaForma,
   PosicaoEstoque,
+  RelatorioDescontos,
   RelatorioFormas,
   RelatorioGiro,
   RelatorioInventario,
@@ -279,6 +282,114 @@ export class RelatoriosService {
   }
 
   // -------------------------------------------------------------------------
+  // Descontos concedidos
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quanto cada vendedor abriu mão — e quanto cobrou a mais.
+   *
+   * Desconto mora em dois lugares: no item e no fechamento da venda. Somar só
+   * um deles daria "nenhum desconto" numa loja que desconta tudo na linha.
+   *
+   * O acréscimo vem junto de propósito: sem ele, dar 10% e somar 15% pareceria
+   * generosidade.
+   */
+  async descontos(filtro: FiltroDescontos): Promise<RelatorioDescontos> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND v.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          vendedor_id: string;
+          vendedor: string;
+          vendas: bigint;
+          com_desconto: bigint;
+          bruto: string;
+          desconto: string;
+          acrescimo: string;
+          liquido: string;
+          maior_taxa: string | null;
+        }[]
+      >(
+        `
+        WITH por_venda AS (
+          SELECT v.id,
+                 v.vendedor_id,
+                 v.total,
+                 v.acrescimo,
+                 /* O desconto de item vem da linha; o do fechamento, do
+                    cabecalho. Os dois saem do bolso da loja. */
+                 (v.desconto + coalesce(i.desconto_itens, 0)) AS desconto,
+                 (v.subtotal + coalesce(i.desconto_itens, 0)) AS bruto
+            FROM venda v
+            LEFT JOIN (
+              SELECT venda_id, sum(desconto_item) AS desconto_itens
+                FROM venda_item
+               GROUP BY venda_id
+            ) i ON i.venda_id = v.id
+           WHERE v.status = 'CONCLUIDA'
+             AND (v.concluida_em AT TIME ZONE 'America/Sao_Paulo')::date
+                 > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+             ${recorte}
+        )
+        SELECT pv.vendedor_id,
+               u.nome AS vendedor,
+               count(*) AS vendas,
+               count(*) FILTER (WHERE pv.desconto > 0) AS com_desconto,
+               sum(pv.bruto)::text AS bruto,
+               sum(pv.desconto)::text AS desconto,
+               sum(pv.acrescimo)::text AS acrescimo,
+               sum(pv.total)::text AS liquido,
+               (max(CASE WHEN pv.bruto > 0 THEN pv.desconto / pv.bruto END) * 100)::text
+                 AS maior_taxa
+          FROM por_venda pv
+          JOIN usuario u ON u.id = pv.vendedor_id
+         GROUP BY pv.vendedor_id, u.nome
+         ORDER BY sum(pv.desconto) DESC
+        `,
+        ...parametros,
+      );
+
+      const vendedores: LinhaDesconto[] = linhas.map((l) => {
+        const bruto = dec(l.bruto);
+        const desconto = dec(l.desconto);
+
+        return {
+          vendedorId: l.vendedor_id,
+          vendedor: l.vendedor,
+          vendas: Number(l.vendas),
+          comDesconto: Number(l.com_desconto),
+          bruto: bruto.toFixed(2),
+          desconto: desconto.toFixed(2),
+          acrescimo: dec(l.acrescimo).toFixed(2),
+          liquido: dec(l.liquido).toFixed(2),
+          taxa: bruto.greaterThan(0) ? desconto.dividedBy(bruto).times(100).toFixed(1) : '0.0',
+          maiorTaxa: dec(l.maior_taxa ?? '0').toFixed(1),
+        };
+      });
+
+      const soma = (campo: (l: LinhaDesconto) => string): Dec =>
+        vendedores.reduce((s, l) => s.plus(dec(campo(l))), dec(0));
+
+      const bruto = soma((l) => l.bruto);
+      const desconto = soma((l) => l.desconto);
+
+      return {
+        dias: filtro.dias,
+        bruto: bruto.toFixed(2),
+        desconto: desconto.toFixed(2),
+        acrescimo: soma((l) => l.acrescimo).toFixed(2),
+        liquido: soma((l) => l.liquido).toFixed(2),
+        taxa: bruto.greaterThan(0) ? desconto.dividedBy(bruto).times(100).toFixed(1) : '0.0',
+        vendas: vendedores.reduce((s, l) => s + l.vendas, 0),
+        comDesconto: vendedores.reduce((s, l) => s + l.comDesconto, 0),
+        vendedores,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Formas de pagamento
   // -------------------------------------------------------------------------
 
@@ -334,11 +445,29 @@ export class RelatoriosService {
         ...parametros,
       );
 
-      const total = linhas.reduce((soma, l) => soma.plus(dec(l.total)), dec(0));
+      /*
+        O troco sai da gaveta.
+
+        `venda_pagamento` guarda o que o cliente ENTREGOU: cem reais numa
+        venda de oitenta e sete. Somar isso como recebido em dinheiro declara
+        na gaveta um dinheiro que voltou para o cliente — e o fechamento de
+        caixa, que subtrai o troco, nunca bateria com este relatório.
+      */
+      const [{ troco } = { troco: '0' }] = await tx.$queryRawUnsafe<{ troco: string }[]>(
+        `
+        SELECT coalesce(sum(v.troco), 0)::text AS troco
+          FROM venda v
+         WHERE ${periodo}
+        `,
+        ...parametros,
+      );
+
+      const devolvido = dec(troco);
       const totalCredito = parcelas.reduce((soma, l) => soma.plus(dec(l.total)), dec(0));
+      const total = linhas.reduce((soma, l) => soma.plus(dec(l.total)), dec(0)).minus(devolvido);
 
       const formas: LinhaForma[] = linhas.map((l) => {
-        const valor = dec(l.total);
+        const valor = l.forma === 'DINHEIRO' ? dec(l.total).minus(devolvido) : dec(l.total);
         const quantos = Number(l.pagamentos);
 
         return {

@@ -126,6 +126,28 @@ interface Formas {
   parcelamento: { parcelas: number; pagamentos: number; total: string; participacao: string }[];
 }
 
+interface Descontos {
+  dias: number;
+  bruto: string;
+  desconto: string;
+  acrescimo: string;
+  liquido: string;
+  taxa: string;
+  vendas: number;
+  comDesconto: number;
+  vendedores: {
+    vendedor: string;
+    vendas: number;
+    comDesconto: number;
+    bruto: string;
+    desconto: string;
+    acrescimo: string;
+    liquido: string;
+    taxa: string;
+    maiorTaxa: string;
+  }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -630,6 +652,33 @@ describe.runIf(temBanco)('formas de pagamento', () => {
     }
   });
 
+  /**
+   * `venda_pagamento` guarda o que o cliente ENTREGOU. O troco voltou para
+   * ele: somado como recebido, declararia dinheiro que não está na gaveta.
+   */
+  it('o dinheiro já vem sem o troco', async () => {
+    const r = await http
+      .get('/api/relatorios/formas-pagamento?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const f = r.body as Formas;
+    const dinheiro = f.formas.find((l) => l.forma === 'DINHEIRO');
+
+    if (dinheiro) {
+      const vendas = await http
+        .get('/api/relatorios/vendas?dias=365')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200);
+
+      const bruto = (vendas.body as Vendas).formasPagamento.find((l) => l.forma === 'DINHEIRO');
+
+      // O relatório de vendas ainda soma o entregue; este soma o que ficou.
+      expect(Number(dinheiro.total)).toBeLessThanOrEqual(Number(bruto?.total ?? 0));
+      expect(Number(dinheiro.total)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('recusa período fora do intervalo e exige sessão', async () => {
     await http
       .get('/api/relatorios/formas-pagamento?dias=999')
@@ -637,5 +686,85 @@ describe.runIf(temBanco)('formas de pagamento', () => {
       .expect(400);
 
     await http.get('/api/relatorios/formas-pagamento').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('descontos concedidos', () => {
+  /** Bruto menos desconto mais acréscimo é o faturado. Se não fecha, um dos três mente. */
+  it('bruto − desconto + acréscimo fecha no faturado', async () => {
+    const r = await http
+      .get('/api/relatorios/descontos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const d = r.body as Descontos;
+    expect(Number(d.bruto) - Number(d.desconto) + Number(d.acrescimo)).toBeCloseTo(
+      Number(d.liquido),
+      2,
+    );
+
+    for (const v of d.vendedores) {
+      expect(Number(v.bruto) - Number(v.desconto) + Number(v.acrescimo)).toBeCloseTo(
+        Number(v.liquido),
+        2,
+      );
+    }
+  });
+
+  it('os vendedores somam o total do período', async () => {
+    const r = await http
+      .get('/api/relatorios/descontos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const d = r.body as Descontos;
+    const soma = (campo: 'bruto' | 'desconto' | 'liquido') =>
+      d.vendedores.reduce((s, v) => s + Number(v[campo]), 0);
+
+    expect(soma('bruto')).toBeCloseTo(Number(d.bruto), 2);
+    expect(soma('desconto')).toBeCloseTo(Number(d.desconto), 2);
+    expect(soma('liquido')).toBeCloseTo(Number(d.liquido), 2);
+    expect(d.vendedores.reduce((s, v) => s + v.vendas, 0)).toBe(d.vendas);
+  });
+
+  /** A média esconde o pico: 3% de taxa com uma venda a 40% é uma decisão sozinha. */
+  it('a maior taxa nunca fica abaixo da média do vendedor', async () => {
+    const r = await http
+      .get('/api/relatorios/descontos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const v of (r.body as Descontos).vendedores) {
+      expect(Number(v.maiorTaxa)).toBeGreaterThanOrEqual(Number(v.taxa) - 0.1);
+      expect(Number(v.taxa)).toBeGreaterThanOrEqual(0);
+      expect(v.comDesconto).toBeLessThanOrEqual(v.vendas);
+    }
+  });
+
+  it('o faturado bate com o relatório de vendas', async () => {
+    const [descontos, vendas] = await Promise.all([
+      http
+        .get('/api/relatorios/descontos?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+      http
+        .get('/api/relatorios/vendas?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+    ]);
+
+    expect(Number((descontos.body as Descontos).liquido)).toBeCloseTo(
+      Number((vendas.body as Vendas).total),
+      2,
+    );
+  });
+
+  it('recusa período fora do intervalo e exige sessão', async () => {
+    await http
+      .get('/api/relatorios/descontos?dias=0')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/descontos').expect(401);
   });
 });

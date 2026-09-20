@@ -128,7 +128,11 @@ const GRUPOS: readonly Grupo[] = [
         descricao: 'Distribuição, parcelamento e o que ainda não entrou',
         para: '/relatorios/formas-pagamento',
       },
-      { nome: 'Descontos concedidos', descricao: 'Por vendedor. Controle, não curiosidade' },
+      {
+        nome: 'Descontos concedidos',
+        descricao: 'Por vendedor. Controle, não curiosidade',
+        para: '/relatorios/descontos',
+      },
       { nome: 'Cancelamentos e devoluções', descricao: 'Volume, motivo e impacto' },
       { nome: 'Comparativo entre lojas', descricao: 'Mesma métrica, lojas lado a lado' },
     ],
