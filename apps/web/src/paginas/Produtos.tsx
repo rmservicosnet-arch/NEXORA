@@ -132,7 +132,11 @@ export function Produtos() {
 
   return (
     <>
-      <header className="flex h-[60px] shrink-0 items-center gap-4 border-b border-neutral-100 bg-white px-6">
+      {/*
+        As ações vivem ao lado do título, como no desenho. Tê-las aqui também
+        criava dois "Novo produto" na mesma tela.
+      */}
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Produtos</span>
         <div className="flex-1" />
         {mostrarCusto ? (
@@ -141,11 +145,6 @@ export function Produtos() {
             Contém custo
           </span>
         ) : null}
-        <SePode permissoes={[PERM.produto.criar]}>
-          <Botao variante="primario" comoFilho>
-            <Link to="/produtos/novo">Novo produto</Link>
-          </Botao>
-        </SePode>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-6">
