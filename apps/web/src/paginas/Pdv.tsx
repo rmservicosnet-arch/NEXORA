@@ -58,6 +58,20 @@ const NA_BUSCA = 15;
 /** Parcelas possíveis no crédito. A API aceita 36; o balcão não passa de 12. */
 const PARCELAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+/**
+ * Reparte o valor em parcelas iguais, com a sobra na primeira.
+ *
+ * Dividir 489,90 por 10 dá 48,99 redondo; 100,00 por 3 não dá. Jogar a
+ * diferença fora faria a soma das parcelas não bater com o total — e é a
+ * soma que o cliente confere no extrato.
+ */
+function parcelaDe(total: number, parcelas: number): { primeira: number; demais: number } {
+  const centavos = Math.trunc(total * 100 + 0.5);
+  const base = Math.trunc(centavos / parcelas);
+  const sobra = centavos - base * parcelas;
+  return { primeira: (base + sobra) / 100, demais: base / 100 };
+}
+
 function brl(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -763,15 +777,14 @@ export function Pdv() {
 
         <aside
           aria-label="Pagamento"
-          className="flex w-full shrink-0 flex-col justify-end border-t border-neutral-100 bg-white lg:w-[424px] lg:border-l lg:border-t-0"
+          className="flex w-full shrink-0 flex-col border-t border-neutral-100 bg-white lg:w-[424px] lg:border-l lg:border-t-0"
         >
-          {/* O título fica no alto e o bloco embaixo: o botão de finalizar
-              mora sempre no mesmo canto, que é o que a mão decora. */}
+          {/* O bloco encosta no cabeçalho; a folga que sobra fica logo acima
+              do botão de finalizar, que continua no canto de sempre. */}
           <div className="hidden shrink-0 items-center border-b border-neutral-100 px-[18px] py-3.5 lg:flex">
             <h2 className="font-display text-[18px] font-bold text-neutral-900">Pagamento</h2>
           </div>
-          <div className="hidden flex-1 lg:block" />
-          <div className="shrink-0 border-t border-neutral-100 bg-neutral-25">
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-neutral-25">
             <div className="flex flex-col gap-2 px-[18px] pb-3 pt-3.5">
               <Linha
                 rotulo="Subtotal"
@@ -845,7 +858,7 @@ export function Pdv() {
 
               <div className="mt-2 flex flex-col gap-2">
                 {pagamentos.map((p, indice) => (
-                  <div key={p.chave} className="flex items-center gap-2">
+                  <div key={p.chave} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-neutral-500">
                       {FORMAS.find((f) => f.valor === p.forma)?.rotulo ?? p.forma}
                     </span>
@@ -898,6 +911,32 @@ export function Pdv() {
                       >
                         ✕
                       </button>
+                    ) : null}
+
+                    {/*
+                      "10x" sozinho não diz nada ao cliente que pergunta "de
+                      quanto fica?". A conta aparece escrita, e a sobra dos
+                      centavos vai na primeira parcela — que é como a máquina
+                      de cartão faz.
+                    */}
+                    {p.forma === 'CREDITO' && p.parcelas > 1 && Number(p.valor || 0) > 0 ? (
+                      <p className="w-full text-[12px] text-neutral-500">
+                        {p.parcelas}× de{' '}
+                        <span className="font-mono font-medium text-neutral-700">
+                          R$ {brl(parcelaDe(Number(p.valor), p.parcelas).demais)}
+                        </span>
+                        {parcelaDe(Number(p.valor), p.parcelas).primeira !==
+                        parcelaDe(Number(p.valor), p.parcelas).demais ? (
+                          <>
+                            {' '}
+                            (a primeira de{' '}
+                            <span className="font-mono font-medium text-neutral-700">
+                              R$ {brl(parcelaDe(Number(p.valor), p.parcelas).primeira)}
+                            </span>
+                            )
+                          </>
+                        ) : null}
+                      </p>
                     ) : null}
                   </div>
                 ))}
@@ -955,7 +994,7 @@ export function Pdv() {
               </div>
             </div>
 
-            <div className="flex gap-2 px-[18px] pb-4">
+            <div className="flex gap-2 px-[18px] pb-4 lg:mt-auto lg:pt-2">
               {podeDarDesconto ? (
                 <button
                   type="button"
