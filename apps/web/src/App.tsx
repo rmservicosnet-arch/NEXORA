@@ -7,6 +7,7 @@ import { ProvedorSessaoPortal } from './auth/sessaoPortal';
 import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
+import { Compras } from './paginas/Compras';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -140,19 +141,7 @@ function AreaDaEquipe() {
           <Route path="tabelas-preco" element={<TabelasPreco />} />
           <Route path="tabelas-preco/:tabelaId" element={<PrecosDaTabela />} />
           <Route path="configuracoes" element={<Configuracoes />} />
-          <Route
-            path="compras"
-            element={
-              <ModuloPendente
-                titulo="Compras"
-                oQueFaz="Pedido ao fornecedor, recebimento e entrada de nota — é por aqui que a mercadoria entra com custo, alimentando o custo médio."
-                ondeEstaHoje={{
-                  texto: 'Hoje a entrada é lançada manualmente em Movimentações.',
-                  para: '/estoque',
-                }}
-              />
-            }
-          />
+          <Route path="compras" element={<Compras />} />
           <Route
             path="financeiro"
             element={

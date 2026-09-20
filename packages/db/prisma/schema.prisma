@@ -351,6 +351,7 @@ model Loja {
   vendas         Venda[]
   pedidos        Pedido[]
   caixas         Caixa[]
+  compras        Compra[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, status])
@@ -377,7 +378,8 @@ model LocalEstoque {
 
   /// Outras lojas que tambem vendem deste local. Ver docs/STOCK.md.
   lojasQueUsam LocalEstoqueLoja[]
-  pedidos    Pedido[]           @relation("PedidoLocal")
+  pedidos      Pedido[]           @relation("PedidoLocal")
+  compras      Compra[]
 
   @@unique([tenantId, lojaId, codigo])
   @@index([tenantId, lojaId])
@@ -406,12 +408,12 @@ model Usuario {
   criadoEm      DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm    DateTime  @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
-  perfis       UsuarioPerfil[]
-  acessosLoja  UsuarioLojaAcesso[]
-  sessoes      SessaoRefresh[]
-  vendasFeitas     Venda[]  @relation("VendaVendedor")
-  caixasOperados   Caixa[]  @relation("CaixaOperador")
-  caixasConferidos Caixa[]  @relation("CaixaConferente")
+  perfis           UsuarioPerfil[]
+  acessosLoja      UsuarioLojaAcesso[]
+  sessoes          SessaoRefresh[]
+  vendasFeitas     Venda[]             @relation("VendaVendedor")
+  caixasOperados   Caixa[]             @relation("CaixaOperador")
+  caixasConferidos Caixa[]             @relation("CaixaConferente")
 
   @@unique([tenantId, email])
   @@index([tenantId, status])
@@ -720,9 +722,108 @@ model Fornecedor {
   criadoEm   DateTime       @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
+  compras Compra[]
+
   @@unique([tenantId, documento])
   @@index([tenantId, nome])
   @@map("fornecedor")
+}
+
+/// Situacao do documento de compra.
+///
+/// `RASCUNHO` existe porque digitar uma nota de 40 linhas nao acontece num
+/// atendimento so, e porque receber MEXE no custo medio: a mercadoria entra
+/// quando alguem confere que ela chegou, nao quando a digitacao comeca.
+enum StatusCompra {
+  RASCUNHO
+  RECEBIDA
+  ESTORNADA
+}
+
+/// Entrada de mercadoria COM CUSTO.
+///
+/// E daqui que o custo medio se forma: o `custoUnitario` de cada item vira
+/// movimento `ENTRADA_COMPRA` no razao, e e contra ele que toda margem e todo
+/// valor em estoque sao calculados depois. Ver docs/COST_POLICY.md.
+///
+/// O documento NAO e o razao. Receber grava movimentos imutaveis; a compra
+/// guarda de onde eles vieram — fornecedor, nota, quem recebeu e quando.
+model Compra {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  lojaId String @map("loja_id") @db.Uuid
+  loja   Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+
+  /// Destino da mercadoria.
+  localId String       @map("local_id") @db.Uuid
+  local   LocalEstoque @relation(fields: [localId], references: [id], onDelete: Restrict)
+
+  fornecedorId String     @map("fornecedor_id") @db.Uuid
+  fornecedor   Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+
+  numeroNota String?   @map("numero_nota") @db.VarChar(40)
+  emitidaEm  DateTime? @map("emitida_em") @db.Timestamptz(3)
+
+  status     StatusCompra @default(RASCUNHO)
+  /// Soma dos itens. Gravada porque o documento e historico: mudar um preco
+  /// de item amanha nao pode reescrever o que a nota custou ontem.
+  valorTotal Decimal      @default(0) @map("valor_total") @db.Decimal(14, 2)
+
+  observacao String? @db.VarChar(400)
+
+  recebidaEm    DateTime? @map("recebida_em") @db.Timestamptz(3)
+  recebidaPorId String?   @map("recebida_por_id") @db.Uuid
+
+  estornadaEm    DateTime? @map("estornada_em") @db.Timestamptz(3)
+  estornadaPorId String?   @map("estornada_por_id") @db.Uuid
+  motivoEstorno  String?   @map("motivo_estorno") @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  itens CompraItem[]
+
+  /// A MESMA nota do MESMO fornecedor, duas vezes, dobra a mercadoria e
+  /// estraga o custo medio de cada item dela. O banco recusa.
+  /// Nota nula nao colide: rascunho ainda sem numero e caso normal.
+  @@unique([tenantId, fornecedorId, numeroNota])
+  @@index([tenantId, status, emitidaEm])
+  @@index([tenantId, fornecedorId])
+  @@map("compra")
+}
+
+model CompraItem {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  compraId String @map("compra_id") @db.Uuid
+  compra   Compra @relation(fields: [compraId], references: [id], onDelete: Cascade)
+
+  variacaoId String   @map("variacao_id") @db.Uuid
+  variacao   Variacao @relation(fields: [variacaoId], references: [id], onDelete: Restrict)
+
+  quantidade    Decimal @db.Decimal(18, 6)
+  custoUnitario Decimal @map("custo_unitario") @db.Decimal(18, 6)
+  total         Decimal @db.Decimal(14, 2)
+
+  /// Congelados no RECEBIMENTO, nunca recalculados.
+  ///
+  /// Uma compra de outubro nao pode reescrever o que esta nota fez com o custo
+  /// medio em setembro — e e por estes dois numeros que se audita a conta.
+  custoMedioAntes  Decimal? @map("custo_medio_antes") @db.Decimal(18, 6)
+  custoMedioDepois Decimal? @map("custo_medio_depois") @db.Decimal(18, 6)
+
+  /// O movimento que esta linha gerou. Sem chave estrangeira: o razao e
+  /// append-only e nao aceita depender de quem o citou.
+  movimentoId String? @map("movimento_id") @db.Uuid
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, compraId])
+  @@index([tenantId, variacaoId])
+  @@map("compra_item")
 }
 
 // ===========================================================================
@@ -816,6 +917,7 @@ model Variacao {
   reservas    EstoqueReserva[]
   itensVenda  VendaItem[]
   itensPedido PedidoItem[]
+  itensCompra CompraItem[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, codigoBarras])
@@ -1054,16 +1156,16 @@ model EstoqueReserva {
 // ===========================================================================
 
 model Venda {
-  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lojaId   String @map("loja_id") @db.Uuid
-  loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+  id       String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String       @map("tenant_id") @db.Uuid
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lojaId   String       @map("loja_id") @db.Uuid
+  loja     Loja         @relation(fields: [lojaId], references: [id], onDelete: Restrict)
   /// De onde a mercadoria saiu. Com chave estrangeira: sem ela, `local_id`
   /// aceitaria o id de um local excluído — ou de outra loja — e o relatório
   /// de saída por local passaria a mentir sem nada acusar.
-  localId String       @map("local_id") @db.Uuid
-  local   LocalEstoque @relation("VendaLocal", fields: [localId], references: [id], onDelete: Restrict)
+  localId  String       @map("local_id") @db.Uuid
+  local    LocalEstoque @relation("VendaLocal", fields: [localId], references: [id], onDelete: Restrict)
 
   numero Int
   origem OrigemVenda @default(PDV)
@@ -1110,8 +1212,8 @@ model Venda {
   criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
-  itens      VendaItem[]
-  pagamentos VendaPagamento[]
+  itens              VendaItem[]
+  pagamentos         VendaPagamento[]
   movimentosCarteira CarteiraMovimento[]
 
   @@unique([tenantId, numero])
@@ -1213,10 +1315,10 @@ model Caixa {
   abertoEm  DateTime  @default(now()) @map("aberto_em") @db.Timestamptz(3)
   fechadoEm DateTime? @map("fechado_em") @db.Timestamptz(3)
 
-  conferidoPorId String?   @map("conferido_por_id") @db.Uuid
-  conferidoPor   Usuario?  @relation("CaixaConferente", fields: [conferidoPorId], references: [id], onDelete: SetNull)
-  conferidoEm    DateTime? @map("conferido_em") @db.Timestamptz(3)
-  observacaoConferencia String? @map("observacao_conferencia") @db.VarChar(400)
+  conferidoPorId        String?   @map("conferido_por_id") @db.Uuid
+  conferidoPor          Usuario?  @relation("CaixaConferente", fields: [conferidoPorId], references: [id], onDelete: SetNull)
+  conferidoEm           DateTime? @map("conferido_em") @db.Timestamptz(3)
+  observacaoConferencia String?   @map("observacao_conferencia") @db.VarChar(400)
 
   criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
@@ -1264,14 +1366,14 @@ model MovimentoCaixa {
 // ===========================================================================
 
 model Pedido {
-  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lojaId   String @map("loja_id") @db.Uuid
-  loja     Loja   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+  id       String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String       @map("tenant_id") @db.Uuid
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lojaId   String       @map("loja_id") @db.Uuid
+  loja     Loja         @relation(fields: [lojaId], references: [id], onDelete: Restrict)
   /// Mesma razão da venda: sem chave estrangeira, o id do local é só um texto.
-  localId String       @map("local_id") @db.Uuid
-  local   LocalEstoque @relation("PedidoLocal", fields: [localId], references: [id], onDelete: Restrict)
+  localId  String       @map("local_id") @db.Uuid
+  local    LocalEstoque @relation("PedidoLocal", fields: [localId], references: [id], onDelete: Restrict)
 
   numero Int
   status StatusPedido @default(RASCUNHO)
@@ -1318,17 +1420,16 @@ model Pedido {
   criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
-  itens    PedidoItem[]
-  eventos  PedidoEvento[]
-  reservas EstoqueReserva[]
-  venda    Venda?
+  itens              PedidoItem[]
+  eventos            PedidoEvento[]
+  reservas           EstoqueReserva[]
+  venda              Venda?
+  movimentosCarteira CarteiraMovimento[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, status, enviadoEm])
   @@index([tenantId, lojaId, status])
   @@index([tenantId, clienteId])
-  movimentosCarteira CarteiraMovimento[]
-
   @@map("pedido")
 }
 

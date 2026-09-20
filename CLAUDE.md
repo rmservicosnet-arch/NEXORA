@@ -195,6 +195,10 @@ o runtime.
 | Recortes que não particionam o total ao lado deles | "Todos 1462" com quatro pílulas somando 1166: cancelado e expirado não cabiam em nenhuma. Ou a soma fecha, ou "Todos" não mostra número |
 | Rota com permissão própria que nenhuma tela chama | `POST /caixa/:id/conferir` existia desde o início e CONFERIDO era um status que nada alcançava. Antes de criar rota, procure quem vai apertar o botão |
 | Parcela somada dentro de outra no painel de conferência | `vendasEmDinheiro` já vinha líquido do troco: quem confere via um número e não tinha como achar os R$ 812,50 que saíram da gaveta. Cada parcela da fórmula é uma coluna |
+| Rodar `npm run db:seed` sem autorização | Ele LIMPA antes de criar. Falhou no meio e deixou o banco pela metade: produtos, preços, clientes e pedidos apagados, nada recriado. Seed é comando destrutivo — pergunte antes |
+| Seed que não apaga tudo o que referencia usuário | Faltava `caixa`, e `usuario.deleteMany` violava a FK. O seed morria NO MEIO da limpeza. A ordem das exclusões é parte do contrato, não detalhe |
+| `prisma migrate dev` num terminal não interativo | Fica pendurado depois de aplicar, esperando resposta que nunca vem. A migração entra e o comando nunca volta; `migrate deploy` é o não interativo |
+| Faixa de tempo com piso zero e relógio adiantado | "Menos de 1 h" exigia `horas >= 0`: pedido gravado no futuro dá −3 e não cai em faixa NENHUMA. A primeira faixa não tem piso |
 
 ## Testes
 

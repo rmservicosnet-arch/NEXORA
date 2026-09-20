@@ -15,6 +15,7 @@ import { EscopoLojaGuard } from './comum/escopo-loja.guard';
 import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
 import { EstoqueModule } from './estoque/estoque.module';
+import { ComprasModule } from './compras/compras.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { LojasController } from './lojas/lojas.controller';
@@ -55,6 +56,7 @@ import { VisaoGeralModule } from './visao-geral/visao-geral.module';
     AuthModule,
     ProdutosModule,
     EstoqueModule,
+    ComprasModule,
     CaixaModule,
     CarteiraModule,
     ClientesModule,

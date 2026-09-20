@@ -23,6 +23,7 @@ import type {
 import {
   aplicarEntrada,
   aplicarSaida,
+  aplicarSaidaComCustoEspecifico,
   dec,
   posicao,
   type Dec,
@@ -50,6 +51,15 @@ export interface LocalResolvido {
   readonly nome: string;
   readonly lojaId: string;
   readonly loja: string;
+}
+
+/** Uma linha de documento que virou movimento no razao. */
+export interface EntradaDeDocumento {
+  readonly variacaoId: string;
+  readonly movimentoId: string;
+  readonly custoMedioAntes: string;
+  readonly custoMedioDepois: string;
+  readonly saldoPosterior: string;
 }
 
 export interface BaixaDeVenda {
@@ -123,6 +133,149 @@ export class EstoqueService {
       custoMedioDepois: lancamento.calculo.custoMedioDepois.toFixed(6),
       avisos: this.avisos(lancamento.calculo),
     };
+  }
+
+  /**
+   * Varias entradas do MESMO documento, na mesma transacao.
+   *
+   * Existe porque receber uma nota de seis itens nao e chamar `entrada()` seis
+   * vezes: cada chamada abriria a sua propria transacao, e uma falha na quarta
+   * linha deixaria tres no razao e tres fora. O documento entra inteiro ou nao
+   * entra.
+   *
+   * Quem chama e dono da transacao — a compra precisa gravar o proprio estado
+   * junto, no mesmo `tx`.
+   */
+  async entradasDoDocumento(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly local: LocalResolvido;
+      readonly tipo: string;
+      readonly documentoTipo: string;
+      readonly documentoId: string;
+      readonly documentoNumero?: string | undefined;
+      readonly justificativa?: string | undefined;
+      readonly itens: readonly {
+        readonly variacaoId: string;
+        readonly quantidade: string;
+        readonly custoUnitario: string;
+      }[];
+    },
+    principal: Principal,
+    contexto: Contexto,
+  ): Promise<EntradaDeDocumento[]> {
+    /*
+      Travar SEMPRE na mesma ordem de id.
+      Duas notas recebidas ao mesmo tempo com os mesmos itens em ordens
+      diferentes viram deadlock — o mesmo motivo da transferencia cruzada.
+    */
+    const ordenados = [...params.itens].sort((a, b) => a.variacaoId.localeCompare(b.variacaoId));
+
+    const feitos: EntradaDeDocumento[] = [];
+
+    for (const item of ordenados) {
+      await this.exigirVariacao(tx, item.variacaoId);
+
+      const atual = await this.travarPosicao(tx, item.variacaoId, params.local.id, contexto);
+
+      const calculo = aplicarEntrada(atual, {
+        quantidade: item.quantidade,
+        custoUnitario: item.custoUnitario,
+      });
+
+      const lanc: Lancamento = {
+        variacaoId: item.variacaoId,
+        local: params.local,
+        sentido: 'ENTRADA',
+        tipo: params.tipo,
+        quantidade: dec(item.quantidade),
+        calculo,
+        justificativa: params.justificativa,
+        documentoTipo: params.documentoTipo,
+        documentoId: params.documentoId,
+        documentoNumero: params.documentoNumero,
+      };
+
+      const movimento = await this.gravar(tx, lanc, principal, contexto);
+
+      feitos.push({
+        variacaoId: item.variacaoId,
+        movimentoId: movimento.id,
+        custoMedioAntes: calculo.custoMedioAntes.toFixed(6),
+        custoMedioDepois: calculo.custoMedioDepois.toFixed(6),
+        saldoPosterior: calculo.saldoPosterior.toFixed(6),
+      });
+    }
+
+    return feitos;
+  }
+
+  /**
+   * Desfaz as entradas de um documento — lancamento contrario, nunca exclusao.
+   *
+   * Cada linha sai pelo custo daquela COMPRA, nao pelo custo medio de hoje:
+   * `aplicarSaidaComCustoEspecifico` existe para isto. A media NAO volta ao
+   * valor anterior, e isso e deliberado — outros movimentos podem ter ocorrido
+   * no intervalo, e reescrever o passado tornaria todo relatorio
+   * irreproduzivel.
+   *
+   * O movimento original permanece e o novo aponta para ele por `estornoDeId`.
+   */
+  async saidasDeEstorno(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly local: LocalResolvido;
+      readonly tipo: string;
+      readonly documentoTipo: string;
+      readonly documentoId: string;
+      readonly documentoNumero?: string | undefined;
+      readonly justificativa: string;
+      readonly itens: readonly {
+        readonly variacaoId: string;
+        readonly quantidade: string;
+        readonly custoUnitario: string;
+        readonly estornoDeId?: string | undefined;
+      }[];
+    },
+    principal: Principal,
+    contexto: Contexto,
+  ): Promise<Movimento[]> {
+    // Mesma ordem de id de sempre: ordens diferentes viram deadlock.
+    const ordenados = [...params.itens].sort((a, b) => a.variacaoId.localeCompare(b.variacaoId));
+
+    const movimentos: Movimento[] = [];
+
+    for (const item of ordenados) {
+      const atual = await this.travarPosicao(tx, item.variacaoId, params.local.id, contexto);
+
+      const calculo = aplicarSaidaComCustoEspecifico(atual, {
+        quantidade: item.quantidade,
+        custoUnitario: item.custoUnitario,
+      });
+
+      movimentos.push(
+        await this.gravar(
+          tx,
+          {
+            variacaoId: item.variacaoId,
+            local: params.local,
+            sentido: 'SAIDA',
+            tipo: params.tipo,
+            quantidade: dec(item.quantidade),
+            calculo,
+            justificativa: params.justificativa,
+            documentoTipo: params.documentoTipo,
+            documentoId: params.documentoId,
+            documentoNumero: params.documentoNumero,
+            estornoDeId: item.estornoDeId,
+          },
+          principal,
+          contexto,
+        ),
+      );
+    }
+
+    return movimentos;
   }
 
   // -------------------------------------------------------------------------

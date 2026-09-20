@@ -152,6 +152,21 @@ async function limparEmpresa(prisma: PrismaClient, tenantId: string): Promise<vo
   await prisma.vendaItem.deleteMany(onde);
   await prisma.venda.deleteMany(onde);
 
+  /*
+    O caixa vem DEPOIS da venda e ANTES do usuário.
+
+    `venda.caixa_id` aponta para cá, e `caixa.operador_id` aponta para
+    `usuario` — sem esta ordem, `usuario.deleteMany` viola
+    `caixa_operador_id_fkey` e o seed morre no MEIO da limpeza, com metade das
+    tabelas já apagadas e nada recriado. Faltava, e quebrava toda vez que
+    alguém tivesse aberto um caixa.
+  */
+  await prisma.movimentoCaixa.deleteMany(onde);
+  await prisma.caixa.deleteMany(onde);
+
+  await prisma.compraItem.deleteMany(onde);
+  await prisma.compra.deleteMany(onde);
+
   await prisma.precoHistorico.deleteMany(onde);
   await prisma.precoItem.deleteMany(onde);
   await prisma.produtoImagem.deleteMany(onde);
@@ -626,6 +641,151 @@ async function main(): Promise<void> {
   passo(
     `Estoque inicial lançado — tatame terminou em ${tatame.saldo.toString()} un a ${tatame.custoMedio.toFixed(2)}`,
   );
+
+  // --- Fornecedores e compras ----------------------------------------------
+
+  /*
+    Compras sao a porta por onde a mercadoria entra COM CUSTO.
+
+    Duas RECEBIDAS (o custo ja esta no razao, lancado acima) e duas em
+    RASCUNHO — a fila de trabalho de verdade: mercadoria que chegou e ainda
+    nao entrou no estoque. O rascunho e o unico estado editavel; depois de
+    recebida, a nota mexeu no custo medio e corrigir e estornar.
+  */
+  const fornecedores = [
+    {
+      nome: 'Kimonos BR Indústria',
+      documento: '12345678000190',
+      email: 'comercial@kimonosbr.com.br',
+      telefone: '+551133330001',
+    },
+    {
+      nome: 'Faixas Kodokan Ltda',
+      documento: '23456789000181',
+      email: 'vendas@kodokan.com.br',
+      telefone: '+551133330002',
+    },
+    {
+      nome: 'Tatames Dojo Sul',
+      documento: '34567890000172',
+      email: 'contato@dojosul.com.br',
+      telefone: '+555133330003',
+    },
+    {
+      nome: 'Protetores Ippon Equip.',
+      documento: '45678901000163',
+      email: 'pedidos@ipponequip.com.br',
+      telefone: '+551133330004',
+    },
+  ];
+
+  const fornecedorIds = new Map<string, string>();
+  for (const f of fornecedores) {
+    const criado = await prisma.fornecedor.create({ data: { tenantId, ...f } });
+    fornecedorIds.set(f.nome, criado.id);
+  }
+
+  const compras: {
+    fornecedor: string;
+    nota: string;
+    emitida: string;
+    status: 'RASCUNHO' | 'RECEBIDA';
+    recebidaEm?: string;
+    itens: { sku: string; quantidade: string; custo: string }[];
+  }[] = [
+    {
+      fornecedor: 'Kimonos BR Indústria',
+      nota: '18442',
+      emitida: '2026-09-18T09:00:00Z',
+      status: 'RASCUNHO',
+      itens: [
+        { sku: 'KIM-TRC-A2-BR', quantidade: '40', custo: '208.00' },
+        { sku: 'KIM-TRC-A3-AZ', quantidade: '25', custo: '225.00' },
+        { sku: 'CAM-TRN-M-PT', quantidade: '50', custo: '42.00' },
+        // Saldo NEGATIVO (-12): a entrada cobre o descoberto e o custo medio
+        // fica preservado ate o saldo voltar a zero. E o caso que a tela
+        // precisa mostrar por escrito. docs/COST_POLICY.md
+        { sku: 'TAT-EVA-20-AZ', quantidade: '30', custo: '39.90' },
+      ],
+    },
+    {
+      fornecedor: 'Faixas Kodokan Ltda',
+      nota: '18440',
+      emitida: '2026-09-17T14:30:00Z',
+      status: 'RASCUNHO',
+      itens: [
+        { sku: 'FXA-PRT-280', quantidade: '12', custo: '88.00' },
+        { sku: 'FXA-CLR-260-AZ', quantidade: '20', custo: '46.00' },
+      ],
+    },
+    {
+      fornecedor: 'Tatames Dojo Sul',
+      nota: '18431',
+      emitida: '2026-09-15T08:10:00Z',
+      status: 'RECEBIDA',
+      recebidaEm: '2026-09-15T15:40:00Z',
+      itens: [{ sku: 'TAT-EVA-20-AZ', quantidade: '80', custo: '38.40' }],
+    },
+    {
+      fornecedor: 'Protetores Ippon Equip.',
+      nota: '18376',
+      emitida: '2026-09-02T11:00:00Z',
+      status: 'RECEBIDA',
+      recebidaEm: '2026-09-02T17:20:00Z',
+      itens: [{ sku: 'PRT-BCL-AD', quantidade: '66', custo: '14.20' }],
+    },
+  ];
+
+  let comprasCriadas = 0;
+  for (const c of compras) {
+    const fornecedorId = fornecedorIds.get(c.fornecedor);
+    if (!fornecedorId) continue;
+
+    const itens = c.itens
+      .map((i) => ({ ...i, variacaoId: variacaoIds.get(i.sku) }))
+      .filter((i): i is typeof i & { variacaoId: string } => Boolean(i.variacaoId));
+
+    if (itens.length === 0) continue;
+
+    const total = itens.reduce(
+      (soma, i) => soma.plus(dec(i.quantidade).times(dec(i.custo))),
+      dec(0),
+    );
+
+    await prisma.compra.create({
+      data: {
+        tenantId,
+        lojaId: lojaIds[0] ?? '',
+        localId: depositoCentro,
+        fornecedorId,
+        numeroNota: c.nota,
+        emitidaEm: new Date(c.emitida),
+        status: c.status,
+        valorTotal: total.toFixed(2),
+        ...(c.recebidaEm ? { recebidaEm: new Date(c.recebidaEm), recebidaPorId: adminId } : {}),
+        itens: {
+          create: itens.map((i) => ({
+            tenantId,
+            variacaoId: i.variacaoId,
+            quantidade: i.quantidade,
+            custoUnitario: i.custo,
+            total: dec(i.quantidade).times(dec(i.custo)).toFixed(2),
+            /*
+              As recebidas j\u00e1 t\u00eam o custo m\u00e9dio congelado: o raz\u00e3o delas foi
+              lancado acima, com a mesma quantidade e o mesmo custo. Deixar
+              nulo faria a tela dizer que a nota entrou sem mexer em nada.
+            */
+            ...(c.status === 'RECEBIDA'
+              ? { custoMedioAntes: '0.000000', custoMedioDepois: i.custo }
+              : {}),
+          })),
+        },
+      },
+    });
+    comprasCriadas += 1;
+  }
+
+  passo(`${fornecedores.length} fornecedores e ${comprasCriadas} compras (2 a receber)`);
 
   // --- Clientes, acesso ao portal e carteira -------------------------------
 
