@@ -135,7 +135,7 @@ export function Carteiras() {
 
   return (
     <>
-      <header className="flex h-[60px] shrink-0 items-center gap-4 border-b border-neutral-100 bg-white px-6">
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Carteiras</span>
         <div className="flex-1" />
         {lista.data ? (
@@ -148,8 +148,11 @@ export function Carteiras() {
         ) : null}
       </header>
 
-      <main className="flex min-h-0 flex-1">
-        <div className="flex w-[380px] shrink-0 flex-col border-r border-neutral-100">
+      {/* Mestre-detalhe vira pilha no celular: a coluna de 380px sozinha
+          já passa da largura do telefone. A lista ganha teto de altura para
+          o extrato continuar alcançável sem rolar a lista inteira. */}
+      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex max-h-[45vh] w-full shrink-0 flex-col border-b border-neutral-100 lg:max-h-none lg:w-[380px] lg:border-b-0 lg:border-r">
           <div className="flex shrink-0 flex-col gap-2 border-b border-neutral-100 p-4">
             <input
               type="search"
@@ -248,11 +251,11 @@ export function Carteiras() {
                         value={valor}
                         onChange={(e) => setValor(e.target.value)}
                         placeholder="0.00"
-                        className="h-10 w-[120px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
+                        className="h-10 w-[110px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
                       />
                     </label>
 
-                    <label className="flex min-w-[220px] flex-1 flex-col gap-1">
+                    <label className="flex min-w-[180px] flex-1 flex-col gap-1">
                       <span className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
                         Motivo{EXIGEM_MOTIVO.has(tipo) ? '' : ' (opcional)'}
                       </span>
@@ -434,20 +437,21 @@ function LinhaMovimento({
   return (
     <div
       className={juntar(
-        'grid grid-cols-[124px_minmax(0,1fr)_120px_120px_86px] items-center gap-3 border-b border-neutral-50 px-5 py-2.5',
+        'flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5',
+        'sm:grid sm:grid-cols-[124px_minmax(0,1fr)_120px_120px_86px] sm:px-5',
         movimento.estornado && 'bg-neutral-25 opacity-60',
         movimento.excedeuLimite && 'bg-[#fdf5f5]',
       )}
     >
-      <span className="font-mono text-[11.5px] text-neutral-500">
+      <span className="order-1 font-mono text-[11.5px] text-neutral-500 sm:order-none">
         {quando.toLocaleDateString('pt-BR')}{' '}
         <span className="text-neutral-400">
           {quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </span>
 
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate text-[13.5px] text-neutral-900">
+      <div className="order-3 w-full min-w-0 sm:order-none sm:w-auto">
+        <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] text-neutral-900">
           <span
             className={juntar(
               'size-1.5 shrink-0 rounded-full',

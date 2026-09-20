@@ -133,6 +133,7 @@ o runtime.
 | Redefinir senha sem revogar sessão | Redefine-se porque a senha pode ter vazado; a sessão aberta sobreviveria à troca |
 | Senha de terceiro digitada por quem cadastra | O servidor gera, mostra uma vez e guarda só o hash. Poder mostrar de novo significa ter guardado |
 | Teste procurando a palavra "senha" no JSON | Um e-mail com ela derruba o teste sem nada ter vazado. Procure `senhaHash` e `$argon2` |
+| "Sem ponto de corte" lido como "quebra no celular" | Tabela larga dentro de `overflow-x-auto` rola e não vaza. Meça `scrollWidth` contra `innerWidth` no navegador antes de afirmar |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

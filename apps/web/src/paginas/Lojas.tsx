@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
 import { useSessao } from '../auth/sessao';
+import { juntar } from '../ui/juntar';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 
 export function Lojas() {
@@ -15,7 +16,7 @@ export function Lojas() {
 
   return (
     <>
-      <header className="flex h-[60px] shrink-0 items-center gap-4 border-b border-neutral-100 bg-white px-6">
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Lojas</span>
         <div className="flex-1" />
         <span className="text-[12.5px] text-neutral-500">
@@ -25,7 +26,7 @@ export function Lojas() {
         </span>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-4 p-6">
+      <main className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
         <div>
           <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">Lojas</h1>
           <p className="mt-1 text-[13.5px] text-neutral-500">
@@ -58,7 +59,7 @@ export function Lojas() {
 
           {consulta.isSuccess && consulta.data.length > 0 ? (
             <>
-              <div className="grid h-9 grid-cols-[120px_minmax(0,1fr)_100px] items-center gap-3 border-b border-neutral-100 bg-neutral-25 px-4">
+              <div className="hidden h-9 grid-cols-[120px_minmax(0,1fr)_100px] items-center gap-3 border-b border-neutral-100 bg-neutral-25 px-4 sm:grid">
                 {['Código', 'Nome', 'Locais'].map((titulo, i) => (
                   <span
                     key={titulo}
@@ -74,12 +75,20 @@ export function Lojas() {
               {consulta.data.map((loja) => (
                 <div
                   key={loja.id}
-                  className="grid h-11 grid-cols-[120px_minmax(0,1fr)_100px] items-center gap-3 border-b border-neutral-50 px-4"
+                  className={juntar(
+                    'flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-neutral-50 px-4 py-2.5',
+                    'sm:grid sm:h-11 sm:grid-cols-[120px_minmax(0,1fr)_100px] sm:py-0',
+                  )}
                 >
                   <span className="font-mono text-[12.5px] text-neutral-600">{loja.codigo}</span>
-                  <span className="truncate text-[13.5px] text-neutral-900">{loja.nome}</span>
-                  <span className="tabular text-right font-mono text-[13px] text-neutral-900">
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-neutral-900">
+                    {loja.nome}
+                  </span>
+                  <span className="tabular ml-auto text-right font-mono text-[13px] text-neutral-900 sm:ml-0">
                     {loja.locais}
+                    <span className="ml-1 font-sans text-[11px] text-neutral-400 sm:hidden">
+                      locais
+                    </span>
                   </span>
                 </div>
               ))}

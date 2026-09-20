@@ -111,7 +111,7 @@ export function Caixa() {
 
   return (
     <>
-      <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-6">
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-2 border-b border-neutral-100 bg-white px-4 py-2 sm:gap-3 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Caixa</span>
 
         <select
@@ -179,7 +179,7 @@ export function Caixa() {
         ) : null}
       </header>
 
-      <main className="min-h-0 flex-1 overflow-auto p-6">
+      <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
         <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5">
           {erro ? (
             <Aviso tom="perigo" titulo="Não foi possível concluir">
@@ -219,7 +219,7 @@ export function Caixa() {
                   onChange={(e) => setValor(e.target.value)}
                   placeholder="0.00"
                   autoFocus
-                  className="h-12 w-[200px] rounded-md border border-neutral-200 bg-white px-3 text-right font-mono text-[18px]"
+                  className="h-12 w-full max-w-[200px] rounded-md border border-neutral-200 bg-white px-3 text-right font-mono text-[18px]"
                 />
               </label>
 
@@ -353,7 +353,7 @@ function PainelCaixa({ caixa }: { readonly caixa: CaixaDto }) {
             Sangrias e suprimentos
           </p>
           {caixa.movimentos.map((m) => (
-            <div key={m.id} className="flex items-baseline gap-2 text-[13px]">
+            <div key={m.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]">
               <span
                 className={juntar(
                   'w-[92px] shrink-0 font-medium',
@@ -365,7 +365,9 @@ function PainelCaixa({ caixa }: { readonly caixa: CaixaDto }) {
               <span className="w-[100px] shrink-0 text-right font-mono text-neutral-900">
                 {m.tipo === 'SANGRIA' ? '−' : '+'} R$ {brl(m.valor)}
               </span>
-              <span className="min-w-0 flex-1 truncate text-neutral-500">{m.motivo}</span>
+              <span className="w-full min-w-0 truncate text-neutral-500 sm:w-auto sm:flex-1">
+                {m.motivo}
+              </span>
             </div>
           ))}
         </div>
@@ -410,25 +412,37 @@ function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
   const diferenca = caixa.diferenca === null ? null : Number(caixa.diferenca);
 
   return (
-    <div className="grid grid-cols-[70px_minmax(0,1fr)_130px_120px_120px] items-center gap-3 border-b border-neutral-50 px-4 py-2.5 last:border-0">
-      <span className="font-mono text-[13px] text-neutral-600">#{caixa.numero}</span>
+    <div
+      className={juntar(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5 last:border-0',
+        'sm:grid sm:grid-cols-[70px_minmax(0,1fr)_130px_120px_120px]',
+      )}
+    >
+      <span className="order-1 font-mono text-[13px] text-neutral-600 sm:order-none">
+        #{caixa.numero}
+      </span>
 
-      <div className="min-w-0">
+      <div className="order-3 w-full min-w-0 sm:order-none sm:w-auto">
         <p className="truncate text-[13.5px] text-neutral-900">{caixa.operador}</p>
         <p className="truncate text-[11.5px] text-neutral-400">
           {caixa.loja} · {new Date(caixa.abertoEm).toLocaleDateString('pt-BR')}
         </p>
       </div>
 
-      <Selo status={caixa.status} />
+      <span className="order-2 mr-auto sm:order-none sm:mr-0">
+        <Selo status={caixa.status} />
+      </span>
 
-      <span className="text-right font-mono text-[13px] text-neutral-600">
+      <span className="order-4 text-right font-mono text-[13px] text-neutral-600 sm:order-none">
+        <span className="mr-1 font-sans text-[10.5px] uppercase text-neutral-400 sm:hidden">
+          contado
+        </span>
         {caixa.valorContado === null ? '—' : `R$ ${brl(caixa.valorContado)}`}
       </span>
 
       <span
         className={juntar(
-          'text-right font-mono text-[13px] font-medium',
+          'order-5 ml-auto text-right font-mono text-[13px] font-medium sm:order-none sm:ml-0',
           diferenca === null
             ? 'text-neutral-400'
             : diferenca === 0

@@ -6,25 +6,26 @@ export function Inicio() {
 
   return (
     <>
-      <header className="flex h-[60px] shrink-0 items-center border-b border-neutral-100 bg-white px-6">
+      <header className="flex min-h-[60px] shrink-0 items-center border-b border-neutral-100 bg-white px-4 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Visão geral</span>
       </header>
 
-      <main className="flex flex-1 flex-col gap-5 p-6">
+      <main className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
         <div>
           <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
             Olá, {usuario?.nome.split(' ')[0]}
           </h1>
           <p className="mt-1 text-[13.5px] text-neutral-500">
-            Fase 1 concluída: isolamento entre empresas, autenticação e permissões.
+            Estoque, PDV, caixa, carteira, pedidos B2B e o portal do cliente.
           </p>
         </div>
 
         <Aviso tom="info" titulo="O que já funciona de ponta a ponta">
           <ul className="mt-1 flex list-disc flex-col gap-1 pl-4">
-            <li>Login com Argon2id e sessão restaurada por cookie httpOnly</li>
+            <li>Razão de estoque encadeado, com custo médio ponderado</li>
+            <li>PDV com caixa por vendedor e carteira do cliente</li>
+            <li>Pedido B2B: o cliente pede no portal, a equipe confirma</li>
             <li>Row-Level Security em 36 tabelas — sem contexto, zero linhas</li>
-            <li>Permissões e vínculo de loja verificados no servidor</li>
           </ul>
         </Aviso>
 

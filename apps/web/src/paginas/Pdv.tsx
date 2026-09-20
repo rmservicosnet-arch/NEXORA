@@ -233,7 +233,7 @@ export function Pdv() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-6">
+      <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-2 border-b border-neutral-100 bg-white px-4 py-2 sm:gap-3 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">PDV</span>
 
         <select
@@ -303,9 +303,11 @@ export function Pdv() {
         ) : null}
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      {/* No balcão são duas colunas; no celular viram uma pilha que rola.
+          Só o layout muda — nenhum passo da venda foi mexido. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-y-hidden">
         {/* Coluna da esquerda: busca e carrinho */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 sm:p-5">
           <input
             ref={campoBusca}
             value={termo}
@@ -405,8 +407,8 @@ export function Pdv() {
         </div>
 
         {/* Coluna da direita: totais e pagamento */}
-        <aside className="flex w-[380px] shrink-0 flex-col border-l border-neutral-100 bg-white">
-          <div className="flex flex-col gap-2 border-b border-neutral-100 p-5">
+        <aside className="flex w-full shrink-0 flex-col border-t border-neutral-100 bg-white lg:w-[380px] lg:border-l lg:border-t-0">
+          <div className="flex flex-col gap-2 border-b border-neutral-100 p-4 sm:p-5">
             <Linha rotulo="Subtotal" valor={totais.subtotal} />
 
             {podeDarDesconto ? (
@@ -417,7 +419,7 @@ export function Pdv() {
                   onChange={(e) => setDesconto(e.target.value)}
                   placeholder="0,00"
                   aria-label="Desconto na venda"
-                  className="h-9 w-[120px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
+                  className="h-9 w-[110px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
                 />
               </label>
             ) : null}
@@ -430,7 +432,7 @@ export function Pdv() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto p-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto p-4 sm:p-5">
             <div className="flex items-baseline justify-between">
               <h2 className="text-[12px] font-semibold uppercase tracking-[0.04em] text-neutral-600">
                 Pagamento
@@ -479,7 +481,7 @@ export function Pdv() {
                   }
                   placeholder="0,00"
                   aria-label={`Valor em ${p.forma}`}
-                  className="h-11 w-[120px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[15px]"
+                  className="h-11 w-[110px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[15px]"
                 />
 
                 {pagamentos.length > 1 ? (
@@ -521,7 +523,7 @@ export function Pdv() {
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-neutral-100 p-5">
+          <div className="shrink-0 border-t border-neutral-100 p-4 sm:p-5">
             <Botao
               variante="primario"
               tamanho="pdv"
