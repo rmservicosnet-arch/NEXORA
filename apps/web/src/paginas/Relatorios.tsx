@@ -178,17 +178,25 @@ const GRUPOS: readonly Grupo[] = [
   {
     nome: 'Carteira',
     itens: [
-      { nome: 'Saldos em aberto', descricao: 'Quem deve, quanto e há quanto tempo' },
+      {
+        nome: 'Saldos em aberto',
+        descricao: 'Quem deve, quanto e há quanto tempo',
+        para: '/relatorios/carteira/abertos',
+      },
       {
         nome: 'Extrato por cliente',
         descricao: 'Todo crédito e débito, com saldo',
         para: '/carteiras',
       },
-      { nome: 'Acima do limite', descricao: 'Quem passou do limite e com que autorização' },
+      {
+        nome: 'Acima do limite',
+        descricao: 'Quem passou do limite e com que autorização',
+        para: '/relatorios/carteira/limite',
+      },
       {
         nome: 'Ajustes e bonificações',
         descricao: 'Os lançamentos que criam dinheiro',
-        restrito: true,
+        para: '/relatorios/carteira/ajustes',
       },
     ],
   },

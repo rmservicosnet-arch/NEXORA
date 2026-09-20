@@ -437,7 +437,8 @@ export class CarteiraService {
       });
     }
 
-    const excedeu = await this.conferirLimite(carteira, params.valor, principal, 'Venda no balcao');
+    const autorizacao = 'Venda no balcao, acima do limite';
+    const excedeu = await this.conferirLimite(carteira, params.valor, principal, autorizacao);
 
     const movimento = await this.gravarMovimento(tx, contexto, {
       carteiraId: carteira.id,
@@ -448,6 +449,13 @@ export class CarteiraService {
       principal,
       vendaId: params.vendaId,
       excedeuLimite: excedeu,
+      /*
+        A justificativa vai para o RAZAO, nao so para a conferencia.
+        `conferirLimite` ja a exigia, e ela era descartada: o movimento ficava
+        marcado como excedido e sem uma linha dizendo por que foi autorizado.
+        Quem revisasse depois via a marca e nenhuma explicacao.
+      */
+      ...(excedeu ? { justificativa: autorizacao } : {}),
       // A chave impede que um reenvio da mesma venda debite duas vezes.
       chaveIdempotencia: `venda:${params.vendaId}`,
     });

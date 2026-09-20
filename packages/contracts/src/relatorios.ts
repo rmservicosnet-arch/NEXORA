@@ -659,3 +659,122 @@ export const relatorioAceitesSchema = z.object({
   itens: z.array(linhaAceiteSchema),
 });
 export type RelatorioAceites = z.infer<typeof relatorioAceitesSchema>;
+
+// ---------------------------------------------------------------------------
+// Carteira: saldos em aberto
+// ---------------------------------------------------------------------------
+
+/** Saldo em aberto e AGORA. Nao tem periodo. */
+export const filtroAbertosSchema = z.object({
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroAbertos = z.infer<typeof filtroAbertosSchema>;
+
+export const linhaAbertoSchema = z.object({
+  clienteId: z.string(),
+  cliente: z.string(),
+  /** Negativo: e divida. O sinal e do razao, nao da tela. */
+  saldo: z.string(),
+  limiteCredito: z.string(),
+  /** `saldo + limite`. Negativo significa que ja passou do limite. */
+  disponivel: z.string(),
+  /** Dias desde que o saldo ficou negativo e nao voltou a zero. */
+  diasNegativo: z.number().int().nullable(),
+  ultimoCredito: z.string().nullable(),
+  bloqueada: z.boolean(),
+});
+export type LinhaAberto = z.infer<typeof linhaAbertoSchema>;
+
+export const relatorioAbertosSchema = z.object({
+  devedores: z.number().int(),
+  totalDevido: z.string(),
+  acimaDoLimite: z.number().int(),
+  bloqueadas: z.number().int(),
+  faixas: z.array(
+    z.object({ faixa: z.string(), clientes: z.number().int(), valor: z.string() }),
+  ),
+  itens: z.array(linhaAbertoSchema),
+});
+export type RelatorioAbertos = z.infer<typeof relatorioAbertosSchema>;
+
+// ---------------------------------------------------------------------------
+// Carteira: acima do limite
+// ---------------------------------------------------------------------------
+
+export const filtroLimiteSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(90),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroLimite = z.infer<typeof filtroLimiteSchema>;
+
+export const linhaLimiteSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  cliente: z.string(),
+  tipo: z.string(),
+  valor: z.string(),
+  saldoPosterior: z.string(),
+  limiteCredito: z.string(),
+  /** Quanto o debito passou de `saldo + limite`. Sempre positivo. */
+  excedeuEm: z.string(),
+  justificativa: z.string().nullable(),
+  autorizadoPor: z.string().nullable(),
+});
+export type LinhaLimite = z.infer<typeof linhaLimiteSchema>;
+
+export const relatorioLimiteSchema = z.object({
+  dias: z.number().int(),
+  autorizacoes: z.number().int(),
+  valorAutorizado: z.string(),
+  clientesAfetados: z.number().int(),
+  /** Carteiras que HOJE estao abaixo de `-limite`. Divida viva, nao historico. */
+  acimaAgora: z.number().int(),
+  /** Autorizacoes sem justificativa escrita. Deveriam ser zero. */
+  semJustificativa: z.number().int(),
+  itens: z.array(linhaLimiteSchema),
+});
+export type RelatorioLimite = z.infer<typeof relatorioLimiteSchema>;
+
+// ---------------------------------------------------------------------------
+// Carteira: ajustes e bonificacoes
+// ---------------------------------------------------------------------------
+
+export const filtroAjustesSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(90),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroAjustes = z.infer<typeof filtroAjustesSchema>;
+
+export const linhaAjusteSchema = z.object({
+  id: z.string(),
+  em: z.string(),
+  cliente: z.string(),
+  tipo: z.string(),
+  credito: z.boolean(),
+  valor: z.string(),
+  saldoPosterior: z.string(),
+  justificativa: z.string().nullable(),
+  autor: z.string().nullable(),
+});
+export type LinhaAjuste = z.infer<typeof linhaAjusteSchema>;
+
+export const relatorioAjustesSchema = z.object({
+  dias: z.number().int(),
+  lancamentos: z.number().int(),
+  credito: z.string(),
+  debito: z.string(),
+  /** `credito - debito`: dinheiro criado no periodo, com sinal. */
+  liquido: z.string(),
+  /** Deveria ser zero: o banco exige justificativa nestes tipos. */
+  semJustificativa: z.number().int(),
+  porAutor: z.array(
+    z.object({
+      autor: z.string(),
+      lancamentos: z.number().int(),
+      credito: z.string(),
+      debito: z.string(),
+    }),
+  ),
+  itens: z.array(linhaAjusteSchema),
+});
+export type RelatorioAjustes = z.infer<typeof relatorioAjustesSchema>;
