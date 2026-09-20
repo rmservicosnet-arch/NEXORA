@@ -141,7 +141,7 @@ export function Carteiras() {
         {lista.data ? (
           <span className="text-[13px] text-neutral-500">
             A receber:{' '}
-            <strong className="font-mono font-semibold text-[--color-perigo]">
+            <strong className="font-mono font-semibold text-[var(--color-perigo)]">
               R$ {brl(lista.data.totalAReceber)}
             </strong>
           </span>
@@ -167,7 +167,7 @@ export function Carteiras() {
                 type="checkbox"
                 checked={soDevedores}
                 onChange={(e) => setSoDevedores(e.target.checked)}
-                className="size-3.5 accent-[--color-perigo]"
+                className="size-3.5 accent-[var(--color-perigo)]"
               />
               So quem esta devendo
             </label>
@@ -305,13 +305,13 @@ export function Carteiras() {
               <div className="flex h-11 shrink-0 items-center justify-end gap-5 border-t border-neutral-100 bg-neutral-25 px-5 text-[12.5px] text-neutral-500">
                 <span>
                   Creditos{' '}
-                  <strong className="font-mono text-[--color-sucesso]">
+                  <strong className="font-mono text-[var(--color-sucesso)]">
                     R$ {brl(extrato.data.totalCreditos)}
                   </strong>
                 </span>
                 <span>
                   Debitos{' '}
-                  <strong className="font-mono text-[--color-perigo]">
+                  <strong className="font-mono text-[var(--color-perigo)]">
                     R$ {brl(extrato.data.totalDebitos)}
                   </strong>
                 </span>
@@ -345,9 +345,9 @@ function Cabecalho({
           className={juntar(
             'mt-0.5 font-mono text-[22px] font-bold leading-7',
             tom === 'devendo'
-              ? 'text-[--color-perigo]'
+              ? 'text-[var(--color-perigo)]'
               : tom === 'credito'
-                ? 'text-[--color-sucesso]'
+                ? 'text-[var(--color-sucesso)]'
                 : 'text-neutral-600',
           )}
         >
@@ -358,7 +358,7 @@ function Cabecalho({
           <strong className="font-mono text-neutral-900">R$ {brl(carteira.disponivel)}</strong>
         </p>
         {carteira.bloqueadaParaCompra ? (
-          <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[--color-perigo-fundo] px-2 py-0.5 text-[11.5px] font-semibold text-[--color-perigo]">
+          <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-perigo-fundo)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-perigo)]">
             <span className="size-1.5 rounded-full bg-current" />
             Bloqueada para compra — quitacao continua liberada
           </p>
@@ -402,9 +402,9 @@ function LinhaCarteira({
           className={juntar(
             'shrink-0 font-mono text-[13px] font-semibold',
             tom === 'devendo'
-              ? 'text-[--color-perigo]'
+              ? 'text-[var(--color-perigo)]'
               : tom === 'credito'
-                ? 'text-[--color-sucesso]'
+                ? 'text-[var(--color-sucesso)]'
                 : 'text-neutral-400',
           )}
         >
@@ -455,7 +455,7 @@ function LinhaMovimento({
           <span
             className={juntar(
               'size-1.5 shrink-0 rounded-full',
-              credito ? 'bg-[--color-sucesso]' : 'bg-[--color-atencao]',
+              credito ? 'bg-[var(--color-sucesso)]' : 'bg-[var(--color-atencao)]',
             )}
             aria-hidden="true"
           />
@@ -466,12 +466,12 @@ function LinhaMovimento({
           {/* Os tipos que criam dinheiro sem contrapartida aparecem
               destacados. docs/WALLET.md §7. */}
           {criaDinheiro ? (
-            <span className="shrink-0 rounded bg-[--color-atencao-fundo] px-1.5 py-0.5 text-[10.5px] font-semibold text-[--color-atencao]">
+            <span className="shrink-0 rounded bg-[var(--color-atencao-fundo)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--color-atencao)]">
               sem contrapartida
             </span>
           ) : null}
           {movimento.excedeuLimite ? (
-            <span className="shrink-0 rounded bg-[--color-perigo-fundo] px-1.5 py-0.5 text-[10.5px] font-semibold text-[--color-perigo]">
+            <span className="shrink-0 rounded bg-[var(--color-perigo-fundo)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--color-perigo)]">
               acima do limite
             </span>
           ) : null}
@@ -489,7 +489,7 @@ function LinhaMovimento({
       <span
         className={juntar(
           'text-right font-mono text-[13.5px] font-semibold',
-          credito ? 'text-[--color-sucesso]' : 'text-[--color-perigo]',
+          credito ? 'text-[var(--color-sucesso)]' : 'text-[var(--color-perigo)]',
         )}
       >
         {credito ? '+' : '-'} R$ {brl(movimento.valor)}
@@ -509,7 +509,7 @@ function LinhaMovimento({
             type="button"
             onClick={aoEstornar}
             disabled={ocupado}
-            className="text-[11.5px] font-medium text-[--color-perigo] underline decoration-[#f0c9cb] underline-offset-2 disabled:opacity-50"
+            className="text-[11.5px] font-medium text-[var(--color-perigo)] underline decoration-[#f0c9cb] underline-offset-2 disabled:opacity-50"
           >
             estornar
           </button>

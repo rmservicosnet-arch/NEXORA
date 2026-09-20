@@ -107,12 +107,12 @@ export function Produtos() {
 
           <div className="flex-1" />
 
-          <label className="flex h-[35px] cursor-pointer items-center gap-2 rounded-md border border-[#f0c9cb] bg-[--color-perigo-fundo] px-3 text-[12.5px] font-medium text-[--color-perigo]">
+          <label className="flex h-[35px] cursor-pointer items-center gap-2 rounded-md border border-[#f0c9cb] bg-[var(--color-perigo-fundo)] px-3 text-[12.5px] font-medium text-[var(--color-perigo)]">
             <input
               type="checkbox"
               checked={soDivergencia}
               onChange={(e) => setSoDivergencia(e.target.checked)}
-              className="size-3.5 accent-[--color-perigo]"
+              className="size-3.5 accent-[var(--color-perigo)]"
             />
             Só divergências de saldo
           </label>
@@ -289,7 +289,7 @@ function Linha({
       <span
         className={juntar(
           'tabular text-right font-mono text-[13px] font-medium',
-          saldo < 0 ? 'text-[--color-perigo]' : 'text-neutral-900',
+          saldo < 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-900',
         )}
       >
         {saldo < 0 ? `−${Math.abs(saldo)}` : saldo}
@@ -302,8 +302,8 @@ function Linha({
 
 function Selo({ status }: { readonly status: ProdutoLista['status'] }) {
   const mapa = {
-    ATIVO: { texto: 'Ativo', cor: 'text-[--color-sucesso] bg-[--color-sucesso-fundo]' },
-    RASCUNHO: { texto: 'Rascunho', cor: 'text-[--color-atencao] bg-[--color-atencao-fundo]' },
+    ATIVO: { texto: 'Ativo', cor: 'text-[var(--color-sucesso)] bg-[var(--color-sucesso-fundo)]' },
+    RASCUNHO: { texto: 'Rascunho', cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]' },
     INATIVO: { texto: 'Inativo', cor: 'text-neutral-500 bg-neutral-50' },
   } as const;
 

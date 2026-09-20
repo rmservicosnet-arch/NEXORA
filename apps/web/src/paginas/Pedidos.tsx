@@ -31,14 +31,14 @@ export const ROTULO_STATUS: Record<StatusPedido, string> = {
  */
 const TOM_STATUS: Record<StatusPedido, string> = {
   RASCUNHO: 'bg-neutral-100 text-neutral-600',
-  AGUARDANDO_CONFIRMACAO: 'bg-[--color-atencao-fundo] text-[--color-atencao]',
+  AGUARDANDO_CONFIRMACAO: 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
   AGUARDANDO_ACEITE_CLIENTE: 'bg-primary-50 text-primary-700',
-  CONFIRMADO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
-  CONFIRMADO_PARCIALMENTE: 'bg-[--color-atencao-fundo] text-[--color-atencao]',
-  DEVOLVIDO: 'bg-[--color-perigo-fundo] text-[--color-perigo]',
-  RECUSADO: 'bg-[--color-perigo-fundo] text-[--color-perigo]',
-  FATURADO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
-  CONCLUIDO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
+  CONFIRMADO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
+  CONFIRMADO_PARCIALMENTE: 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
+  DEVOLVIDO: 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]',
+  RECUSADO: 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]',
+  FATURADO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
+  CONCLUIDO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
   CANCELADO: 'bg-neutral-100 text-neutral-600',
   EXPIRADO: 'bg-neutral-100 text-neutral-600',
 };
@@ -332,7 +332,7 @@ function LinhaPedido({ pedido }: { readonly pedido: Pedido }) {
       {/* Disponibilidade: a pergunta que decide se o pedido segue sozinho. */}
       <span className="order-2 lg:order-none">
         {falta > 0 ? (
-          <span className="inline-flex h-[23px] items-center gap-1.5 whitespace-nowrap rounded-full bg-[--color-atencao-fundo] px-2.5 text-[11.5px] font-semibold text-[--color-atencao]">
+          <span className="inline-flex h-[23px] items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--color-atencao-fundo)] px-2.5 text-[11.5px] font-semibold text-[var(--color-atencao)]">
             <svg
               width="12"
               height="12"
@@ -349,7 +349,7 @@ function LinhaPedido({ pedido }: { readonly pedido: Pedido }) {
             {falta} sem saldo
           </span>
         ) : (
-          <span className="inline-flex h-[23px] items-center whitespace-nowrap rounded-full bg-[--color-sucesso-fundo] px-2.5 text-[11.5px] font-semibold text-[--color-sucesso]">
+          <span className="inline-flex h-[23px] items-center whitespace-nowrap rounded-full bg-[var(--color-sucesso-fundo)] px-2.5 text-[11.5px] font-semibold text-[var(--color-sucesso)]">
             Tudo disponível
           </span>
         )}
@@ -364,7 +364,7 @@ function LinhaPedido({ pedido }: { readonly pedido: Pedido }) {
           <span
             className={juntar(
               'block whitespace-nowrap font-mono text-[11px]',
-              diferenca > 0 ? 'text-[--color-perigo]' : 'text-[--color-sucesso]',
+              diferenca > 0 ? 'text-[var(--color-perigo)]' : 'text-[var(--color-sucesso)]',
             )}
           >
             {diferenca > 0 ? '+' : '−'} R$ {brl(Math.abs(diferenca))}
@@ -379,7 +379,7 @@ function LinhaPedido({ pedido }: { readonly pedido: Pedido }) {
       <span
         className={juntar(
           'order-8 text-[12.5px] lg:order-none',
-          vencido ? 'font-semibold text-[--color-perigo]' : 'text-neutral-600',
+          vencido ? 'font-semibold text-[var(--color-perigo)]' : 'text-neutral-600',
         )}
       >
         {pedido.validoAte

@@ -33,13 +33,13 @@ const ROTULO: Record<StatusPedido, string> = {
 const TOM: Record<StatusPedido, string> = {
   RASCUNHO: 'bg-neutral-100 text-neutral-600',
   AGUARDANDO_CONFIRMACAO: 'bg-primary-50 text-primary-700',
-  AGUARDANDO_ACEITE_CLIENTE: 'bg-[--color-atencao-fundo] text-[--color-atencao]',
-  CONFIRMADO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
-  CONFIRMADO_PARCIALMENTE: 'bg-[--color-atencao-fundo] text-[--color-atencao]',
-  DEVOLVIDO: 'bg-[--color-perigo-fundo] text-[--color-perigo]',
-  RECUSADO: 'bg-[--color-perigo-fundo] text-[--color-perigo]',
-  FATURADO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
-  CONCLUIDO: 'bg-[--color-sucesso-fundo] text-[--color-sucesso]',
+  AGUARDANDO_ACEITE_CLIENTE: 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
+  CONFIRMADO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
+  CONFIRMADO_PARCIALMENTE: 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
+  DEVOLVIDO: 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]',
+  RECUSADO: 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]',
+  FATURADO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
+  CONCLUIDO: 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]',
   CANCELADO: 'bg-neutral-100 text-neutral-600',
   EXPIRADO: 'bg-neutral-100 text-neutral-600',
 };
@@ -133,7 +133,7 @@ export function PortalMeusPedidos() {
                 </span>
 
                 {precisaDeVoce ? (
-                  <span className="order-5 w-full text-[12px] font-medium text-[--color-atencao]">
+                  <span className="order-5 w-full text-[12px] font-medium text-[var(--color-atencao)]">
                     A loja alterou o pedido — toque para ver e decidir.
                   </span>
                 ) : null}

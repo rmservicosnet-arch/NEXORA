@@ -138,6 +138,8 @@ o runtime.
 | `SECURITY DEFINER` sem filtro de tenant | A função ignora o RLS por definição. O `tenant_id` tem de ser filtrado à mão, em cada subconsulta, ou ela vira o vazamento que o RLS impede |
 | Agendador dentro da API | Duas instâncias no ar rodam a rotina duas vezes e disputam as mesmas linhas. Quem agenda é o sistema operacional: `npm run expirar` por cron |
 | Prazo gravado que ninguém lê | `expiraEm` existia desde o início e nada o consultava: reserva vencida prendia estoque para sempre. O filtro vai no CÁLCULO, não só na rotina de limpeza |
+| `bg-[--minha-var]` no Tailwind 4 | O atalho não gera nada: sai `transparent`. Use `bg-[var(--minha-var)]`. Ficou invisível em 155 lugares sem ninguém notar — cor de status não dá erro, só some |
+| Estado de tela guardado sem dizer a QUEM pertence | Ir de um pedido para outro não remonta o componente: a rota é a mesma, muda o parâmetro. As decisões do anterior ficavam na tela |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |

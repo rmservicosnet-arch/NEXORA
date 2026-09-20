@@ -202,7 +202,7 @@ export function TabelasPreco() {
                         className={juntar(
                           'text-[12px]',
                           t.itensComPreco === 0
-                            ? 'font-medium text-[--color-atencao]'
+                            ? 'font-medium text-[var(--color-atencao)]'
                             : 'text-neutral-500',
                         )}
                       >

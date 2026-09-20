@@ -89,7 +89,7 @@ export function Clientes() {
               className={juntar(
                 'h-10 rounded-md border px-3 text-[13px] font-medium',
                 soSemTabela
-                  ? 'border-[--color-atencao] bg-[--color-atencao-fundo] text-[--color-atencao]'
+                  ? 'border-[var(--color-atencao)] bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]'
                   : 'border-neutral-200 bg-white text-neutral-600',
               )}
             >
@@ -142,7 +142,7 @@ export function Clientes() {
                         {c.tabelaPreco}
                       </span>
                     ) : (
-                      <span className="rounded bg-[--color-atencao-fundo] px-2 py-0.5 text-[11.5px] font-semibold text-[--color-atencao]">
+                      <span className="rounded bg-[var(--color-atencao-fundo)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-atencao)]">
                         sem tabela
                       </span>
                     )}

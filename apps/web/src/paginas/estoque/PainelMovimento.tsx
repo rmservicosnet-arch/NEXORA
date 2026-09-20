@@ -402,7 +402,7 @@ export function PainelMovimento({ aoFechar }: { readonly aoFechar: () => void })
                 className={juntar(
                   'font-mono',
                   Number(saldoNoLocal?.quantidade ?? 0) < 0
-                    ? 'text-[--color-perigo]'
+                    ? 'text-[var(--color-perigo)]'
                     : 'text-neutral-900',
                 )}
               >
@@ -486,7 +486,7 @@ export function PainelMovimento({ aoFechar }: { readonly aoFechar: () => void })
             {operacao === 'saida' &&
             justificativa.trim().length > 0 &&
             justificativa.trim().length < 5 ? (
-              <span className="text-[11.5px] text-[--color-perigo]">
+              <span className="text-[11.5px] text-[var(--color-perigo)]">
                 Descreva o motivo com ao menos 5 caracteres.
               </span>
             ) : null}

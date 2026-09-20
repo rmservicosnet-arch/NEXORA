@@ -217,6 +217,8 @@ export const pedidoSchema = z.object({
   loja: z.string(),
   clienteId: z.string(),
   cliente: z.string(),
+  /** Para o "Falar com o cliente" da tela de conferencia. */
+  clienteTelefone: z.string().nullable(),
   solicitante: z.string().nullable(),
   tabelaPreco: z.string().nullable(),
   /**

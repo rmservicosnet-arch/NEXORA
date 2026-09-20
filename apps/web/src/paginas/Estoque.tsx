@@ -269,7 +269,7 @@ function Linha({
         <span
           className={juntar(
             'size-1.5 shrink-0 rounded-full',
-            entrada ? 'bg-[--color-sucesso]' : 'bg-[--color-atencao]',
+            entrada ? 'bg-[var(--color-sucesso)]' : 'bg-[var(--color-atencao)]',
           )}
           aria-hidden="true"
         />
@@ -281,7 +281,7 @@ function Linha({
       <span
         className={juntar(
           'tabular text-right font-mono text-[13px] font-medium',
-          entrada ? 'text-[--color-sucesso]' : 'text-neutral-900',
+          entrada ? 'text-[var(--color-sucesso)]' : 'text-neutral-900',
         )}
       >
         {/* O sinal é do sentido, não da quantidade: ela é sempre positiva no
@@ -294,7 +294,7 @@ function Linha({
       <span
         className={juntar(
           'tabular text-right font-mono text-[13px]',
-          saldo < 0 ? 'font-semibold text-[--color-perigo]' : 'text-neutral-600',
+          saldo < 0 ? 'font-semibold text-[var(--color-perigo)]' : 'text-neutral-600',
         )}
       >
         {saldo < 0 ? `−${Math.abs(saldo).toLocaleString('pt-BR')}` : saldo.toLocaleString('pt-BR')}

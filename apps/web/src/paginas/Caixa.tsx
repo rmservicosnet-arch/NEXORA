@@ -357,7 +357,7 @@ function PainelCaixa({ caixa }: { readonly caixa: CaixaDto }) {
               <span
                 className={juntar(
                   'w-[92px] shrink-0 font-medium',
-                  m.tipo === 'SANGRIA' ? 'text-[--color-perigo]' : 'text-[--color-sucesso]',
+                  m.tipo === 'SANGRIA' ? 'text-[var(--color-perigo)]' : 'text-[var(--color-sucesso)]',
                 )}
               >
                 {m.tipo === 'SANGRIA' ? 'Sangria' : 'Suprimento'}
@@ -446,8 +446,8 @@ function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
           diferenca === null
             ? 'text-neutral-400'
             : diferenca === 0
-              ? 'text-[--color-sucesso]'
-              : 'text-[--color-perigo]',
+              ? 'text-[var(--color-sucesso)]'
+              : 'text-[var(--color-perigo)]',
         )}
         title={diferenca === null ? undefined : diferenca < 0 ? 'Falta' : 'Sobra'}
       >
@@ -463,8 +463,8 @@ function LinhaHistorico({ caixa }: { readonly caixa: CaixaDto }) {
 
 function Selo({ status }: { readonly status: CaixaDto['status'] }) {
   const mapa = {
-    ABERTO: { texto: 'Aberto', cor: 'text-[--color-sucesso] bg-[--color-sucesso-fundo]' },
-    FECHADO: { texto: 'Fechado', cor: 'text-[--color-atencao] bg-[--color-atencao-fundo]' },
+    ABERTO: { texto: 'Aberto', cor: 'text-[var(--color-sucesso)] bg-[var(--color-sucesso-fundo)]' },
+    FECHADO: { texto: 'Fechado', cor: 'text-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]' },
     CONFERIDO: { texto: 'Conferido', cor: 'text-neutral-600 bg-neutral-50' },
   } as const;
 

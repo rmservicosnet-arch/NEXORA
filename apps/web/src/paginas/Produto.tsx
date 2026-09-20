@@ -192,7 +192,7 @@ export function Produto() {
                 <span>
                   {p.variacoes.length} {p.variacoes.length === 1 ? 'variação' : 'variações'}
                 </span>
-                <span className={p.temSaldoNegativo ? 'font-medium text-[--color-perigo]' : ''}>
+                <span className={p.temSaldoNegativo ? 'font-medium text-[var(--color-perigo)]' : ''}>
                   saldo {p.saldoTotal}
                 </span>
                 {p.valorEstoque !== undefined ? (
@@ -205,7 +205,7 @@ export function Produto() {
               className={juntar(
                 'shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-semibold',
                 p.publicadoNoCatalogo
-                  ? 'bg-[--color-sucesso-fundo] text-[--color-sucesso]'
+                  ? 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]'
                   : 'bg-neutral-50 text-neutral-500',
               )}
             >
@@ -416,9 +416,9 @@ function LinhaVariacao({
           className={juntar(
             'tabular text-right font-mono text-[13px] font-medium',
             saldo < 0
-              ? 'text-[--color-perigo]'
+              ? 'text-[var(--color-perigo)]'
               : variacao.abaixoDoMinimo
-                ? 'text-[--color-atencao]'
+                ? 'text-[var(--color-atencao)]'
                 : 'text-neutral-900',
           )}
           title={
@@ -447,7 +447,7 @@ function LinhaVariacao({
               <span
                 className={juntar(
                   'font-mono',
-                  Number(s.quantidade) < 0 ? 'text-[--color-perigo]' : 'text-neutral-600',
+                  Number(s.quantidade) < 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-600',
                 )}
               >
                 {s.quantidade}
@@ -488,8 +488,8 @@ function Cartao({
         )}
       >
         {falhou ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1 bg-[--color-perigo-fundo] px-2 text-center">
-            <span className="text-[11.5px] font-semibold text-[--color-perigo]">
+          <div className="flex h-full flex-col items-center justify-center gap-1 bg-[var(--color-perigo-fundo)] px-2 text-center">
+            <span className="text-[11.5px] font-semibold text-[var(--color-perigo)]">
               Falhou no envio
             </span>
             <span className="text-[10.5px] text-[#8c1a21]">Remova e tente de novo</span>
@@ -524,7 +524,7 @@ function Cartao({
             'truncate text-[10.5px]',
             foto.status === 'PRONTA'
               ? 'font-mono text-neutral-400'
-              : 'font-medium text-[--color-atencao]',
+              : 'font-medium text-[var(--color-atencao)]',
           )}
         >
           {/* Sem dimensão não é "—": é uma foto que não terminou o envio, e
@@ -552,7 +552,7 @@ function Cartao({
               type="button"
               onClick={aoExcluir}
               disabled={ocupado}
-              className="text-[11px] font-medium text-[--color-perigo] underline decoration-[#f0c9cb] underline-offset-2 disabled:opacity-50"
+              className="text-[11px] font-medium text-[var(--color-perigo)] underline decoration-[#f0c9cb] underline-offset-2 disabled:opacity-50"
             >
               Remover
             </button>

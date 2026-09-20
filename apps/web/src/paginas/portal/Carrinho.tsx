@@ -228,12 +228,12 @@ function Linha({
         <p className="truncate text-[13.5px] text-neutral-900">{item.produto}</p>
         <p className="truncate text-[11.5px] text-neutral-500">{item.descricaoVariacao}</p>
         {mudouDePreco ? (
-          <p className="text-[11.5px] font-medium text-[--color-atencao]">
+          <p className="text-[11.5px] font-medium text-[var(--color-atencao)]">
             preço atualizado: era R$ {brl(item.precoVisto)}
           </p>
         ) : null}
         {sumiu ? (
-          <p className="text-[11.5px] font-medium text-[--color-perigo]">
+          <p className="text-[11.5px] font-medium text-[var(--color-perigo)]">
             não está mais no seu catálogo
           </p>
         ) : null}

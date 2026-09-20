@@ -1304,7 +1304,7 @@ export class PedidosService {
   private inclusao() {
     return {
       loja: { select: { nome: true } },
-      cliente: { select: { nome: true } },
+      cliente: { select: { nome: true, telefone: true } },
       clienteAcesso: { select: { nome: true } },
       tabelaPreco: { select: { id: true, nome: true } },
       venda: { select: { numero: true } },
@@ -1383,6 +1383,7 @@ export class PedidosService {
       loja: p.loja.nome,
       clienteId: p.clienteId,
       cliente: p.cliente.nome,
+      clienteTelefone: p.cliente.telefone ?? null,
       solicitante: p.clienteAcesso?.nome ?? null,
       tabelaPreco: p.tabelaPreco?.nome ?? null,
       tabelaPrecoId: p.tabelaPreco?.id ?? null,
@@ -1432,7 +1433,7 @@ interface PedidoComRelacoes {
   faturadoEm: Date | null;
   aceiteClienteEm: Date | null;
   loja: { nome: string };
-  cliente: { nome: string };
+  cliente: { nome: string; telefone: string | null };
   clienteAcesso: { nome: string } | null;
   tabelaPreco: { id: string; nome: string } | null;
   venda: { numero: number } | null;

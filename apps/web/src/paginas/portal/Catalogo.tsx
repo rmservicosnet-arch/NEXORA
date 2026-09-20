@@ -120,8 +120,8 @@ function CartaoItem({ item }: { readonly item: ItemCatalogo }) {
           className={juntar(
             'w-fit rounded px-1.5 py-0.5 text-[10.5px] font-semibold',
             item.disponivel
-              ? 'bg-[--color-sucesso-fundo] text-[--color-sucesso]'
-              : 'bg-[--color-atencao-fundo] text-[--color-atencao]',
+              ? 'bg-[var(--color-sucesso-fundo)] text-[var(--color-sucesso)]'
+              : 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]',
           )}
         >
           {item.disponivel ? 'pronta entrega' : 'sob encomenda'}

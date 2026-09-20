@@ -222,7 +222,7 @@ export function NovoProduto() {
             </div>
 
             {errosCampo['variacoes'] ? (
-              <p className="text-[12.5px] font-medium text-[--color-perigo]">
+              <p className="text-[12.5px] font-medium text-[var(--color-perigo)]">
                 {errosCampo['variacoes']}
               </p>
             ) : null}
@@ -384,10 +384,10 @@ function EntradaSimples({
         className={juntar(
           'h-[38px] w-full rounded-md border bg-white px-2.5 text-[13px] placeholder:text-neutral-300',
           mono && 'font-mono text-[12.5px]',
-          erro ? 'border-[--color-perigo]' : 'border-neutral-200',
+          erro ? 'border-[var(--color-perigo)]' : 'border-neutral-200',
         )}
       />
-      {erro ? <span className="text-[11.5px] text-[--color-perigo]">{erro}</span> : null}
+      {erro ? <span className="text-[11.5px] text-[var(--color-perigo)]">{erro}</span> : null}
     </div>
   );
 }

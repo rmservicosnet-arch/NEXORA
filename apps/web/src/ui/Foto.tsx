@@ -59,7 +59,7 @@ export function Foto({
     return (
       <div
         className={juntar(
-          'flex items-center justify-center bg-[--color-perigo-fundo] text-[--color-perigo]',
+          'flex items-center justify-center bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]',
           className,
         )}
         title="Não foi possível carregar a imagem"

@@ -40,7 +40,7 @@ export function Campo({ rotulo, erro, ajuda, acessorio, className, ...resto }: C
         className={juntar(
           'h-[42px] w-full rounded-md border bg-white px-3 text-[14px] text-neutral-900',
           'placeholder:text-neutral-400',
-          erro ? 'border-[--color-perigo]' : 'border-neutral-200',
+          erro ? 'border-[var(--color-perigo)]' : 'border-neutral-200',
           className,
         )}
         aria-invalid={erro ? true : undefined}
@@ -55,7 +55,7 @@ export function Campo({ rotulo, erro, ajuda, acessorio, className, ...resto }: C
       ) : null}
 
       {erro ? (
-        <p id={idErro} className="text-[12.5px] font-medium text-[--color-perigo]">
+        <p id={idErro} className="text-[12.5px] font-medium text-[var(--color-perigo)]">
           {erro}
         </p>
       ) : null}

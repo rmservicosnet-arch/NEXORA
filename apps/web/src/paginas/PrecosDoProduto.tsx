@@ -173,7 +173,7 @@ export function PrecosDoProduto({ produtoId }: { readonly produtoId: string }) {
                           className={juntar(
                             'h-[38px] w-[104px] rounded-r-md border px-2 text-right font-mono text-[13.5px]',
                             vazio
-                              ? 'border-[--color-atencao] bg-[--color-atencao-fundo]'
+                              ? 'border-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]'
                               : 'border-neutral-200',
                           )}
                         />

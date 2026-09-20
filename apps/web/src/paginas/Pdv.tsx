@@ -271,7 +271,7 @@ export function Pdv() {
           caixaAberto ? (
             <Link
               to="/caixa"
-              className="flex items-center gap-1.5 rounded-full bg-[--color-sucesso-fundo] px-2.5 py-1 text-[11.5px] font-semibold text-[--color-sucesso] no-underline"
+              className="flex items-center gap-1.5 rounded-full bg-[var(--color-sucesso-fundo)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-sucesso)] no-underline"
               title={`Esperado na gaveta: R$ ${caixaAberto.resumo.esperadoEmCaixa}`}
             >
               <span className="size-1.5 rounded-full bg-current" />
@@ -280,7 +280,7 @@ export function Pdv() {
           ) : (
             <Link
               to="/caixa"
-              className="flex items-center gap-1.5 rounded-full bg-[--color-atencao-fundo] px-2.5 py-1 text-[11.5px] font-semibold text-[--color-atencao] no-underline"
+              className="flex items-center gap-1.5 rounded-full bg-[var(--color-atencao-fundo)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-atencao)] no-underline"
               title="Sem caixa aberto, o PDV não recebe em dinheiro"
             >
               <span className="size-1.5 rounded-full bg-current" />
@@ -347,7 +347,7 @@ export function Pdv() {
                   <span
                     className={juntar(
                       'shrink-0 font-mono text-[12px]',
-                      Number(i.saldo) <= 0 ? 'text-[--color-perigo]' : 'text-neutral-500',
+                      Number(i.saldo) <= 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-500',
                     )}
                   >
                     {i.saldo} un
@@ -556,8 +556,8 @@ function Linha({
       <span
         className={juntar(
           'font-mono text-[14px] font-medium',
-          tom === 'perigo' && 'text-[--color-perigo]',
-          tom === 'sucesso' && 'text-[--color-sucesso]',
+          tom === 'perigo' && 'text-[var(--color-perigo)]',
+          tom === 'sucesso' && 'text-[var(--color-sucesso)]',
           !tom && 'text-neutral-900',
         )}
       >
@@ -601,7 +601,7 @@ function LinhaItem({
           {linha.sku} · {linha.descricaoVariacao}
         </p>
         {excedeSaldo ? (
-          <p className="text-[11.5px] font-medium text-[--color-perigo]">
+          <p className="text-[11.5px] font-medium text-[var(--color-perigo)]">
             {/* Aviso, não bloqueio: a API decide. Quem tem permissão conclui e
                 a divergência fica registrada; quem não tem recebe a recusa. */}
             Há {linha.saldo} no balcão — a venda deixará o saldo negativo
@@ -646,7 +646,7 @@ function LinhaItem({
           className={juntar(
             'h-9 w-[92px] shrink-0 rounded-md border px-2 text-right font-mono text-[13.5px]',
             linha.precoManual
-              ? 'border-[--color-atencao] bg-[--color-atencao-fundo]'
+              ? 'border-[var(--color-atencao)] bg-[var(--color-atencao-fundo)]'
               : 'border-neutral-200',
           )}
           title={linha.precoManual ? `Preço de tabela: R$ ${linha.precoTabela}` : undefined}
@@ -665,7 +665,7 @@ function LinhaItem({
         type="button"
         onClick={aoRemover}
         aria-label={`Remover ${linha.sku}`}
-        className="size-8 shrink-0 rounded-md text-neutral-400 hover:bg-[--color-perigo-fundo] hover:text-[--color-perigo]"
+        className="size-8 shrink-0 rounded-md text-neutral-400 hover:bg-[var(--color-perigo-fundo)] hover:text-[var(--color-perigo)]"
       >
         ✕
       </button>

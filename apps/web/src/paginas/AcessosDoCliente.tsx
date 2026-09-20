@@ -115,7 +115,7 @@ export function AcessosDoCliente({ clienteId }: { readonly clienteId: string }) 
         argon2id, e ele não volta. Quem fechar sem copiar gera outra.
       */}
       {revelada ? (
-        <div className="flex flex-col gap-2.5 rounded-md border border-[--color-atencao] bg-[--color-atencao-fundo] p-3.5">
+        <div className="flex flex-col gap-2.5 rounded-md border border-[var(--color-atencao)] bg-[var(--color-atencao-fundo)] p-3.5">
           <p className="text-[13px] font-semibold text-neutral-900">
             Senha provisória de {revelada.acesso.nome}
           </p>

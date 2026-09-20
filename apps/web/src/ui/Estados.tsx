@@ -94,7 +94,7 @@ export function EstadoErro({
 }: EstadoBase & { readonly aoTentarNovamente?: () => void }) {
   return (
     <Moldura>
-      <div className="flex size-14 items-center justify-center rounded-full bg-[--color-perigo-fundo]">
+      <div className="flex size-14 items-center justify-center rounded-full bg-[var(--color-perigo-fundo)]">
         <svg
           width="26"
           height="26"

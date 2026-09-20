@@ -123,7 +123,7 @@ export function PortalMeuPedido() {
               <p
                 className={juntar(
                   'font-mono text-[12.5px]',
-                  diferenca > 0 ? 'text-[--color-perigo]' : 'text-[--color-sucesso]',
+                  diferenca > 0 ? 'text-[var(--color-perigo)]' : 'text-[var(--color-sucesso)]',
                 )}
               >
                 {diferenca > 0 ? '+' : '−'} R$ {brl(Math.abs(diferenca))} em relação ao que você
@@ -141,7 +141,7 @@ export function PortalMeuPedido() {
       </section>
 
       {esperaVoce ? (
-        <section className="flex flex-col gap-3 rounded-md border border-[--color-atencao] bg-[--color-atencao-fundo] p-4">
+        <section className="flex flex-col gap-3 rounded-md border border-[var(--color-atencao)] bg-[var(--color-atencao-fundo)] p-4">
           <p className="text-[13.5px] font-semibold text-neutral-900">
             O pedido mudou e precisa da sua resposta.
           </p>
@@ -274,19 +274,19 @@ function LinhaItem({ item }: { readonly item: PedidoItem }) {
             </span>
           ) : null}
           {devolvido ? (
-            <span className="rounded bg-[--color-perigo-fundo] px-1.5 py-0.5 text-[10.5px] font-semibold text-[--color-perigo]">
+            <span className="rounded bg-[var(--color-perigo-fundo)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--color-perigo)]">
               não vem desta vez
             </span>
           ) : null}
           {cortou ? (
-            <span className="rounded bg-[--color-atencao-fundo] px-1.5 py-0.5 text-[10.5px] font-semibold text-[--color-atencao]">
+            <span className="rounded bg-[var(--color-atencao-fundo)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--color-atencao)]">
               {confirmada} de {pedida}
             </span>
           ) : null}
         </div>
 
         {item.motivoDevolucao ? (
-          <p className="truncate text-[11.5px] text-[--color-perigo]">{item.motivoDevolucao}</p>
+          <p className="truncate text-[11.5px] text-[var(--color-perigo)]">{item.motivoDevolucao}</p>
         ) : null}
         {item.motivoRemocao ? (
           <p className="truncate text-[11.5px] text-neutral-500">{item.motivoRemocao}</p>

@@ -10,15 +10,15 @@ const TONS: Record<TomAviso, { caixa: string; icone: string }> = {
     icone: 'var(--color-primary-600)',
   },
   sucesso: {
-    caixa: 'bg-[--color-sucesso-fundo] border-[#c6e4d3] text-[#155635]',
+    caixa: 'bg-[var(--color-sucesso-fundo)] border-[#c6e4d3] text-[#155635]',
     icone: 'var(--color-sucesso)',
   },
   atencao: {
-    caixa: 'bg-[--color-atencao-fundo] border-[#ebd6a8] text-[#7a5205]',
+    caixa: 'bg-[var(--color-atencao-fundo)] border-[#ebd6a8] text-[#7a5205]',
     icone: 'var(--color-atencao)',
   },
   perigo: {
-    caixa: 'bg-[--color-perigo-fundo] border-[#f0c9cb] text-[#8c1a21]',
+    caixa: 'bg-[var(--color-perigo-fundo)] border-[#f0c9cb] text-[#8c1a21]',
     icone: 'var(--color-perigo)',
   },
 };

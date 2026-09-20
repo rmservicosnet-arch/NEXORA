@@ -20,7 +20,7 @@ const VARIANTES: Record<VarianteBotao, string> = {
   secundario: 'bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50',
   fantasma: 'bg-transparent text-neutral-700 hover:bg-neutral-50',
   perigo:
-    'bg-white text-[--color-perigo] border border-neutral-200 hover:bg-[--color-perigo-fundo]',
+    'bg-white text-[var(--color-perigo)] border border-neutral-200 hover:bg-[var(--color-perigo-fundo)]',
 };
 
 const TAMANHOS: Record<TamanhoBotao, string> = {
