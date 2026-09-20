@@ -79,6 +79,25 @@ export const novoPedidoSchema = z.object({
 });
 export type NovoPedido = z.infer<typeof novoPedidoSchema>;
 
+/**
+ * Reenvio de um pedido devolvido.
+ *
+ * `itens` e opcional: sem ele, o pedido volta como estava. Com ele, o cliente
+ * ajusta as quantidades antes de reenviar — que e o caso comum, porque o
+ * motivo da devolucao costuma ser falta de saldo.
+ *
+ * Nao da para ACRESCENTAR item aqui. Item novo e outro pedido, ou inclusao
+ * pela equipe: reenvio e a mesma conversa continuando, nao uma nova.
+ */
+export const reenvioPedidoSchema = z.object({
+  itens: z
+    .array(z.object({ itemId: z.string().uuid(), quantidade }))
+    .max(200)
+    .optional(),
+  observacao: z.string().trim().max(400).optional(),
+});
+export type ReenvioPedido = z.infer<typeof reenvioPedidoSchema>;
+
 export const aceitePedidoSchema = z.object({
   /** `false` devolve o pedido a equipe com o motivo do cliente. */
   aceita: z.boolean(),

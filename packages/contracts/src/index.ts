@@ -49,6 +49,17 @@ export {
   type TabelaPrecoResumo,
 } from './clientes.js';
 
+export {
+  alteracaoTabelaPrecoSchema,
+  novaTabelaPrecoSchema,
+  statusTabelaSchema,
+  tabelaPrecoSchema,
+  type AlteracaoTabelaPreco,
+  type NovaTabelaPreco,
+  type StatusTabela,
+  type TabelaPreco,
+} from './tabelas.js';
+
 export { lojaResumoSchema, type LojaResumo } from './lojas.js';
 
 export {
@@ -67,6 +78,7 @@ export {
   paginaPedidosSchema,
   pedidoItemSchema,
   pedidoSchema,
+  reenvioPedidoSchema,
   remocaoItemSchema,
   resultadoCheckoutSchema,
   statusPedidoItemSchema,
@@ -86,6 +98,7 @@ export {
   type PaginaPedidos,
   type Pedido,
   type PedidoItem,
+  type ReenvioPedido,
   type RemocaoItem,
   type ResultadoCheckout,
   type StatusPedido,

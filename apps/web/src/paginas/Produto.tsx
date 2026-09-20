@@ -17,6 +17,7 @@ import { Botao } from '../ui/Botao';
 import { EstadoCarregando, EstadoErro } from '../ui/Estados';
 import { Foto } from '../ui/Foto';
 import { juntar } from '../ui/juntar';
+import { PrecosDoProduto } from './PrecosDoProduto';
 
 const TIPOS_ACEITOS = 'image/jpeg,image/png,image/webp';
 
@@ -372,6 +373,8 @@ export function Produto() {
               </Aviso>
             ) : null}
           </section>
+
+          <PrecosDoProduto produtoId={p.id} />
         </div>
       </main>
     </>
