@@ -286,7 +286,9 @@ function LinhaItem({ item }: { readonly item: PedidoItem }) {
         </div>
 
         {item.motivoDevolucao ? (
-          <p className="truncate text-[11.5px] text-[var(--color-perigo)]">{item.motivoDevolucao}</p>
+          <p className="truncate text-[11.5px] text-[var(--color-perigo)]">
+            {item.motivoDevolucao}
+          </p>
         ) : null}
         {item.motivoRemocao ? (
           <p className="truncate text-[11.5px] text-neutral-500">{item.motivoRemocao}</p>

@@ -228,7 +228,17 @@ describe.runIf(temBanco)('venda a prazo', () => {
 
     vendas.push(resultado.venda.numero);
 
-    expect(resultado.avisos.some((a) => a.codigo === 'LANCADO_NA_CARTEIRA')).toBe(true);
+    /*
+      Carteira nova nasce com limite ZERO: R$ 180,00 a prazo PASSA do limite,
+      e o aviso tem de dizer isso.
+
+      Este teste exigia `LANCADO_NA_CARTEIRA` e passava — porque o caminho da
+      venda a prazo descartava `debito.excedeuLimite` e avisava a mesma coisa
+      nos dois casos. O movimento ficava marcado como excedido no razão e a
+      tela não dizia nada: "permitido quando autorizado, nunca silencioso"
+      virando silencioso.
+    */
+    expect(resultado.avisos.some((a) => a.codigo === 'LIMITE_DE_CARTEIRA_EXCEDIDO')).toBe(true);
 
     // O razão da carteira recebeu o débito, com o tipo que diz o que foi.
     const extrato = (
@@ -260,6 +270,36 @@ describe.runIf(temBanco)('venda a prazo', () => {
     expect(
       titulos.itens.some((t) => t.descricao.includes(`Venda ${String(resultado.venda.numero)}`)),
     ).toBe(false);
+  });
+
+  it('venda a prazo DENTRO do limite avisa que lançou, sem falar em limite', async () => {
+    const variacaoId = await produtoAbastecido();
+    const clienteId = await clienteCom(true);
+
+    // Com limite, a mesma venda cabe — e o aviso é o outro.
+    await autenticado('post', `/api/carteira/${clienteId}/limite`)
+      .send({ limiteCredito: '1000.00', justificativa: 'Cliente antigo, teste' })
+      .expect(201);
+
+    const resultado = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '1', precoUnitario: '180.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '180.00' }],
+        })
+        .expect(201)
+    ).body as { venda: { numero: number }; avisos: { codigo: string; mensagem: string }[] };
+
+    vendas.push(resultado.venda.numero);
+
+    const aviso = resultado.avisos.find((av) => av.codigo === 'LANCADO_NA_CARTEIRA');
+    expect(aviso).toBeDefined();
+    expect(resultado.avisos.some((av) => av.codigo === 'LIMITE_DE_CARTEIRA_EXCEDIDO')).toBe(false);
+
+    // E o valor vem em pt-BR: vírgula, não ponto.
+    expect(aviso!.mensagem).toContain('R$ 180,00');
   });
 
   it('o vencimento informado manda; sem ele, valem 30 dias', async () => {

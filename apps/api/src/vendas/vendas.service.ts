@@ -21,7 +21,7 @@ import type {
   Venda,
 } from '@estoque/contracts';
 import { PERM } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, formatarBRL, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -284,12 +284,12 @@ export class VendasService {
         if (debito.excedeuLimite) {
           avisosColetados.push({
             codigo: 'LIMITE_DE_CARTEIRA_EXCEDIDO',
-            mensagem: `A compra passou do limite. O saldo do cliente ficou em R$ ${debito.saldoPosterior.toFixed(2)}.`,
+            mensagem: `A compra passou do limite. O saldo do cliente ficou em ${formatarBRL(debito.saldoPosterior)}.`,
           });
         } else {
           avisosColetados.push({
             codigo: 'DEBITADO_EM_CARTEIRA',
-            mensagem: `R$ ${emCarteira.toFixed(2)} debitados. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
+            mensagem: `${formatarBRL(emCarteira)} debitados. Saldo do cliente: ${formatarBRL(debito.saldoPosterior)}.`,
           });
         }
       }
@@ -338,10 +338,26 @@ export class VendasService {
             principal,
           );
 
-          avisosColetados.push({
-            codigo: 'LANCADO_NA_CARTEIRA',
-            mensagem: `R$ ${aPrazo.toFixed(2)} a prazo na conta corrente. Saldo do cliente: R$ ${debito.saldoPosterior.toFixed(2)}.`,
-          });
+          /*
+            `debitarPorVenda` devolve "excedeu com autorizacao", e este caminho
+            descartava o retorno: a venda a prazo que estourava o limite
+            avisava a mesma coisa que a que cabia. O movimento ficava marcado
+            como excedido no razao e a tela nao dizia nada — "permitido quando
+            autorizado, nunca silencioso" virando silencioso.
+
+            O caminho de PAGAMENTO_VENDA, logo acima, ja fazia a distincao.
+          */
+          avisosColetados.push(
+            debito.excedeuLimite
+              ? {
+                  codigo: 'LIMITE_DE_CARTEIRA_EXCEDIDO',
+                  mensagem: `A venda a prazo passou do limite. O saldo do cliente ficou em ${formatarBRL(debito.saldoPosterior)}.`,
+                }
+              : {
+                  codigo: 'LANCADO_NA_CARTEIRA',
+                  mensagem: `${formatarBRL(aPrazo)} a prazo na conta corrente. Saldo do cliente: ${formatarBRL(debito.saldoPosterior)}.`,
+                },
+          );
         } else {
           const vencimento = dados.pagamentos.find((p) => p.forma === 'PRAZO')?.vencimento;
 
@@ -360,7 +376,7 @@ export class VendasService {
 
           avisosColetados.push({
             codigo: 'TITULO_A_RECEBER_GERADO',
-            mensagem: `R$ ${aPrazo.toFixed(2)} viraram titulo em contas a receber.`,
+            mensagem: `${formatarBRL(aPrazo)} viraram titulo em contas a receber.`,
           });
         }
       }
@@ -383,7 +399,7 @@ export class VendasService {
       if (troco.greaterThan(0)) {
         avisosColetados.push({
           codigo: 'TROCO',
-          mensagem: `Troco de R$ ${troco.toFixed(2)}.`,
+          mensagem: `Troco de ${formatarBRL(troco)}.`,
         });
       }
 
@@ -787,7 +803,7 @@ export class VendasService {
           if (!clienteId || !temCarteira) {
             throw new ConflictException({
               codigo: 'DEVOLUCAO_SEM_DESTINO',
-              mensagem: `Restam R$ ${restante.toFixed(2)} para devolver e não há onde: a venda não foi em dinheiro e o cliente não tem carteira. O estorno no cartão ou no PIX acontece fora do sistema — cadastre a carteira do cliente para o crédito ficar registrado.`,
+              mensagem: `Restam ${formatarBRL(restante)} para devolver e não há onde: a venda não foi em dinheiro e o cliente não tem carteira. O estorno no cartão ou no PIX acontece fora do sistema — cadastre a carteira do cliente para o crédito ficar registrado.`,
             });
           }
 
@@ -806,7 +822,7 @@ export class VendasService {
             */
             throw new ConflictException({
               codigo: 'DEVOLUCAO_SEM_DESTINO',
-              mensagem: `Restam R$ ${restante.minus(creditado).toFixed(2)} sem destino. O valor entrou por cartão ou PIX e o estorno acontece fora do sistema.`,
+              mensagem: `Restam ${formatarBRL(restante.minus(creditado))} sem destino. O valor entrou por cartão ou PIX e o estorno acontece fora do sistema.`,
             });
           }
 
@@ -1297,7 +1313,7 @@ export class VendasService {
     if (recebido.lessThan(total)) {
       throw new BadRequestException({
         codigo: 'PAGAMENTO_INSUFICIENTE',
-        mensagem: `Falta R$ ${total.minus(recebido).toFixed(2)} para fechar a venda.`,
+        mensagem: `Falta ${formatarBRL(total.minus(recebido))} para fechar a venda.`,
       });
     }
 
@@ -1311,7 +1327,7 @@ export class VendasService {
       if (troco.greaterThan(emDinheiro) || (semTroco && emDinheiro.isZero())) {
         throw new BadRequestException({
           codigo: 'PAGAMENTO_EXCEDE_TOTAL',
-          mensagem: `O pagamento passa R$ ${troco.toFixed(2)} do total, e só dinheiro devolve troco.`,
+          mensagem: `O pagamento passa ${formatarBRL(troco)} do total, e só dinheiro devolve troco.`,
         });
       }
     }

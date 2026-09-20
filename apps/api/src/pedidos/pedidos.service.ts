@@ -25,7 +25,7 @@ import type {
   StatusPedido,
 } from '@estoque/contracts';
 import { PERM } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, formatarBRL, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -432,7 +432,7 @@ export class PedidosService {
       tipo: 'VENDA',
       pedido: null,
       vendaNumero: venda.numero,
-      mensagem: `Compra ${String(venda.numero)} concluída. R$ ${venda.total} debitados na sua conta.`,
+      mensagem: `Compra ${String(venda.numero)} concluída. ${formatarBRL(dec(venda.total))} debitados na sua conta.`,
     };
   }
 
@@ -1592,7 +1592,7 @@ export class PedidosService {
         deStatus: pedido.status,
         paraStatus: 'AGUARDANDO_ACEITE_CLIENTE',
         atorTipo: 'SISTEMA',
-        motivo: `Total passou de R$ ${solicitado.toFixed(2)} para R$ ${confirmado.toFixed(2)} — aguardando aceite do cliente`,
+        motivo: `Total passou de ${formatarBRL(solicitado)} para ${formatarBRL(confirmado)} — aguardando aceite do cliente`,
       });
     }
   }

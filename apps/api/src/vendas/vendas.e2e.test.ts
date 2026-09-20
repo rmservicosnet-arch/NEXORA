@@ -367,7 +367,12 @@ describe.runIf(temBanco)('venda de balcão', () => {
       })
       .expect(400);
 
-    expect((recusa.body as { mensagem: string }).mensagem).toContain('50.00');
+    /*
+      Com VÍRGULA. A mensagem é lida por gente no balcão, e "R$ 50.00" num
+      texto em português é o formato de outro país — o helper `formatarBRL`
+      existia em `@estoque/core` desde sempre e 15 mensagens o ignoravam.
+    */
+    expect((recusa.body as { mensagem: string }).mensagem).toContain('R$ 50,00');
   });
 
   it('nada fica gravado quando a venda falha no meio', async () => {

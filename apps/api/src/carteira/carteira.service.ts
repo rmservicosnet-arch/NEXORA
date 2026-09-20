@@ -20,7 +20,7 @@ import type {
   TipoMovimentoCarteira,
 } from '@estoque/contracts';
 import { PERM } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, formatarBRL, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -779,8 +779,8 @@ export class CarteiraService {
       throw new ConflictException({
         codigo: 'LIMITE_EXCEDIDO',
         mensagem:
-          `Disponivel: R$ ${disponivel.toFixed(2)} (saldo ${carteira.saldo.toFixed(2)} + limite ` +
-          `${carteira.limiteCredito.toFixed(2)}). A operacao e de R$ ${valor.toFixed(2)}.`,
+          `Disponivel: ${formatarBRL(disponivel)} (saldo ${formatarBRL(carteira.saldo)} + limite ` +
+          `${formatarBRL(carteira.limiteCredito)}). A operacao e de ${formatarBRL(valor)}.`,
       });
     }
 

@@ -163,6 +163,7 @@ function Corpo({
   }
 
   const situacao = SITUACAO[venda.status];
+  const unidadesVendidas = venda.itens.reduce((soma, i) => soma + Number(i.quantidade), 0);
   const encerrada = venda.status === 'CANCELADA' || venda.status === 'DEVOLVIDA_TOTAL';
 
   const escolhidos = Object.entries(escolhas).filter(([, q]) => q > 0);
@@ -362,7 +363,7 @@ function Corpo({
               <div className="flex shrink-0 items-center gap-3 border-t-2 border-neutral-200 bg-neutral-25 px-4 py-3">
                 <span className="text-[12.5px] font-semibold text-neutral-700">
                   {venda.itens.length} {venda.itens.length === 1 ? 'item' : 'itens'} ·{' '}
-                  {inteiro(venda.itens.reduce((s, i) => s + Number(i.quantidade), 0))} unidades
+                  {inteiro(unidadesVendidas)} {unidadesVendidas === 1 ? 'unidade' : 'unidades'}
                   {Number(venda.valorDevolvido) > 0
                     ? ` · R$ ${brl(venda.valorDevolvido)} já voltaram`
                     : ''}

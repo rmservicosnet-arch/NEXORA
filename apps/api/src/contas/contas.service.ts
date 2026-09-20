@@ -8,7 +8,7 @@ import {
   type SituacaoTitulo,
   type Titulo,
 } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, formatarBRL, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -344,7 +344,7 @@ export class ContasService {
       if (valor.greaterThan(emAberto)) {
         throw new BadRequestException({
           codigo: 'BAIXA_ACIMA_DO_SALDO',
-          mensagem: `Em aberto há R$ ${emAberto.toFixed(2)}. Baixar mais do que se deve é erro de digitação.`,
+          mensagem: `Em aberto há ${formatarBRL(emAberto)}. Baixar mais do que se deve é erro de digitação.`,
         });
       }
 
@@ -757,8 +757,12 @@ export class ContasService {
       const abate = restante.greaterThan(emAberto) ? emAberto : restante;
       const novoValor = valor.minus(abate);
 
-      const nota = `${t.observacao ? `${t.observacao}
-` : ''}${params.motivo}`.slice(0, 400);
+      const nota = `${
+        t.observacao
+          ? `${t.observacao}
+`
+          : ''
+      }${params.motivo}`.slice(0, 400);
 
       await tx.tituloFinanceiro.update({
         where: { id: t.id },

@@ -16,7 +16,7 @@ import type {
   ResumoFinanceiroCaixa,
 } from '@estoque/contracts';
 import { PERM } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, formatarBRL, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -190,7 +190,7 @@ export class CaixaService {
         if (valor.greaterThan(emCaixa)) {
           throw new ConflictException({
             codigo: 'SANGRIA_MAIOR_QUE_O_CAIXA',
-            mensagem: `Há R$ ${emCaixa.toFixed(2)} na gaveta e a sangria é de R$ ${valor.toFixed(2)}.`,
+            mensagem: `Há ${formatarBRL(emCaixa)} na gaveta e a sangria é de ${formatarBRL(valor)}.`,
           });
         }
       }
