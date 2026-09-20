@@ -522,3 +522,140 @@ export const relatorioConfirmacaoSchema = z.object({
   ),
 });
 export type RelatorioConfirmacao = z.infer<typeof relatorioConfirmacaoSchema>;
+
+// ---------------------------------------------------------------------------
+// Pedidos: ruptura
+// ---------------------------------------------------------------------------
+
+export const filtroRupturaSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(60),
+});
+export type FiltroRuptura = z.infer<typeof filtroRupturaSchema>;
+
+export const linhaRupturaSchema = z.object({
+  variacaoId: z.string(),
+  sku: z.string(),
+  produto: z.string(),
+  descricaoVariacao: z.string(),
+  /** Quantos pedidos diferentes bateram na falta deste item. */
+  pedidos: z.number().int(),
+  solicitada: z.string(),
+  atendida: z.string(),
+  /** `solicitada - atendida`: o que o cliente pediu e nao levou. */
+  naoAtendida: z.string(),
+  /** `naoAtendida x preco congelado`. Venda que nao aconteceu. */
+  valorPerdido: z.string(),
+  /** Saldo de hoje nos locais da loja. Repor ou nao e decisao com este numero. */
+  saldoAtual: z.string(),
+  /** Vezes em que a equipe confirmou ACIMA do disponivel, com autorizacao. */
+  confirmadoSemSaldo: z.number().int(),
+});
+export type LinhaRuptura = z.infer<typeof linhaRupturaSchema>;
+
+export const relatorioRupturaSchema = z.object({
+  dias: z.number().int(),
+  /** Itens de pedido que a equipe nao conseguiu atender. */
+  itensEmFalta: z.number().int(),
+  pedidosAfetados: z.number().int(),
+  valorPerdido: z.string(),
+  confirmadosSemSaldo: z.number().int(),
+  itens: z.array(linhaRupturaSchema),
+});
+export type RelatorioRuptura = z.infer<typeof relatorioRupturaSchema>;
+
+// ---------------------------------------------------------------------------
+// Pedidos: alteracoes pela equipe
+// ---------------------------------------------------------------------------
+
+export const filtroAlteracoesSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroAlteracoes = z.infer<typeof filtroAlteracoesSchema>;
+
+export const linhaAlteracaoSchema = z.object({
+  id: z.string(),
+  pedidoId: z.string(),
+  numero: z.number().int(),
+  cliente: z.string(),
+  em: z.string(),
+  acao: z.enum(['INCLUSAO', 'REMOCAO']),
+  sku: z.string(),
+  produto: z.string(),
+  descricaoVariacao: z.string(),
+  quantidade: z.string(),
+  valor: z.string(),
+  motivo: z.string().nullable(),
+  autor: z.string().nullable(),
+});
+export type LinhaAlteracao = z.infer<typeof linhaAlteracaoSchema>;
+
+export const relatorioAlteracoesSchema = z.object({
+  dias: z.number().int(),
+  inclusoes: z.number().int(),
+  remocoes: z.number().int(),
+  valorIncluido: z.string(),
+  valorRemovido: z.string(),
+  /** Pedidos distintos que a equipe tocou. */
+  pedidosTocados: z.number().int(),
+  porAutor: z.array(
+    z.object({
+      autor: z.string(),
+      inclusoes: z.number().int(),
+      remocoes: z.number().int(),
+      valorIncluido: z.string(),
+      valorRemovido: z.string(),
+      /** Remocoes sem motivo escrito. O acordo nao ficou registrado. */
+      semMotivo: z.number().int(),
+    }),
+  ),
+  itens: z.array(linhaAlteracaoSchema),
+});
+export type RelatorioAlteracoes = z.infer<typeof relatorioAlteracoesSchema>;
+
+// ---------------------------------------------------------------------------
+// Pedidos: aceites de cliente
+// ---------------------------------------------------------------------------
+
+export const filtroAceitesSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroAceites = z.infer<typeof filtroAceitesSchema>;
+
+export const linhaAceiteSchema = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  cliente: z.string(),
+  loja: z.string(),
+  /** Quando a edicao da equipe pediu o aceite. */
+  pedidoEm: z.string(),
+  valorSolicitado: z.string(),
+  valorConfirmado: z.string(),
+  /** Quanto o total subiu. E por isso que o aceite existe. */
+  aumento: z.string(),
+  resumoAlteracao: z.string().nullable(),
+  desfecho: z.enum(['ACEITO', 'RECUSADO', 'PENDENTE']),
+  /** Horas entre o pedido de aceite e a resposta. Nulo enquanto pendente. */
+  horasAte: z.number().int().nullable(),
+});
+export type LinhaAceite = z.infer<typeof linhaAceiteSchema>;
+
+export const relatorioAceitesSchema = z.object({
+  dias: z.number().int(),
+  pedidosDeAceite: z.number().int(),
+  aceitos: z.number().int(),
+  recusados: z.number().int(),
+  pendentes: z.number().int(),
+  /** Sobre os respondidos. Pendente nao e recusa. */
+  taxaAceite: z.string(),
+  aumentoAceito: z.string(),
+  aumentoRecusado: z.string(),
+  horasMedias: z.string().nullable(),
+  itens: z.array(linhaAceiteSchema),
+});
+export type RelatorioAceites = z.infer<typeof relatorioAceitesSchema>;

@@ -158,9 +158,21 @@ const GRUPOS: readonly Grupo[] = [
         descricao: 'Confirmado, parcial, devolvido, recusado',
         para: '/relatorios/pedidos/confirmacao',
       },
-      { nome: 'Ruptura', descricao: 'Venda perdida por falta de estoque' },
-      { nome: 'Alterações pela equipe', descricao: 'O que foi incluído e removido, por quem' },
-      { nome: 'Aceites de cliente', descricao: 'Aumentos aceitos e recusados' },
+      {
+        nome: 'Ruptura',
+        descricao: 'Venda perdida por falta de estoque',
+        para: '/relatorios/pedidos/ruptura',
+      },
+      {
+        nome: 'Alterações pela equipe',
+        descricao: 'O que foi incluído e removido, por quem',
+        para: '/relatorios/pedidos/alteracoes',
+      },
+      {
+        nome: 'Aceites de cliente',
+        descricao: 'Aumentos aceitos e recusados',
+        para: '/relatorios/pedidos/aceites',
+      },
     ],
   },
   {

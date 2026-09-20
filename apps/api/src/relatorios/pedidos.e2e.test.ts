@@ -64,6 +64,65 @@ interface Confirmacao {
   }[];
 }
 
+interface Ruptura {
+  dias: number;
+  itensEmFalta: number;
+  pedidosAfetados: number;
+  valorPerdido: string;
+  confirmadosSemSaldo: number;
+  itens: {
+    sku: string;
+    pedidos: number;
+    solicitada: string;
+    atendida: string;
+    naoAtendida: string;
+    valorPerdido: string;
+    saldoAtual: string;
+    confirmadoSemSaldo: number;
+  }[];
+}
+
+interface Alteracoes {
+  dias: number;
+  inclusoes: number;
+  remocoes: number;
+  valorIncluido: string;
+  valorRemovido: string;
+  pedidosTocados: number;
+  porAutor: {
+    autor: string;
+    inclusoes: number;
+    remocoes: number;
+    valorIncluido: string;
+    valorRemovido: string;
+    semMotivo: number;
+  }[];
+  itens: {
+    acao: 'INCLUSAO' | 'REMOCAO';
+    quantidade: string;
+    valor: string;
+    autor: string | null;
+  }[];
+}
+
+interface Aceites {
+  dias: number;
+  pedidosDeAceite: number;
+  aceitos: number;
+  recusados: number;
+  pendentes: number;
+  taxaAceite: string;
+  aumentoAceito: string;
+  aumentoRecusado: string;
+  horasMedias: string | null;
+  itens: {
+    numero: number;
+    desfecho: 'ACEITO' | 'RECUSADO' | 'PENDENTE';
+    aumento: string;
+    horasAte: number | null;
+  }[];
+}
+
 function entrar(rota: string, dados: { email: string; senha: string }) {
   return http
     .post(rota)
@@ -240,5 +299,129 @@ describe.runIf(temBanco)('taxa de confirmação', () => {
       .expect(400);
 
     await http.get('/api/relatorios/pedidos/confirmacao').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('ruptura', () => {
+  /**
+   * Falta é o que foi pedido e não foi atendido. Se `naoAtendida` não for
+   * `solicitada − atendida`, o relatório está inventando demanda.
+   */
+  it('o não atendido é exatamente o pedido menos o entregue', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/ruptura?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Ruptura).itens) {
+      expect(Number(i.naoAtendida)).toBeCloseTo(Number(i.solicitada) - Number(i.atendida), 0);
+      expect(Number(i.naoAtendida)).toBeGreaterThan(0);
+      expect(Number(i.valorPerdido)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('o resumo cobre a lista, que é uma página dele', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/ruptura?dias=365&limite=5')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const x = r.body as Ruptura;
+    expect(x.itens.length).toBeLessThanOrEqual(5);
+    expect(x.pedidosAfetados).toBeLessThanOrEqual(x.itensEmFalta || Number.MAX_SAFE_INTEGER);
+    expect(Number(x.valorPerdido)).toBeGreaterThanOrEqual(
+      x.itens.reduce((s, i) => s + Number(i.valorPerdido), 0) - 0.01,
+    );
+  });
+
+  it('exige sessão da equipe', async () => {
+    await http.get('/api/relatorios/pedidos/ruptura').expect(401);
+    await http
+      .get('/api/relatorios/pedidos/ruptura')
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .expect(401);
+  });
+});
+
+describe.runIf(temBanco)('alterações pela equipe', () => {
+  it('inclusão e remoção somam o que a lista mostra', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/alteracoes?dias=365&limite=200')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const a = r.body as Alteracoes;
+    const soma = a.porAutor.reduce((s, x) => s + x.inclusoes + x.remocoes, 0);
+
+    expect(soma).toBe(a.inclusoes + a.remocoes);
+    for (const x of a.porAutor) {
+      expect(x.semMotivo).toBeLessThanOrEqual(x.remocoes);
+      expect(x.autor.length).toBeGreaterThan(0);
+    }
+  });
+
+  /** Remoção é lógica: o item continua na linha do tempo, com autor. */
+  it('cada linha diz o que foi feito e com quanto', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/alteracoes?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Alteracoes).itens) {
+      expect(['INCLUSAO', 'REMOCAO']).toContain(i.acao);
+      expect(Number(i.valor)).toBeGreaterThanOrEqual(0);
+      expect(i.valor).toMatch(/^\d+\.\d{2}$/);
+    }
+  });
+
+  it('exige sessão e recusa período inválido', async () => {
+    await http
+      .get('/api/relatorios/pedidos/alteracoes?dias=0')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/pedidos/alteracoes').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('aceites de cliente', () => {
+  /**
+   * Pendente não é recusa. Contar um aumento enviado há uma hora como
+   * recusado faria a equipe achar que o cliente rejeita tudo.
+   */
+  it('a taxa se mede sobre os respondidos', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/aceites?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const a = r.body as Aceites;
+    const respondidos = a.aceitos + a.recusados;
+
+    if (respondidos > 0) {
+      expect(Number(a.taxaAceite)).toBeCloseTo((a.aceitos / respondidos) * 100, 1);
+    }
+    expect(a.aceitos + a.recusados + a.pendentes).toBeLessThanOrEqual(a.pedidosDeAceite);
+    expect(Number(a.taxaAceite)).toBeLessThanOrEqual(100);
+  });
+
+  it('pendente não tem tempo de resposta', async () => {
+    const r = await http
+      .get('/api/relatorios/pedidos/aceites?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    for (const i of (r.body as Aceites).itens) {
+      if (i.desfecho === 'PENDENTE') expect(i.horasAte).toBeNull();
+      if (i.desfecho === 'ACEITO') expect(i.horasAte).not.toBeNull();
+    }
+  });
+
+  it('exige sessão da equipe', async () => {
+    await http.get('/api/relatorios/pedidos/aceites').expect(401);
+    await http
+      .get('/api/relatorios/pedidos/aceites')
+      .set('Authorization', `Bearer ${tokenCliente}`)
+      .expect(401);
   });
 });

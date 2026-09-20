@@ -1,9 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  FiltroAceites,
+  FiltroAlteracoes,
   FiltroConfirmacao,
   FiltroFila,
+  FiltroRuptura,
+  LinhaAlteracao,
+  RelatorioAceites,
+  RelatorioAlteracoes,
   RelatorioConfirmacao,
   RelatorioFila,
+  RelatorioRuptura,
 } from '@estoque/contracts';
 import { dec } from '@estoque/core';
 import { comEscopoAtual, type PrismaClient } from '@estoque/db';
@@ -337,6 +344,428 @@ export class RelatoriosPedidosService {
             valorConfirmado: dec(l.valor).toFixed(2),
           };
         }),
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Ruptura
+  // -------------------------------------------------------------------------
+
+  /**
+   * Venda perdida por falta de estoque.
+   *
+   * O item devolvido por falta é o único lugar do sistema onde a demanda
+   * aparece SEM a venda: o cliente pediu, a loja não tinha. Um relatório de
+   * vendas jamais mostraria isso — ele só conhece o que saiu.
+   *
+   * O saldo de hoje vai junto porque repor é decisão com os dois números: o
+   * que faltou e o que tem agora.
+   */
+  async ruptura(filtro: FiltroRuptura): Promise<RelatorioRuptura> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND p.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      /*
+        A janela é a do PEDIDO, não a do item: o item não guarda quando foi
+        enviado, e a falta pertence ao momento em que o cliente pediu.
+      */
+      const janela = `
+        p.enviado_em IS NOT NULL
+        AND (p.enviado_em AT TIME ZONE 'America/Sao_Paulo')::date
+            > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+        ${recorte}`;
+
+      /* Falta é o que foi pedido e não foi atendido — nem o devolvido por
+         falta, nem a parte não confirmada de um item confirmado pela metade. */
+      const faltou = `
+        (i.status = 'DEVOLVIDO'
+         OR (i.status = 'CONFIRMADO' AND i.quantidade_confirmada < i.quantidade_solicitada))
+        AND i.removido_em IS NULL
+        AND i.origem = 'SOLICITADO_CLIENTE'`;
+
+      const [linhas, resumo] = await Promise.all([
+        tx.$queryRawUnsafe<
+          {
+            variacao_id: string;
+            sku: string;
+            produto: string;
+            descricao: string;
+            pedidos: bigint;
+            solicitada: string;
+            atendida: string;
+            nao_atendida: string;
+            valor: string;
+            saldo: string;
+            sem_saldo: bigint;
+          }[]
+        >(
+          `
+          SELECT v.id AS variacao_id,
+                 v.sku,
+                 pr.nome AS produto,
+                 v.descricao,
+                 count(DISTINCT i.pedido_id) AS pedidos,
+                 sum(i.quantidade_solicitada)::text AS solicitada,
+                 sum(i.quantidade_confirmada)::text AS atendida,
+                 sum(i.quantidade_solicitada - i.quantidade_confirmada)::text AS nao_atendida,
+                 sum((i.quantidade_solicitada - i.quantidade_confirmada) * i.preco_unitario)::text
+                   AS valor,
+                 coalesce((
+                   SELECT sum(se.quantidade) FROM saldo_estoque se
+                    WHERE se.variacao_id = v.id
+                 ), 0)::text AS saldo,
+                 count(*) FILTER (WHERE i.confirmado_sem_saldo) AS sem_saldo
+            FROM pedido_item i
+            JOIN pedido p ON p.id = i.pedido_id
+            JOIN variacao v ON v.id = i.variacao_id
+            JOIN produto pr ON pr.id = v.produto_id
+           WHERE ${janela} AND ${faltou}
+           GROUP BY v.id, v.sku, pr.nome, v.descricao
+           ORDER BY sum((i.quantidade_solicitada - i.quantidade_confirmada) * i.preco_unitario) DESC
+           LIMIT ${String(filtro.limite)}
+          `,
+          ...parametros,
+        ),
+
+        tx.$queryRawUnsafe<{ itens: bigint; pedidos: bigint; valor: string; sem_saldo: bigint }[]>(
+          `
+          SELECT count(*) FILTER (WHERE ${faltou}) AS itens,
+                 count(DISTINCT i.pedido_id) FILTER (WHERE ${faltou}) AS pedidos,
+                 coalesce(sum(
+                   (i.quantidade_solicitada - i.quantidade_confirmada) * i.preco_unitario
+                 ) FILTER (WHERE ${faltou}), 0)::text AS valor,
+                 count(*) FILTER (WHERE i.confirmado_sem_saldo) AS sem_saldo
+            FROM pedido_item i
+            JOIN pedido p ON p.id = i.pedido_id
+           WHERE ${janela}
+          `,
+          ...parametros,
+        ),
+      ]);
+
+      const r = resumo[0];
+
+      return {
+        dias: filtro.dias,
+        itensEmFalta: Number(r?.itens ?? 0),
+        pedidosAfetados: Number(r?.pedidos ?? 0),
+        valorPerdido: dec(r?.valor ?? '0').toFixed(2),
+        confirmadosSemSaldo: Number(r?.sem_saldo ?? 0),
+        itens: linhas.map((l) => ({
+          variacaoId: l.variacao_id,
+          sku: l.sku,
+          produto: l.produto,
+          descricaoVariacao: l.descricao,
+          pedidos: Number(l.pedidos),
+          solicitada: dec(l.solicitada).toFixed(0),
+          atendida: dec(l.atendida).toFixed(0),
+          naoAtendida: dec(l.nao_atendida).toFixed(0),
+          valorPerdido: dec(l.valor).toFixed(2),
+          saldoAtual: dec(l.saldo).toFixed(0),
+          confirmadoSemSaldo: Number(l.sem_saldo),
+        })),
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Alterações pela equipe
+  // -------------------------------------------------------------------------
+
+  /**
+   * O que a equipe incluiu e o que retirou do pedido do cliente.
+   *
+   * Remoção é LÓGICA: o item sai da conta e permanece na linha do tempo, com
+   * autor e motivo. Remoção sem motivo escrito vai contada à parte — o acordo
+   * com o cliente existiu, mas ninguém consegue mais dizer qual foi.
+   */
+  async alteracoes(filtro: FiltroAlteracoes): Promise<RelatorioAlteracoes> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND p.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      const janela = `
+        (coalesce(i.removido_em, i.criado_em) AT TIME ZONE 'America/Sao_Paulo')::date
+        > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+        ${recorte}`;
+
+      const tocado = `
+        (i.origem = 'ADICIONADO_EQUIPE' OR i.removido_em IS NOT NULL)`;
+
+      const [linhas, porAutor] = await Promise.all([
+        tx.$queryRawUnsafe<
+          {
+            id: string;
+            pedido_id: string;
+            numero: number;
+            cliente: string;
+            em: Date;
+            removido: boolean;
+            sku: string;
+            produto: string;
+            descricao: string;
+            quantidade: string;
+            valor: string;
+            motivo: string | null;
+            autor: string | null;
+          }[]
+        >(
+          `
+          SELECT i.id,
+                 i.pedido_id,
+                 p.numero,
+                 c.nome AS cliente,
+                 coalesce(i.removido_em, i.criado_em) AS em,
+                 (i.removido_em IS NOT NULL) AS removido,
+                 v.sku,
+                 pr.nome AS produto,
+                 v.descricao,
+                 (CASE WHEN i.removido_em IS NOT NULL
+                       THEN i.quantidade_solicitada
+                       ELSE greatest(i.quantidade_confirmada, i.quantidade_solicitada)
+                  END)::text AS quantidade,
+                 i.total_item::text AS valor,
+                 coalesce(i.motivo_remocao, p.resumo_alteracao) AS motivo,
+                 u.nome AS autor
+            FROM pedido_item i
+            JOIN pedido p ON p.id = i.pedido_id
+            JOIN cliente c ON c.id = p.cliente_id
+            JOIN variacao v ON v.id = i.variacao_id
+            JOIN produto pr ON pr.id = v.produto_id
+            LEFT JOIN usuario u
+              ON u.id = coalesce(i.removido_por_id, i.adicionado_por_id, p.editado_por_id)
+           WHERE ${tocado} AND ${janela}
+           ORDER BY coalesce(i.removido_em, i.criado_em) DESC
+           LIMIT ${String(filtro.limite)}
+          `,
+          ...parametros,
+        ),
+
+        tx.$queryRawUnsafe<
+          {
+            autor: string | null;
+            inclusoes: bigint;
+            remocoes: bigint;
+            incluido: string;
+            removido: string;
+            sem_motivo: bigint;
+            pedidos: bigint;
+          }[]
+        >(
+          `
+          SELECT u.nome AS autor,
+                 count(*) FILTER (
+                   WHERE i.origem = 'ADICIONADO_EQUIPE' AND i.removido_em IS NULL
+                 ) AS inclusoes,
+                 count(*) FILTER (WHERE i.removido_em IS NOT NULL) AS remocoes,
+                 coalesce(sum(i.total_item) FILTER (
+                   WHERE i.origem = 'ADICIONADO_EQUIPE' AND i.removido_em IS NULL
+                 ), 0)::text AS incluido,
+                 coalesce(sum(i.total_item) FILTER (WHERE i.removido_em IS NOT NULL), 0)::text
+                   AS removido,
+                 count(*) FILTER (
+                   WHERE i.removido_em IS NOT NULL AND i.motivo_remocao IS NULL
+                 ) AS sem_motivo,
+                 count(DISTINCT i.pedido_id) AS pedidos
+            FROM pedido_item i
+            JOIN pedido p ON p.id = i.pedido_id
+            LEFT JOIN usuario u
+              ON u.id = coalesce(i.removido_por_id, i.adicionado_por_id, p.editado_por_id)
+           WHERE ${tocado} AND ${janela}
+           GROUP BY u.nome
+           ORDER BY count(*) DESC
+          `,
+          ...parametros,
+        ),
+      ]);
+
+      const soma = (campo: 'incluido' | 'removido') =>
+        porAutor.reduce((acc, a) => acc.plus(dec(a[campo])), dec(0));
+
+      const itens: LinhaAlteracao[] = linhas.map((l) => ({
+        id: l.id,
+        pedidoId: l.pedido_id,
+        numero: l.numero,
+        cliente: l.cliente,
+        em: l.em.toISOString(),
+        acao: l.removido ? 'REMOCAO' : 'INCLUSAO',
+        sku: l.sku,
+        produto: l.produto,
+        descricaoVariacao: l.descricao,
+        quantidade: dec(l.quantidade).toFixed(0),
+        valor: dec(l.valor).toFixed(2),
+        motivo: l.motivo,
+        autor: l.autor,
+      }));
+
+      return {
+        dias: filtro.dias,
+        inclusoes: porAutor.reduce((acc, a) => acc + Number(a.inclusoes), 0),
+        remocoes: porAutor.reduce((acc, a) => acc + Number(a.remocoes), 0),
+        valorIncluido: soma('incluido').toFixed(2),
+        valorRemovido: soma('removido').toFixed(2),
+        pedidosTocados: porAutor.reduce((acc, a) => acc + Number(a.pedidos), 0),
+        porAutor: porAutor.map((a) => ({
+          // Sem usuário resolvido o item veio de uma edição antiga do pedido.
+          autor: a.autor ?? 'Não identificado',
+          inclusoes: Number(a.inclusoes),
+          remocoes: Number(a.remocoes),
+          valorIncluido: dec(a.incluido).toFixed(2),
+          valorRemovido: dec(a.removido).toFixed(2),
+          semMotivo: Number(a.sem_motivo),
+        })),
+        itens,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Aceites de cliente
+  // -------------------------------------------------------------------------
+
+  /**
+   * Aumentos que precisaram do toque do cliente.
+   *
+   * Pendente não é recusa: a taxa se mede sobre os RESPONDIDOS. Um aumento
+   * enviado há uma hora contado como recusado faria a equipe achar que o
+   * cliente rejeita tudo.
+   */
+  async aceites(filtro: FiltroAceites): Promise<RelatorioAceites> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND p.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      /*
+        Quem pediu aceite é quem TEM a edição registrada, não quem está no
+        status agora: o pedido já aceito seguiu para confirmado e sumiria do
+        recorte se o filtro fosse pelo status.
+      */
+      const janela = `
+        p.editado_pela_equipe_em IS NOT NULL
+        AND (p.editado_pela_equipe_em AT TIME ZONE 'America/Sao_Paulo')::date
+            > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+        AND EXISTS (
+          SELECT 1 FROM pedido_evento e
+           WHERE e.pedido_id = p.id AND e.para_status = 'AGUARDANDO_ACEITE_CLIENTE'
+        )
+        ${recorte}`;
+
+      const linhas = await tx.$queryRawUnsafe<
+        {
+          id: string;
+          numero: number;
+          cliente: string;
+          loja: string;
+          pedido_em: Date;
+          solicitado: string;
+          confirmado: string;
+          resumo: string | null;
+          status: string;
+          aceite_em: Date | null;
+          horas: string | null;
+        }[]
+      >(
+        `
+        SELECT p.id,
+               p.numero,
+               c.nome AS cliente,
+               lj.nome AS loja,
+               p.editado_pela_equipe_em AS pedido_em,
+               p.valor_solicitado::text AS solicitado,
+               p.valor_confirmado::text AS confirmado,
+               p.resumo_alteracao AS resumo,
+               p.status::text AS status,
+               p.aceite_cliente_em AS aceite_em,
+               CASE WHEN p.aceite_cliente_em IS NOT NULL
+                    THEN floor(extract(
+                      epoch FROM p.aceite_cliente_em - p.editado_pela_equipe_em
+                    ) / 3600)::text
+               END AS horas
+          FROM pedido p
+          JOIN cliente c ON c.id = p.cliente_id
+          JOIN loja lj ON lj.id = p.loja_id
+         WHERE ${janela}
+         ORDER BY p.editado_pela_equipe_em DESC
+         LIMIT ${String(filtro.limite)}
+        `,
+        ...parametros,
+      );
+
+      const resumo = await tx.$queryRawUnsafe<
+        {
+          total: bigint;
+          aceitos: bigint;
+          recusados: bigint;
+          pendentes: bigint;
+          media: string | null;
+        }[]
+      >(
+        `
+        SELECT count(*) AS total,
+               count(*) FILTER (WHERE p.aceite_cliente_em IS NOT NULL) AS aceitos,
+               count(*) FILTER (
+                 WHERE p.aceite_cliente_em IS NULL AND p.status = 'RECUSADO'
+               ) AS recusados,
+               count(*) FILTER (
+                 WHERE p.status = 'AGUARDANDO_ACEITE_CLIENTE'
+               ) AS pendentes,
+               (avg(extract(
+                  epoch FROM p.aceite_cliente_em - p.editado_pela_equipe_em
+                )) / 3600)::text AS media
+          FROM pedido p
+         WHERE ${janela}
+        `,
+        ...parametros,
+      );
+
+      const r = resumo[0];
+      const aceitos = Number(r?.aceitos ?? 0);
+      const recusados = Number(r?.recusados ?? 0);
+      const respondidos = aceitos + recusados;
+
+      const desfechoDe = (l: (typeof linhas)[number]): 'ACEITO' | 'RECUSADO' | 'PENDENTE' => {
+        if (l.aceite_em !== null) return 'ACEITO';
+        if (l.status === 'AGUARDANDO_ACEITE_CLIENTE') return 'PENDENTE';
+        if (l.status === 'RECUSADO') return 'RECUSADO';
+        // Seguiu sem aceite registrado: a equipe desfez o aumento.
+        return 'PENDENTE';
+      };
+
+      const aumentoDe = (l: (typeof linhas)[number]) => dec(l.confirmado).minus(dec(l.solicitado));
+
+      const itens = linhas.map((l) => ({
+        id: l.id,
+        numero: l.numero,
+        cliente: l.cliente,
+        loja: l.loja,
+        pedidoEm: l.pedido_em.toISOString(),
+        valorSolicitado: dec(l.solicitado).toFixed(2),
+        valorConfirmado: dec(l.confirmado).toFixed(2),
+        aumento: aumentoDe(l).toFixed(2),
+        resumoAlteracao: l.resumo,
+        desfecho: desfechoDe(l),
+        horasAte: l.horas === null ? null : Number(l.horas),
+      }));
+
+      const somaPor = (desfecho: 'ACEITO' | 'RECUSADO') =>
+        itens
+          .filter((i) => i.desfecho === desfecho)
+          .reduce((acc, i) => acc.plus(dec(i.aumento)), dec(0));
+
+      return {
+        dias: filtro.dias,
+        pedidosDeAceite: Number(r?.total ?? 0),
+        aceitos,
+        recusados,
+        pendentes: Number(r?.pendentes ?? 0),
+        taxaAceite:
+          respondidos > 0 ? dec(aceitos).dividedBy(respondidos).times(100).toFixed(1) : '0.0',
+        aumentoAceito: somaPor('ACEITO').toFixed(2),
+        aumentoRecusado: somaPor('RECUSADO').toFixed(2),
+        horasMedias: r?.media == null ? null : dec(r.media).toFixed(1),
+        itens,
       };
     });
   }
