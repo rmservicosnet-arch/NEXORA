@@ -87,9 +87,15 @@ dois produz compra errada.
 
 Marcados com **[C]** exigem `relatorio.ver_custo`.
 
-> **Estado: 36 dos 37 construídos.** O único que falta é **Comissões
+> **Estado: 40 dos 41 construídos.** O único que falta é **Comissões
 > apuradas**, e ele não é trabalho de relatório: não existe modelo de comissão
 > no schema. Construí-lo antes seria inventar número.
+>
+> O número era 37 até esta revisão, e estava errado por omissão: os quatro de
+> **Carteira** existiam em rota e em tela e não constavam do catálogo. O
+> índice de relatórios do canvas listava 41 e escrevia 37 no cabeçalho —
+> ninguém tinha contado. Catálogo que não lista o que existe manda construir
+> de novo.
 >
 > Os três de Compras exigem `relatorio.ver_custo`, não só o que tem "custo" no
 > nome: "compras por fornecedor" devolve valor e unidades lado a lado, e
@@ -140,6 +146,23 @@ O relatório de ruptura é a razão pela qual `DEVOLVIDO` e `REMOVIDO` são
 status distintos: item retirado por acordo com o cliente **não** é venda
 perdida por estoque, e contá-lo como tal faria a loja comprar o que não
 precisa. Ver `docs/ORDERS.md` §6.
+
+### Carteira
+
+| Relatório | Responde |
+|---|---|
+| **Saldos em aberto** | Quem deve, quanto, e há quanto tempo |
+| **Extrato por cliente** | Todo crédito e débito, com saldo antes e depois |
+| **Acima do limite** | As compras autorizadas acima do limite, com a justificativa |
+| **Ajustes e bonificações** | Crédito criado sem contrapartida — controle, não curiosidade |
+
+Os quatro existem desde a Fase 3 — três em `/relatorios/carteira/*` e o
+extrato em `/carteiras/:clienteId` — e **não estavam neste documento**. O
+catálogo dizia 37 contando sem eles.
+
+"Acima do limite" é o par do `excedeuLimite` de [WALLET.md](WALLET.md) §4:
+permitir com autorização só vale se alguém puder revisar depois quem
+autorizou o quê.
 
 ### Financeiro e caixa — Fase 5
 

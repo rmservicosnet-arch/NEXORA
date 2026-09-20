@@ -28,3 +28,7 @@ npm-debug.log*
 
 # Uploads locais de desenvolvimento
 .storage/
+
+# Pasta de trabalho de quem edita o canvas de telas: os `.dc.html` sao
+# baixados do artefato, alterados e republicados. Nada aqui e fonte.
+.canvas-tmp/

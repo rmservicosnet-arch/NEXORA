@@ -85,15 +85,49 @@ Leia nesta ordem para entender o sistema:
 | [ORDERS](docs/ORDERS.md) | Pedidos com confirmação, edição pela equipe e aceite |
 | [WALLET](docs/WALLET.md) | Carteira do cliente e a convenção de sinal |
 | [REPORTS](docs/REPORTS.md) | Catálogo de relatórios e o que os torna reprodutíveis |
+| [STOCK](docs/STOCK.md) | O razão de movimentações, saldo e reserva |
+| [POS](docs/POS.md) | PDV, venda a prazo e devolução parcial |
+| [CASHBOX](docs/CASHBOX.md) | O dinheiro físico da gaveta, turno e conferência |
+| [PURCHASES](docs/PURCHASES.md) · [PAYABLES](docs/PAYABLES.md) | Compras com custo; contas a pagar e a receber |
 | [MEDIA](docs/MEDIA.md) · [MOBILE](docs/MOBILE.md) · [NOTIFICATIONS](docs/NOTIFICATIONS.md) | Imagens, aplicativo nativo, push |
+| [DEPLOY](docs/DEPLOY.md) | Contêiner, migração e o que quebra com duas instâncias |
 | [DESIGN_SYSTEM](DESIGN_SYSTEM.md) | Tokens, componentes e as regras de interface |
+
+`docs/ARCHITECTURE.md` §0 tem o mapa completo, com o que cada documento
+responde.
 
 ## Situação
 
-**Fase 1 concluída.** Isolamento multiempresa, autenticação nos dois domínios,
-permissões, custo médio ponderado, e a web com login e shell.
+**453 testes**, dos quais a maioria roda ponta a ponta contra um PostgreSQL de
+verdade. Isolamento e autenticação não se testam com mock: metade da garantia
+está no banco.
 
-Os sete critérios de aceite de `TENANCY.md` passam em teste automatizado.
+Funcionando:
 
-Falta: produtos, estoque, PDV, pedidos, carteira, relatórios e o aplicativo
-nativo. As decisões dessas fases já estão escritas em `docs/`.
+| | |
+|---|---|
+| **Fundação** | Multiempresa com RLS, autenticação em dois domínios, permissões por perfil |
+| **Catálogo** | Produtos, variações, fotos, tabelas de preço, publicação |
+| **Estoque** | Razão append-only, custo médio ponderado, reserva, transferência |
+| **PDV** | Venda de balcão, várias formas de pagamento, venda a prazo, devolução parcial |
+| **Pedidos** | Portal do cliente, conferência pela equipe, aceite, faturamento |
+| **Carteira** | Conta corrente do revendedor, limite com autorização |
+| **Compras** | Nota com custo, fornecedores, estorno |
+| **Contas** | A pagar e a receber, baixa, estorno de baixa |
+| **Caixa** | Turno, sangria, suprimento, fechamento e conferência |
+| **Relatórios** | 40 dos 41 do catálogo |
+
+Falta:
+
+- **Aplicativo nativo** e **notificações push** — decidido em
+  [MOBILE](docs/MOBILE.md) e [NOTIFICATIONS](docs/NOTIFICATIONS.md), nada
+  construído.
+- **Comissões.** Não existe modelo de comissão no schema, e o relatório que
+  falta depende dele. Construir o relatório antes seria inventar número.
+- **Emissão fiscal.** A arquitetura mantém os campos; nenhuma integração.
+- **Título a pagar gerado pelo recebimento de uma compra** — hoje a dívida com
+  o fornecedor depende de alguém digitá-la. Ver [PURCHASES](docs/PURCHASES.md)
+  §6.
+
+Cada documento em `docs/` termina com a própria lista de "o que ainda não
+existe". Elas são mantidas junto com o código, não depois.
