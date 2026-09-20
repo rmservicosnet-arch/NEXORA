@@ -15,7 +15,7 @@ import { api, definirToken } from '../api/cliente';
 interface ValorSessao {
   readonly usuario: UsuarioSessao | null;
   readonly restaurando: boolean;
-  readonly entrar: (email: string, senha: string) => Promise<void>;
+  readonly entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<void>;
   readonly sair: () => Promise<void>;
   /** Tem TODAS as permissões pedidas. */
   readonly pode: (...permissoes: readonly string[]) => boolean;
@@ -69,9 +69,9 @@ export function ProvedorSessao({ children }: { readonly children: ReactNode }) {
   }, [fila]);
 
   const entrar = useCallback(
-    async (email: string, senha: string) => {
+    async (email: string, senha: string, manterConectado = true) => {
       esvaziarCache();
-      const sessao = await api.entrar(email, senha);
+      const sessao = await api.entrar(email, senha, manterConectado);
       definirToken(sessao.tokenAcesso);
       setUsuario(sessao.usuario);
     },

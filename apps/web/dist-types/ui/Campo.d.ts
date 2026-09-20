@@ -10,6 +10,8 @@ export interface CampoProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
     readonly erro?: string;
     readonly ajuda?: string;
     readonly acessorio?: ReactNode;
+    /** Botão dentro do campo, à direita — o olho da senha, por exemplo. */
+    readonly sufixo?: ReactNode;
 }
-export declare function Campo({ rotulo, erro, ajuda, acessorio, className, ...resto }: CampoProps): import("react").JSX.Element;
+export declare function Campo({ rotulo, erro, ajuda, acessorio, sufixo, className, ...resto }: CampoProps): import("react").JSX.Element;
 //# sourceMappingURL=Campo.d.ts.map

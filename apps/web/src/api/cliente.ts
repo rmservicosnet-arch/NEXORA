@@ -116,6 +116,36 @@ const RAIZ_AUTH: Record<Dominio, string> = {
 };
 
 /**
+ * O que a pessoa escolheu em "manter conectado", por domínio.
+ *
+ * Guardado aqui porque o cookie do refresh é reescrito a cada rotação, e o
+ * servidor não tem como adivinhar a escolha: sem repetir o valor na
+ * renovação, a primeira rotação devolveria os 30 dias recusados no login.
+ *
+ * Ler `localStorage` pode lançar (aba anônima, cookies bloqueados): na
+ * dúvida, o padrão é manter — que é o comportamento de sempre.
+ */
+function chaveManter(dominio: Dominio): string {
+  return `estoque:manter-conectado:${dominio}`;
+}
+
+function manterConectadoGuardado(dominio: Dominio): boolean {
+  try {
+    return globalThis.localStorage?.getItem(chaveManter(dominio)) !== 'nao';
+  } catch {
+    return true;
+  }
+}
+
+function guardarManterConectado(dominio: Dominio, manter: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(chaveManter(dominio), manter ? 'sim' : 'nao');
+  } catch {
+    // Sem armazenamento, a sessão segue o padrão. Não é motivo para falhar.
+  }
+}
+
+/**
  * Serializa uma tarefa entre as abas da mesma origem.
  *
  * A promessa compartilhada resolve a corrida dentro de UMA aba. Duas abas são
@@ -140,7 +170,7 @@ async function renovar(dominio: Dominio): Promise<boolean> {
     try {
       const resposta = await bruto(`${RAIZ_AUTH[dominio]}/refresh`, {
         method: 'POST',
-        body: { canal: 'web' },
+        body: { canal: 'web', manterConectado: manterConectadoGuardado(dominio) },
         semRenovar: true,
       });
 
@@ -237,10 +267,11 @@ function autenticacao(dominio: Dominio) {
   const raiz = RAIZ_AUTH[dominio];
 
   return {
-    entrar: async (email: string, senha: string): Promise<Sessao> => {
+    entrar: async (email: string, senha: string, manterConectado = true): Promise<Sessao> => {
+      guardarManterConectado(dominio, manterConectado);
       const sessao = await pedir<Sessao>(`${raiz}/login`, {
         method: 'POST',
-        body: { email, senha, canal: 'web' },
+        body: { email, senha, canal: 'web', manterConectado },
         semRenovar: true,
       });
       definirToken(sessao.tokenAcesso, dominio);
@@ -262,7 +293,7 @@ function autenticacao(dominio: Dominio) {
           const sessao = await emFila(`estoque:restaurar-${dominio}`, () =>
             pedir<Sessao>(`${raiz}/refresh`, {
               method: 'POST',
-              body: { canal: 'web' },
+              body: { canal: 'web', manterConectado: manterConectadoGuardado(dominio) },
               semRenovar: true,
             }),
           );

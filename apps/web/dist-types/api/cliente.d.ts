@@ -45,11 +45,11 @@ export declare function enviarArquivo(destino: {
 export declare const api: {
     /** O portal do cliente. Sessão própria, cookie próprio, token próprio. */
     portal: {
-        entrar: (email: string, senha: string) => Promise<Sessao>;
+        entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<Sessao>;
         restaurar: () => Promise<Sessao | null>;
         sair: () => Promise<void>;
     };
-    entrar: (email: string, senha: string) => Promise<Sessao>;
+    entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<Sessao>;
     restaurar: () => Promise<Sessao | null>;
     sair: () => Promise<void>;
 };

@@ -3,7 +3,7 @@ import { type ReactNode } from 'react';
 interface ValorSessao {
     readonly usuario: UsuarioSessao | null;
     readonly restaurando: boolean;
-    readonly entrar: (email: string, senha: string) => Promise<void>;
+    readonly entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<void>;
     readonly sair: () => Promise<void>;
     /** Tem TODAS as permissões pedidas. */
     readonly pode: (...permissoes: readonly string[]) => boolean;

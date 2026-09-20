@@ -8,6 +8,11 @@ export const esquemaEntrada = z.object({
    * guarda no Keychain/Keystore. Ver `dominios.ts`.
    */
   canal: z.enum(['web', 'app']).default('web'),
+  /**
+   * `false` faz o refresh virar cookie de sessão: morre ao fechar a janela.
+   * É o balcão compartilhado, onde a sessão de 30 dias é um risco.
+   */
+  manterConectado: z.boolean().default(true),
 });
 
 export type EntradaDto = z.infer<typeof esquemaEntrada>;
@@ -16,6 +21,11 @@ export const esquemaRenovacao = z.object({
   /** Só no canal `app`. No `web` o token vem do cookie. */
   refreshToken: z.string().optional(),
   canal: z.enum(['web', 'app']).default('web'),
+  /**
+   * Repetido aqui porque o cookie é reescrito a cada rotação. Sem isto, a
+   * primeira renovação devolveria os 30 dias que a pessoa recusou no login.
+   */
+  manterConectado: z.boolean().default(true),
 });
 
 export type RenovacaoDto = z.infer<typeof esquemaRenovacao>;

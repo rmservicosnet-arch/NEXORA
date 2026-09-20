@@ -14,16 +14,32 @@ export type Canal = z.infer<typeof canalSchema>;
 export const dominioSchema = z.enum(['funcionario', 'cliente']);
 export type Dominio = z.infer<typeof dominioSchema>;
 
+/**
+ * Quanto a sessão dura no aparelho.
+ *
+ * `true` (o padrão) grava o refresh num cookie que sobrevive a fechar o
+ * navegador; `false` faz dele cookie de sessão, que morre junto com a janela.
+ * É a diferença entre o computador de casa e o do balcão compartilhado.
+ */
+const manterConectadoSchema = z.boolean().default(true);
+
 export const entradaSchema = z.object({
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
   senha: z.string().min(1, 'Senha é obrigatória'),
   canal: canalSchema.default('web'),
+  manterConectado: manterConectadoSchema,
 });
 export type Entrada = z.infer<typeof entradaSchema>;
 
 export const renovacaoSchema = z.object({
   refreshToken: z.string().optional(),
   canal: canalSchema.default('web'),
+  /**
+   * Repetido na renovação de propósito: o cookie é reescrito a cada rotação,
+   * e sem isto a primeira renovação devolveria os 30 dias que a pessoa
+   * recusou no login.
+   */
+  manterConectado: manterConectadoSchema,
 });
 export type Renovacao = z.infer<typeof renovacaoSchema>;
 

@@ -112,6 +112,64 @@ describe.runIf(temBanco)('login', () => {
     expect(refresh).toContain('HttpOnly');
     expect(refresh).toContain('SameSite=Strict');
   });
+
+  /**
+   * "Manter conectado" é a diferença entre o computador de casa e o do
+   * balcão compartilhado — e ela tem de sobreviver à ROTAÇÃO do refresh.
+   * O cookie é reescrito a cada renovação; sem repetir a escolha ali, a
+   * primeira renovação devolveria os 30 dias que a pessoa recusou.
+   */
+  it('sem manter conectado, o cookie morre com a janela — e continua assim ao renovar', async () => {
+    const login = await http
+      .post('/api/auth/login')
+      .send({ ...ADMIN, canal: 'web', manterConectado: false })
+      .expect(200);
+
+    const doLogin = (login.headers['set-cookie'] as unknown as string[]).find((c) =>
+      c.startsWith('estoque_refresh='),
+    );
+
+    // Cookie de sessão: sem Max-Age e sem Expires.
+    expect(doLogin).toBeDefined();
+    expect(doLogin).not.toContain('Max-Age');
+    expect(doLogin).not.toContain('Expires');
+
+    const renovacao = await http
+      .post('/api/auth/refresh')
+      .set('Cookie', doLogin!)
+      .send({ canal: 'web', manterConectado: false })
+      .expect(200);
+
+    const daRenovacao = (renovacao.headers['set-cookie'] as unknown as string[]).find((c) =>
+      c.startsWith('estoque_refresh='),
+    );
+    expect(daRenovacao).toBeDefined();
+    expect(daRenovacao).not.toContain('Max-Age');
+  });
+
+  it('com manter conectado, o cookie tem prazo', async () => {
+    const login = await http
+      .post('/api/auth/login')
+      .send({ ...ADMIN, canal: 'web', manterConectado: true })
+      .expect(200);
+
+    const cookie = (login.headers['set-cookie'] as unknown as string[]).find((c) =>
+      c.startsWith('estoque_refresh='),
+    );
+    expect(cookie).toContain('Max-Age=');
+  });
+
+  it('o padrão é manter: quem não manda o campo continua com prazo', async () => {
+    const login = await http
+      .post('/api/auth/login')
+      .send({ ...ADMIN, canal: 'web' })
+      .expect(200);
+
+    const cookie = (login.headers['set-cookie'] as unknown as string[]).find((c) =>
+      c.startsWith('estoque_refresh='),
+    );
+    expect(cookie).toContain('Max-Age=');
+  });
 });
 
 describe.runIf(temBanco)('os dois domínios não se misturam — ADR-009', () => {

@@ -71,7 +71,11 @@ abstract class AuthControllerBase {
     res.clearCookie(this.nomeDoCookie, { path: '/' });
   }
 
-  protected responder(sessao: Sessao, dto: { canal: string }, res: Response): RespostaSessao {
+  protected responder(
+    sessao: Sessao,
+    dto: { canal: string; manterConectado?: boolean },
+    res: Response,
+  ): RespostaSessao {
     const corpo: RespostaSessao = {
       tokenAcesso: sessao.tokenAcesso,
       // Canal `app` recebe no corpo; `web` recebe no cookie. Nunca os dois:
@@ -94,7 +98,17 @@ abstract class AuthControllerBase {
         secure: this.config.get('COOKIE_SECURE', { infer: true }),
         domain: this.config.get('COOKIE_DOMAIN', { infer: true }),
         path: '/',
-        maxAge: this.config.get('REFRESH_TOKEN_TTL_DIAS', { infer: true }) * 86_400_000,
+        /*
+          Sem `maxAge` o cookie é de SESSÃO: morre quando a janela fecha.
+          É o que "manter conectado" desmarcado pede — e o token no servidor
+          continua válido pelos mesmos 30 dias, porque quem decide aqui é o
+          aparelho, não o servidor.
+        */
+        ...(dto.manterConectado === false
+          ? {}
+          : {
+              maxAge: this.config.get('REFRESH_TOKEN_TTL_DIAS', { infer: true }) * 86_400_000,
+            }),
       });
     }
 
