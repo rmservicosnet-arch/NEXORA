@@ -802,7 +802,12 @@ async function main(): Promise<void> {
 
     A conta do esperado e a do docs/CASHBOX.md §4:
       esperado = fundo + suprimentos − sangrias + (dinheiro recebido − troco)
-    Sem venda em dinheiro no seed, a ultima parcela e zero.
+
+    Sem venda em dinheiro no seed, a ultima parcela e ZERO — e por isso as
+    sangrias tem de caber em fundo + suprimentos. Sangria maior do que o que
+    existe na gaveta e recusada pelo servico (§8), e um seed que cria o que a
+    API recusa e um seed que mente:
+      500 + 400 − 200 − 300 = 400 esperado.
   */
   const horas = (h: number): Date => new Date(Date.now() - h * 3_600_000);
 
@@ -813,7 +818,7 @@ async function main(): Promise<void> {
       numero: 1,
       operadorId: adminId,
       status: 'ABERTO',
-      valorAbertura: '200.00',
+      valorAbertura: '500.00',
       observacaoAbertura: 'Fundo de troco conferido na abertura',
       abertoEm: horas(4),
       movimentos: {
@@ -821,7 +826,7 @@ async function main(): Promise<void> {
           {
             tenantId,
             tipo: 'SUPRIMENTO',
-            valor: '500.00',
+            valor: '400.00',
             motivo: 'Troco trazido do cofre — faltavam notas de 10 e 20',
             atorId: adminId,
             criadoEm: horas(3),
@@ -837,7 +842,7 @@ async function main(): Promise<void> {
           {
             tenantId,
             tipo: 'SANGRIA',
-            valor: '800.00',
+            valor: '300.00',
             motivo: 'Depósito bancário do meio do dia — envelope 4471',
             atorId: adminId,
             criadoEm: horas(1),

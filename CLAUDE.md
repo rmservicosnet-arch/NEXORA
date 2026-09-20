@@ -205,6 +205,7 @@ o runtime.
 | Estado de painel que não remonta ao trocar de linha | Abrir outro título não desmonta o componente: a rota é a mesma. O valor digitado para o anterior ficava no seguinte — o estado carrega o id do dono |
 | Módulo novo sem cenário no seed | Compras, Contas e Caixa nasceram com a tela certa e a base vazia — e o que aparecia era o lixo dos próprios testes. Tela nova pede dado de seed junto, senão só o e2e a preenche |
 | Teste de e2e que cria e não limpa, de novo | 46 notas "T7X2K9" e 36 "título de teste" empurraram os de verdade para fora da primeira página. `afterAll` apaga rascunho, ESTORNA recebida e CANCELA título — pelas ações do domínio, nunca por `delete` escondido |
+| Seed que cria o que a API recusaria | Fundo 200 + suprimento 500 − sangrias 1000 dá −300 na gaveta: o serviço recusa sangria maior do que existe, mas o seed escreve direto. Dado de demonstração obedece às mesmas invariantes |
 
 ## Testes
 
