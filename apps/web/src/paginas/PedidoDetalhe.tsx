@@ -350,9 +350,9 @@ export function PedidoDetalhe() {
         ) : null}
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:flex-row lg:overflow-hidden lg:p-6">
+      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6 xl:flex-row xl:overflow-hidden">
         {/* ---------------- Itens ---------------- */}
-        <section className="flex min-h-0 flex-1 flex-col gap-3">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
           {erro ? (
             <Aviso tom="perigo" titulo="Não foi possível concluir">
               {erro}
@@ -503,7 +503,7 @@ export function PedidoDetalhe() {
         </section>
 
         {/* ---------------- Resumo e ações ---------------- */}
-        <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-[320px] lg:overflow-y-auto">
+        <aside className="flex w-full shrink-0 flex-col gap-3 xl:w-[320px] xl:overflow-y-auto">
           <section className="flex items-center gap-2.5 rounded-md border border-neutral-100 bg-white p-3.5 shadow-sm">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-600 text-[12px] font-semibold text-white">
               {pedido.cliente

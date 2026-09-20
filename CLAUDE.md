@@ -140,6 +140,8 @@ o runtime.
 | Prazo gravado que ninguém lê | `expiraEm` existia desde o início e nada o consultava: reserva vencida prendia estoque para sempre. O filtro vai no CÁLCULO, não só na rotina de limpeza |
 | `bg-[--minha-var]` no Tailwind 4 | O atalho não gera nada: sai `transparent`. Use `bg-[var(--minha-var)]`. Ficou invisível em 155 lugares sem ninguém notar — cor de status não dá erro, só some |
 | Estado de tela guardado sem dizer a QUEM pertence | Ir de um pedido para outro não remonta o componente: a rota é a mesma, muda o parâmetro. As decisões do anterior ficavam na tela |
+| Largura mínima dentro de linha flex | Item de flex não encolhe abaixo do conteúdo (`min-width: auto`). A tabela empurrou o painel lateral inteiro para fora da tela, num `overflow-hidden` — invisível E sem rolagem. `min-w-0` na coluna, mínimo só dentro do que rola |
+| "Fora da tela" contado sem perguntar se dá para rolar | Tabela larga tem conteúdo à direita de propósito. O defeito é o que está fora E sem ancestral que role: some sem aviso |
 | Handler do NestJS devolvendo `null` | Manda corpo VAZIO, e o cliente recebe `{}` — que é verdadeiro. Embrulhe: `{ caixa: null }` |
 | URL montada com `localhost` para o cliente | Dentro de contêiner é o próprio contêiner. Use `API_PUBLIC_URL`, que aceita caminho relativo |
 | Volume do Postgres em `/var/lib/postgresql/data` | Na imagem 18 é `/var/lib/postgresql`; o contêiner recusa subir |
