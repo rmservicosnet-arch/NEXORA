@@ -179,7 +179,15 @@ export class RelatoriosPedidosService {
 
       const naFila = linhas.filter((l) => !l.espera_cliente);
       const faixas = FAIXAS.map((f, i) => {
-        const piso = i === 0 ? 0 : (FAIXAS[i - 1]?.ate ?? 0);
+        /*
+          A primeira faixa nao tem PISO.
+
+          Com `piso = 0`, um pedido cuja hora de envio esteja adiante do
+          relogio do banco da `horas` negativo e nao cai em faixa NENHUMA — as
+          cinco faixas somavam zero enquanto a fila tinha quatorze. As faixas
+          cobrem a fila inteira por definicao; um buraco nelas e sempre erro.
+        */
+        const piso = i === 0 ? Number.NEGATIVE_INFINITY : (FAIXAS[i - 1]?.ate ?? 0);
         const dentro = naFila.filter((l) => {
           const horas = Number(l.horas);
           return horas >= piso && (f.ate === null || horas < f.ate);

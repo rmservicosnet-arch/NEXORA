@@ -352,6 +352,7 @@ model Loja {
   pedidos        Pedido[]
   caixas         Caixa[]
   compras        Compra[]
+  titulos        TituloFinanceiro[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, status])
@@ -703,6 +704,7 @@ model Cliente {
   acessos  ClienteAcesso[]
   vendas   Venda[]
   pedidos  Pedido[]
+  titulos  TituloFinanceiro[]
   carteira Carteira?
 
   @@unique([tenantId, documento])
@@ -723,6 +725,7 @@ model Fornecedor {
   alteradoEm DateTime       @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
   compras Compra[]
+  titulos TituloFinanceiro[]
 
   @@unique([tenantId, documento])
   @@index([tenantId, nome])
@@ -782,7 +785,8 @@ model Compra {
   criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
 
-  itens CompraItem[]
+  itens   CompraItem[]
+  titulos TituloFinanceiro[]
 
   /// A MESMA nota do MESMO fornecedor, duas vezes, dobra a mercadoria e
   /// estraga o custo medio de cada item dela. O banco recusa.
@@ -824,6 +828,128 @@ model CompraItem {
   @@index([tenantId, compraId])
   @@index([tenantId, variacaoId])
   @@map("compra_item")
+}
+
+/// A pagar (fornecedor) ou a receber (cliente).
+enum TipoTitulo {
+  PAGAR
+  RECEBER
+}
+
+/// De onde o titulo nasceu. Titulo sem origem visivel vira numero orfao.
+enum OrigemTitulo {
+  COMPRA
+  VENDA
+  MANUAL
+}
+
+enum StatusTitulo {
+  ABERTO
+  PAGO
+  CANCELADO
+}
+
+/// Um compromisso COM VENCIMENTO.
+///
+/// O que este modelo NAO e: um segundo saldo do cliente. O saldo do revendedor
+/// continua sendo o da `Carteira`, que e o razao — o titulo acrescenta o que a
+/// carteira nao tem, que e a DATA. Dar baixa num titulo a receber lanca a
+/// quitacao NA carteira, e e ela que continua mandando no limite de credito.
+///
+/// Dois lugares registrando o mesmo debito com numeros diferentes seria a pior
+/// coisa que este sistema poderia ganhar.
+model TituloFinanceiro {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  tipo   TipoTitulo
+  origem OrigemTitulo @default(MANUAL)
+
+  lojaId String? @map("loja_id") @db.Uuid
+  loja   Loja?   @relation(fields: [lojaId], references: [id], onDelete: Restrict)
+
+  /// Preenchido em titulo A PAGAR de fornecedor.
+  fornecedorId String?     @map("fornecedor_id") @db.Uuid
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+
+  /// Preenchido em titulo A RECEBER de cliente.
+  clienteId String?  @map("cliente_id") @db.Uuid
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+
+  /// A nota que originou o titulo a pagar.
+  compraId String? @map("compra_id") @db.Uuid
+  compra   Compra? @relation(fields: [compraId], references: [id], onDelete: Restrict)
+
+  /// A venda que originou o titulo a receber.
+  vendaId String? @map("venda_id") @db.Uuid
+  venda   Venda?  @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+
+  /// O que e, em uma linha. Obrigatoria: "R$ 1.500,00 em 02/10" sem descricao
+  /// e um numero que ninguem sabe de onde veio.
+  descricao String @db.VarChar(200)
+
+  /// Parcela N de M. Um titulo a vista e 1/1.
+  parcela  Int @default(1)
+  parcelas Int @default(1)
+
+  vencimento DateTime @db.Date
+
+  valor     Decimal @db.Decimal(14, 2)
+  /// Soma das baixas. Derivado e gravado: a lista ordena e filtra por ele.
+  valorPago Decimal @default(0) @map("valor_pago") @db.Decimal(14, 2)
+
+  status StatusTitulo @default(ABERTO)
+
+  observacao String? @db.VarChar(400)
+
+  canceladoEm        DateTime? @map("cancelado_em") @db.Timestamptz(3)
+  motivoCancelamento String?   @map("motivo_cancelamento") @db.VarChar(400)
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  baixas BaixaTitulo[]
+
+  @@index([tenantId, tipo, status, vencimento])
+  @@index([tenantId, fornecedorId])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, compraId])
+  @@map("titulo_financeiro")
+}
+
+/// Uma baixa. Append-only, como todo razao daqui.
+///
+/// Baixa nao se edita: corrigir e lancar o contrario, que e outra linha. Um
+/// pagamento corrigido em silencio e um pagamento que ninguem audita.
+model BaixaTitulo {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  tituloId String           @map("titulo_id") @db.Uuid
+  titulo   TituloFinanceiro @relation(fields: [tituloId], references: [id], onDelete: Restrict)
+
+  /// Sempre positivo. Negativo seria estorno, e estorno e outra linha.
+  valor Decimal @db.Decimal(14, 2)
+
+  pagoEm DateTime @map("pago_em") @db.Date
+
+  forma FormaPagamento
+
+  /// O movimento de caixa gerado quando a baixa foi em DINHEIRO: dinheiro que
+  /// sai da gaveta precisa aparecer na conferencia do turno.
+  movimentoCaixaId String? @map("movimento_caixa_id") @db.Uuid
+
+  /// O lancamento na carteira, em titulo A RECEBER. E la que o saldo do
+  /// cliente vive — aqui fica so o ponteiro.
+  carteiraMovimentoId String? @map("carteira_movimento_id") @db.Uuid
+
+  observacao String? @db.VarChar(400)
+
+  atorId   String?  @map("ator_id") @db.Uuid
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([tenantId, tituloId, criadoEm])
+  @@map("baixa_titulo")
 }
 
 // ===========================================================================
@@ -1215,6 +1341,7 @@ model Venda {
   itens              VendaItem[]
   pagamentos         VendaPagamento[]
   movimentosCarteira CarteiraMovimento[]
+  titulos            TituloFinanceiro[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, lojaId, status])

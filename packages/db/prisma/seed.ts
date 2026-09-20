@@ -787,6 +787,133 @@ async function main(): Promise<void> {
 
   passo(`${fornecedores.length} fornecedores e ${comprasCriadas} compras (2 a receber)`);
 
+  // --- Caixa ----------------------------------------------------------------
+
+  /*
+    O turno que a tela de Caixa mostra.
+
+    Um ABERTO com fundo, um suprimento e duas sangrias — porque o painel abre
+    a conta em parcelas e sem movimentos ele mostra tres zeros. E tres
+    fechados: um com falta, um exato ja conferido e um exato a conferir, que
+    e o unico estado em que o botao "Conferir" aparece.
+
+    A conta do esperado e a do docs/CASHBOX.md §4:
+      esperado = fundo + suprimentos − sangrias + (dinheiro recebido − troco)
+    Sem venda em dinheiro no seed, a ultima parcela e zero.
+  */
+  const horas = (h: number): Date => new Date(Date.now() - h * 3_600_000);
+
+  const caixaAberto = await prisma.caixa.create({
+    data: {
+      tenantId,
+      lojaId: lojaIds[0] ?? '',
+      numero: 1,
+      operadorId: adminId,
+      status: 'ABERTO',
+      valorAbertura: '200.00',
+      observacaoAbertura: 'Fundo de troco conferido na abertura',
+      abertoEm: horas(4),
+      movimentos: {
+        create: [
+          {
+            tenantId,
+            tipo: 'SUPRIMENTO',
+            valor: '500.00',
+            motivo: 'Troco trazido do cofre — faltavam notas de 10 e 20',
+            atorId: adminId,
+            criadoEm: horas(3),
+          },
+          {
+            tenantId,
+            tipo: 'SANGRIA',
+            valor: '200.00',
+            motivo: 'Pagamento do frete da transportadora em espécie',
+            atorId: adminId,
+            criadoEm: horas(2),
+          },
+          {
+            tenantId,
+            tipo: 'SANGRIA',
+            valor: '800.00',
+            motivo: 'Depósito bancário do meio do dia — envelope 4471',
+            atorId: adminId,
+            criadoEm: horas(1),
+          },
+        ],
+      },
+    },
+  });
+
+  /*
+    Quem fechou NAO confere o proprio caixa (§6). Por isso os fechados sao da
+    outra operadora: com todos no nome do admin, o botao nasceria desabilitado
+    em todos e a tela nunca mostraria a conferencia funcionando.
+  */
+  const marina = await prisma.usuario.findFirst({
+    where: { tenantId, email: { not: 'rodrigo@lojacentro.com.br' } },
+    select: { id: true },
+  });
+
+  const fechados = [
+    {
+      numero: 2,
+      abertura: '200.00',
+      esperado: '1840.00',
+      contado: '1800.00',
+      diferenca: '-40.00',
+      conferido: false,
+      observacao: 'Duas notas de 20 a menos; conferi a gaveta duas vezes',
+    },
+    {
+      numero: 3,
+      abertura: '200.00',
+      esperado: '2310.00',
+      contado: '2310.00',
+      diferenca: '0.00',
+      conferido: true,
+      observacao: null,
+    },
+    {
+      numero: 4,
+      abertura: '200.00',
+      esperado: '1450.00',
+      contado: '1460.00',
+      diferenca: '10.00',
+      conferido: true,
+      observacao: 'Dez reais a mais; provavelmente troco nao entregue',
+    },
+  ];
+
+  for (const f of fechados) {
+    await prisma.caixa.create({
+      data: {
+        tenantId,
+        lojaId: lojaIds[0] ?? '',
+        numero: f.numero,
+        operadorId: marina?.id ?? adminId,
+        status: f.conferido ? 'CONFERIDO' : 'FECHADO',
+        valorAbertura: f.abertura,
+        valorEsperado: f.esperado,
+        valorContado: f.contado,
+        diferenca: f.diferenca,
+        observacaoFechamento: f.observacao,
+        abertoEm: horas(24 * (f.numero - 1) + 10),
+        fechadoEm: horas(24 * (f.numero - 1)),
+        ...(f.conferido
+          ? {
+              conferidoPorId: adminId,
+              conferidoEm: horas(24 * (f.numero - 1) - 1),
+              observacaoConferencia: 'Gaveta conferida no fim do turno',
+            }
+          : {}),
+      },
+    });
+  }
+
+  passo(
+    `Caixa #${String(caixaAberto.numero)} aberto com 3 movimentos e ${String(fechados.length)} fechados (1 a conferir)`,
+  );
+
   // --- Clientes, acesso ao portal e carteira -------------------------------
 
   const hashCliente = await gerarHashSenha(SENHA_CLIENTE);

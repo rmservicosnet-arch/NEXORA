@@ -8,6 +8,7 @@ import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
 import { Compras } from './paginas/Compras';
+import { Contas } from './paginas/Contas';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -53,7 +54,6 @@ import { PortalEntrar } from './paginas/portal/Entrar';
 import { PortalMeuPedido } from './paginas/portal/MeuPedido';
 import { PortalMeusPedidos } from './paginas/portal/MeusPedidos';
 import { PortalSenha } from './paginas/portal/Senha';
-import { ModuloPendente } from './paginas/ModuloPendente';
 import { EstadoVazio } from './ui/Estados';
 
 const cliente = new QueryClient({
@@ -142,19 +142,7 @@ function AreaDaEquipe() {
           <Route path="tabelas-preco/:tabelaId" element={<PrecosDaTabela />} />
           <Route path="configuracoes" element={<Configuracoes />} />
           <Route path="compras" element={<Compras />} />
-          <Route
-            path="financeiro"
-            element={
-              <ModuloPendente
-                titulo="Contas"
-                oQueFaz="Contas a pagar e a receber, com baixa e conciliação."
-                ondeEstaHoje={{
-                  texto: 'A dívida do cliente que usa conta corrente está em Carteiras.',
-                  para: '/carteiras',
-                }}
-              />
-            }
-          />
+          <Route path="financeiro" element={<Contas />} />
           <Route path="estoque" element={<Estoque />} />
           <Route path="caixa" element={<Caixa />} />
           <Route path="carteiras" element={<Carteiras />} />

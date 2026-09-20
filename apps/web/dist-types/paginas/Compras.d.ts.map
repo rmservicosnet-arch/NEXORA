@@ -1,1 +1,1 @@
-{"version":3,"file":"Compras.d.ts","sourceRoot":"","sources":["../../src/paginas/Compras.tsx"],"names":[],"mappings":"AAAA,OAAO,EAML,KAAK,eAAe,EAGrB,MAAM,oBAAoB,CAAC;AAwC5B,wBAAgB,OAAO,gCA6KtB;AAqlBD,qEAAqE;AACrE,YAAY,EAAE,eAAe,EAAE,CAAC"}
+{"version":3,"file":"Compras.d.ts","sourceRoot":"","sources":["../../src/paginas/Compras.tsx"],"names":[],"mappings":"AAAA,OAAO,EAML,KAAK,eAAe,EAGrB,MAAM,oBAAoB,CAAC;AAwC5B,wBAAgB,OAAO,gCA6KtB;AAm7BD,qEAAqE;AACrE,YAAY,EAAE,eAAe,EAAE,CAAC"}

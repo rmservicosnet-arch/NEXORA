@@ -199,6 +199,10 @@ o runtime.
 | Seed que não apaga tudo o que referencia usuário | Faltava `caixa`, e `usuario.deleteMany` violava a FK. O seed morria NO MEIO da limpeza. A ordem das exclusões é parte do contrato, não detalhe |
 | `prisma migrate dev` num terminal não interativo | Fica pendurado depois de aplicar, esperando resposta que nunca vem. A migração entra e o comando nunca volta; `migrate deploy` é o não interativo |
 | Faixa de tempo com piso zero e relógio adiantado | "Menos de 1 h" exigia `horas >= 0`: pedido gravado no futuro dá −3 e não cai em faixa NENHUMA. A primeira faixa não tem piso |
+| Endpoint construído sem a tela que o usa | A busca de itens de compra existia e nada a chamava: a nota nascia vazia e não havia como preencher. Rota nova só está pronta quando alguém consegue apertar o botão |
+| Módulo que grava dinheiro por conta própria | A baixa de título chama o CAIXA e a CARTEIRA em vez de lançar sozinha. Cada um com as suas regras e a sua auditoria — senão viram dois lugares onde saldo muda |
+| Indicador financeiro somando o valor cheio | "Em aberto" tem de somar `valor − pago`: um título de 9.600 com 4.743 pagos pesa 4.856, não 9.600. Somar o cheio mostra dívida que já não existe |
+| Estado de painel que não remonta ao trocar de linha | Abrir outro título não desmonta o componente: a rota é a mesma. O valor digitado para o anterior ficava no seguinte — o estado carrega o id do dono |
 
 ## Testes
 

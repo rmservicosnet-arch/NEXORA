@@ -391,9 +391,49 @@ function PainelCompra({
   const [motivoEstorno, setMotivoEstorno] = useState('');
   const [estornando, setEstornando] = useState(false);
 
+  /*
+    Os itens do rascunho vivem em estado LOCAL ate alguem salvar.
+
+    Digitar quantidade e custo item a item com uma escrita por tecla faria a
+    nota ser reescrita quarenta vezes, e cada uma recalcularia o total. Quem
+    grava e o botao — a armadilha do "cabecalho com Salvar e campo que grava
+    no blur" e ter os dois.
+
+    A chave do estado carrega o ID da compra: trocar de nota na lista NAO
+    remonta o painel, e sem isso as linhas digitadas da anterior ficariam na
+    tela da seguinte.
+  */
+  const [rascunho, setRascunho] = useState<LinhaRascunho[] | null>(null);
+  const [donoDoRascunho, setDonoDoRascunho] = useState<string | null>(null);
+
   const consulta = useQuery({
     queryKey: ['compras', 'detalhe', id],
     queryFn: () => pedir<Compra>(`/compras/${id}`),
+  });
+
+  const salvarItens = useMutation({
+    mutationFn: (itens: LinhaRascunho[]) =>
+      pedir<Compra>(`/compras/${id}`, {
+        method: 'PUT',
+        body: {
+          itens: itens.map((i) => ({
+            variacaoId: i.variacaoId,
+            quantidade: i.quantidade,
+            custoUnitario: i.custoUnitario,
+          })),
+        },
+      }),
+    onSuccess: async () => {
+      setRascunho(null);
+      setDonoDoRascunho(null);
+      await fila.invalidateQueries({ queryKey: ['compras', 'detalhe', id] });
+      await aoMudar();
+    },
+    onError: (e) => {
+      aoFalhar(
+        e instanceof ErroRequisicao ? e.corpo.mensagem : 'Nao foi possivel salvar os itens.',
+      );
+    },
   });
 
   const acao = useMutation({
@@ -423,7 +463,36 @@ function PainelCompra({
     );
   }
 
-  const unidades = compra.itens.reduce((soma, i) => soma + Number(i.quantidade), 0);
+  const editavel = compra.status === 'RASCUNHO' && podeReceber;
+
+  // O estado local pertence a ESTA nota. Se o painel trocou de nota sem
+  // remontar, o rascunho da anterior nao vale mais.
+  const meuRascunho = donoDoRascunho === id ? rascunho : null;
+
+  function editar(proximas: LinhaRascunho[]): void {
+    setDonoDoRascunho(id);
+    setRascunho(proximas);
+  }
+
+  const linhas: LinhaRascunho[] =
+    meuRascunho ??
+    compra.itens.map((i) => ({
+      variacaoId: i.variacaoId,
+      sku: i.sku,
+      produto: i.produto,
+      descricaoVariacao: i.descricaoVariacao,
+      quantidade: String(Number(i.quantidade)),
+      custoUnitario: String(Number(i.custoUnitario)),
+      saldoAtual: i.saldoAtual ?? null,
+      custoMedioAtual: i.custoMedioAtual ?? null,
+    }));
+
+  const naoSalvo = meuRascunho !== null;
+  const totalLocal = linhas.reduce(
+    (soma, i) => soma + (Number(i.quantidade) || 0) * (Number(i.custoUnitario) || 0),
+    0,
+  );
+  const unidades = linhas.reduce((soma, i) => soma + (Number(i.quantidade) || 0), 0);
 
   return (
     <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm lg:w-[420px]">
@@ -473,10 +542,55 @@ function PainelCompra({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        {compra.itens.map((item) => (
-          <LinhaItem key={item.id} item={item} rascunho={compra.status === 'RASCUNHO'} />
-        ))}
+        {linhas.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[12.5px] text-neutral-500">
+            Nenhum item ainda. Busque abaixo para preencher a nota.
+          </p>
+        ) : null}
+
+        {linhas.map((linha, indice) =>
+          editavel ? (
+            <LinhaEditavel
+              key={linha.variacaoId}
+              linha={linha}
+              aoMudar={(campo, valor) =>
+                editar(linhas.map((l, i) => (i === indice ? { ...l, [campo]: valor } : l)))
+              }
+              aoRemover={() => editar(linhas.filter((_, i) => i !== indice))}
+            />
+          ) : (
+            <LinhaItem
+              key={linha.variacaoId}
+              item={compra.itens[indice]!}
+              rascunho={compra.status === 'RASCUNHO'}
+            />
+          ),
+        )}
       </div>
+
+      {editavel ? (
+        <IncluirItem
+          localId={compra.localId}
+          jaNaNota={linhas.map((l) => l.variacaoId)}
+          aoIncluir={(item) =>
+            editar([
+              ...linhas,
+              {
+                variacaoId: item.variacaoId,
+                sku: item.sku,
+                produto: item.produto,
+                descricaoVariacao: item.descricaoVariacao,
+                quantidade: '1',
+                // O custo da ULTIMA entrada como sugestao: e um numero que
+                // existiu de verdade, diferente do custo medio, que e media.
+                custoUnitario: item.ultimoCusto ? String(Number(item.ultimoCusto)) : '',
+                saldoAtual: item.saldoAtual,
+                custoMedioAtual: item.custoMedioAtual,
+              },
+            ])
+          }
+        />
+      ) : null}
 
       <div className="border-t border-neutral-100">
         <div className="flex items-baseline justify-between px-4 py-2.5">
@@ -485,9 +599,36 @@ function PainelCompra({
             unidades
           </span>
           <span className="font-display text-[20px] font-bold tabular-nums text-neutral-900">
-            R$ {brl(compra.valorTotal)}
+            R$ {brl(naoSalvo ? totalLocal : compra.valorTotal)}
           </span>
         </div>
+
+        {naoSalvo ? (
+          <div className="flex items-center gap-2 border-t border-neutral-100 px-4 py-2.5">
+            <span className="flex-1 text-[12px] font-medium text-[var(--color-atencao)]">
+              Alteracoes nao salvas
+            </span>
+            <Botao
+              variante="secundario"
+              tamanho="compacto"
+              onClick={() => {
+                setRascunho(null);
+                setDonoDoRascunho(null);
+              }}
+            >
+              Descartar
+            </Botao>
+            <Botao
+              variante="primario"
+              tamanho="compacto"
+              carregando={salvarItens.isPending}
+              disabled={linhas.some((l) => !l.quantidade || !l.custoUnitario)}
+              onClick={() => salvarItens.mutate(linhas)}
+            >
+              Salvar itens
+            </Botao>
+          </div>
+        ) : null}
 
         {compra.status === 'RASCUNHO' && podeReceber ? (
           <>
@@ -514,14 +655,24 @@ function PainelCompra({
                 variante="primario"
                 tamanho="pdv"
                 carregando={acao.isPending}
-                disabled={compra.itens.length === 0}
+                disabled={compra.itens.length === 0 || naoSalvo}
                 onClick={() => acao.mutate({ tipo: 'receber' })}
               >
                 Receber e lançar no estoque
               </Botao>
+              {/*
+                O motivo do bloqueio por escrito, nunca so o botao apagado.
+                Receber com item digitado e nao salvo lancaria no estoque uma
+                nota diferente da que esta na tela.
+              */}
               {compra.itens.length === 0 ? (
                 <p className="mt-1.5 text-center text-[11.5px] text-neutral-500">
                   Uma nota sem itens não tem o que dar entrada.
+                </p>
+              ) : naoSalvo ? (
+                <p className="mt-1.5 text-center text-[11.5px] text-[var(--color-atencao)]">
+                  Salve os itens antes: receber lançaria a nota que está gravada, não a que está na
+                  tela.
                 </p>
               ) : null}
             </div>
@@ -577,6 +728,205 @@ function PainelCompra({
         ) : null}
       </div>
     </aside>
+  );
+}
+
+/** Uma linha do rascunho, ainda em edicao. */
+interface LinhaRascunho {
+  readonly variacaoId: string;
+  readonly sku: string;
+  readonly produto: string;
+  readonly descricaoVariacao: string;
+  readonly quantidade: string;
+  readonly custoUnitario: string;
+  readonly saldoAtual: string | null;
+  readonly custoMedioAtual: string | null;
+}
+
+/**
+ * Linha do rascunho: quantidade e custo se digitam aqui.
+ *
+ * O saldo do destino aparece ao lado porque e ele que decide o que vai
+ * acontecer com a media — e a previsao muda a cada tecla, antes de salvar.
+ */
+function LinhaEditavel({
+  linha,
+  aoMudar,
+  aoRemover,
+}: {
+  readonly linha: LinhaRascunho;
+  readonly aoMudar: (campo: 'quantidade' | 'custoUnitario', valor: string) => void;
+  readonly aoRemover: () => void;
+}) {
+  const saldo = linha.saldoAtual === null ? null : Number(linha.saldoAtual);
+  const medio = linha.custoMedioAtual === null ? null : Number(linha.custoMedioAtual);
+  const q = Number(linha.quantidade) || 0;
+  const c = Number(linha.custoUnitario) || 0;
+
+  let previsto: number | null = null;
+  let explicacao = '';
+  let alerta = false;
+
+  if (saldo !== null && medio !== null && q > 0) {
+    if (saldo <= 0) {
+      previsto = c;
+      explicacao =
+        saldo === 0 ? 'redefine · saldo era 0' : `saldo ${num(saldo)} · cobre a descoberto`;
+      alerta = saldo < 0;
+    } else {
+      previsto = (saldo * medio + q * c) / (saldo + q);
+      explicacao = `era ${brl(medio)}`;
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_56px_76px_88px] items-center gap-2 border-b border-neutral-50 px-4 py-2 last:border-0">
+      <span className="min-w-0">
+        <span className="block truncate text-[12.5px] text-neutral-900">
+          {linha.produto} <span className="text-neutral-500">· {linha.descricaoVariacao}</span>
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="truncate font-mono text-[10.5px] text-neutral-400">{linha.sku}</span>
+          <button
+            type="button"
+            onClick={aoRemover}
+            className="text-[10.5px] text-neutral-400 underline underline-offset-2 hover:text-[var(--color-perigo)]"
+          >
+            remover
+          </button>
+        </span>
+      </span>
+
+      <input
+        value={linha.quantidade}
+        onChange={(e) => aoMudar('quantidade', e.target.value.replace(/[^\d.]/g, ''))}
+        aria-label={`Quantidade de ${linha.sku}`}
+        className="h-8 w-full rounded border border-neutral-200 px-1.5 text-right font-mono text-[12.5px]"
+      />
+
+      <input
+        value={linha.custoUnitario}
+        onChange={(e) => aoMudar('custoUnitario', e.target.value.replace(/[^\d.]/g, ''))}
+        placeholder="0.00"
+        aria-label={`Custo unitario de ${linha.sku}`}
+        className="h-8 w-full rounded border border-neutral-200 px-1.5 text-right font-mono text-[12.5px]"
+      />
+
+      <span className="text-right">
+        <span
+          className={juntar(
+            'block font-mono text-[12.5px] font-medium',
+            alerta ? 'text-[var(--color-perigo)]' : 'text-neutral-900',
+          )}
+        >
+          {previsto === null ? '—' : brl(previsto)}
+        </span>
+        <span
+          className={juntar(
+            'block font-mono text-[10px]',
+            alerta ? 'text-[var(--color-perigo)]' : 'text-neutral-400',
+          )}
+        >
+          {explicacao}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Incluir item na nota.
+ *
+ * Os resultados sobem ACIMA do campo: num bloco de rodape eles empurrariam a
+ * propria busca para fora da tela. E cada resultado mostra SKU, variacao e
+ * saldo — sem isso, dois "Kimono Trancado" sao indistinguiveis.
+ */
+function IncluirItem({
+  localId,
+  jaNaNota,
+  aoIncluir,
+}: {
+  readonly localId: string;
+  readonly jaNaNota: readonly string[];
+  readonly aoIncluir: (item: ItemParaComprar) => void;
+}) {
+  const [termo, setTermo] = useState('');
+  const [busca, setBusca] = useState('');
+
+  useEffect(() => {
+    const id = setTimeout(() => setBusca(termo.trim()), 300);
+    return () => clearTimeout(id);
+  }, [termo]);
+
+  const consulta = useQuery({
+    queryKey: ['compras', 'itens', localId, busca],
+    queryFn: () =>
+      pedir<ItemParaComprar[]>(
+        `/compras/itens?localId=${localId}&limite=8&termo=${encodeURIComponent(busca)}`,
+      ),
+    enabled: busca.length > 0,
+  });
+
+  const achados = (consulta.data ?? []).filter((i) => !jaNaNota.includes(i.variacaoId));
+
+  return (
+    <div className="border-t border-neutral-100 bg-neutral-25">
+      {busca && achados.length > 0 ? (
+        <div className="max-h-[210px] overflow-auto border-b border-neutral-100">
+          {achados.map((item) => (
+            <button
+              key={item.variacaoId}
+              type="button"
+              onClick={() => {
+                aoIncluir(item);
+                setTermo('');
+                setBusca('');
+              }}
+              className="flex w-full items-center gap-2 border-b border-neutral-50 px-4 py-2 text-left last:border-0 hover:bg-white"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] text-neutral-900">
+                  {item.produto}{' '}
+                  <span className="text-neutral-500">· {item.descricaoVariacao}</span>
+                </span>
+                <span className="block truncate font-mono text-[10.5px] text-neutral-400">
+                  {item.sku}
+                </span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span
+                  className={juntar(
+                    'block font-mono text-[11.5px]',
+                    Number(item.saldoAtual) < 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-600',
+                  )}
+                >
+                  saldo {num(item.saldoAtual, 2)}
+                </span>
+                <span className="block font-mono text-[10.5px] text-neutral-400">
+                  {item.ultimoCusto ? `ultimo ${brl(item.ultimoCusto)}` : 'sem custo anterior'}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {busca && !consulta.isPending && achados.length === 0 ? (
+        <p className="border-b border-neutral-100 px-4 py-2.5 text-[12px] text-neutral-500">
+          Nada encontrado para “{busca}”.
+        </p>
+      ) : null}
+
+      <div className="px-4 py-2.5">
+        <input
+          value={termo}
+          onChange={(e) => setTermo(e.target.value)}
+          placeholder="Incluir item — SKU, produto ou descrição"
+          aria-label="Incluir item na nota"
+          className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2.5 text-[12.5px]"
+        />
+      </div>
+    </div>
   );
 }
 
