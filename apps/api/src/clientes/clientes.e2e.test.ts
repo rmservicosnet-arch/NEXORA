@@ -37,6 +37,16 @@ async function entrar(dados: { email: string; senha: string }): Promise<string> 
   return (resposta.body as { tokenAcesso: string }).tokenAcesso;
 }
 
+/*
+  Todo cadastro criado aqui sai DESATIVADO no fim.
+
+  Sem isso o teste degradava o ambiente que ele proprio usa: 60 "Cadastro de
+  teste" acumulados empurravam os clientes de verdade para fora da primeira
+  pagina da grade. Desativar, nao apagar — cliente aparece em venda, pedido e
+  titulo, e `delete` deixaria orfaos.
+*/
+const criados: string[] = [];
+
 async function criarCadastro(extra: Record<string, unknown> = {}): Promise<string> {
   const sufixo = Math.random().toString(36).toUpperCase().slice(2, 9);
   const criado = await http
@@ -44,7 +54,10 @@ async function criarCadastro(extra: Record<string, unknown> = {}): Promise<strin
     .set('Authorization', `Bearer ${tokenAdmin}`)
     .send({ nome: `Cadastro de teste ${sufixo}`, documento: `CT${sufixo}`, ...extra })
     .expect(201);
-  return (criado.body as { id: string }).id;
+
+  const id = (criado.body as { id: string }).id;
+  criados.push(id);
+  return id;
 }
 
 async function ver(id: string) {
@@ -81,8 +94,18 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  if (app) await app.close();
-});
+  if (app) {
+    for (const id of criados) {
+      // Pela rota do dominio, nunca por `delete` escondido.
+      await http
+        .patch(`/api/clientes/${id}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ status: 'INATIVO' });
+    }
+
+    await app.close();
+  }
+}, 60_000);
 
 describe.runIf(temBanco)('vínculo com a tabela de preço', () => {
   it('um cadastro novo sem tabela nasce sem catálogo', async () => {

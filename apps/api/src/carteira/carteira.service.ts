@@ -479,6 +479,77 @@ export class CarteiraService {
     };
   }
 
+  /**
+   * Estorna os debitos que esta venda lancou na carteira.
+   *
+   * Dentro da transacao de QUEM CANCELA, pelo mesmo motivo do debito: venda
+   * cancelada com o debito de pe e o cliente devendo por mercadoria que
+   * voltou para a prateleira.
+   *
+   * Nao usa `estornar`, que abre transacao propria e recusa movimento ja
+   * estornado. Aqui o ja estornado e simplesmente PULADO: cancelar duas vezes
+   * nao pode creditar duas vezes, e a chave de idempotencia carrega o id do
+   * movimento original para garantir isso no banco, nao so na leitura.
+   *
+   * Carteira bloqueada nao impede: bloqueio e para COMPRAR. Recusar a
+   * devolucao do que ela mesma debitou prenderia a divida justamente em quem
+   * ja esta bloqueado.
+   */
+  async estornarPorVendaCancelada(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly clienteId: string;
+      readonly vendaId: string;
+      readonly motivo: string;
+    },
+    principal: Principal,
+  ): Promise<number> {
+    const contexto = exigirContexto();
+
+    const debitos = await tx.carteiraMovimento.findMany({
+      where: {
+        vendaId: params.vendaId,
+        sentido: 'DEBITO',
+        estornoDeId: null,
+        estornos: { none: {} },
+      },
+      select: { id: true, valor: true, carteiraId: true },
+      orderBy: { criadoEm: 'asc' },
+    });
+
+    if (debitos.length === 0) {
+      return 0;
+    }
+
+    // Trava UMA vez e encadeia o saldo na memoria: `gravarMovimento` grava
+    // `saldoAnterior` e `saldoPosterior` em cada linha, e reler o saldo entre
+    // um estorno e outro traria o valor de antes — o razao deixaria de
+    // encadear na segunda linha.
+    const carteira = await this.travar(tx, params.clienteId);
+    let saldo = carteira.saldo;
+
+    for (const d of debitos) {
+      const valor = dec(d.valor.toString());
+
+      await this.gravarMovimento(tx, contexto, {
+        carteiraId: carteira.id,
+        saldoAtual: saldo,
+        sentido: 'CREDITO',
+        tipo: 'ESTORNO_DEBITO',
+        valor,
+        principal,
+        vendaId: params.vendaId,
+        justificativa: params.motivo,
+        estornoDeId: d.id,
+        chaveIdempotencia: `venda:${params.vendaId}:estorno:${d.id}`,
+      });
+
+      saldo = saldo.plus(valor);
+    }
+
+    return debitos.length;
+  }
+
   /** A carteira do cliente, se ele tiver uma. Usado pelo PDV. */
   async carteiraDoCliente(tx: ClienteEmTransacao, clienteId: string): Promise<Carteira | null> {
     const carteira = await tx.carteira.findFirst({

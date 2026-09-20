@@ -19,8 +19,17 @@ import { juntar } from '../ui/juntar';
 
 type Filtro = 'todos' | 'carteira' | 'semTabela' | 'inativos';
 
+/*
+  "Ativos" e "Inativos" PARTICIONAM o cadastro; os outros dois são recortes
+  que cruzam os dois.
+
+  O primeiro se chamava "Todos" e trazia o desativado junto — a mesma
+  armadilha das 19 lojas de teste, aqui com 60 "Cadastro de teste" empurrando
+  quem importa para fora da primeira página. Recorte cujo rótulo diz mais do
+  que a consulta faz é pior do que recorte nenhum.
+*/
 const FILTROS: { chave: Filtro; nome: string }[] = [
-  { chave: 'todos', nome: 'Todos' },
+  { chave: 'todos', nome: 'Ativos' },
   { chave: 'carteira', nome: 'Com carteira' },
   { chave: 'semTabela', nome: 'Sem tabela' },
   { chave: 'inativos', nome: 'Inativos' },
@@ -74,7 +83,7 @@ export function Clientes() {
       const p = new URLSearchParams({ limite: '60' });
       if (busca) p.set('busca', busca);
       if (filtro === 'semTabela') p.set('semTabela', 'true');
-      if (filtro === 'inativos') p.set('status', 'INATIVO');
+      p.set('status', filtro === 'inativos' ? 'INATIVO' : 'ATIVO');
       return pedir<PaginaClientes>(`/clientes?${p.toString()}`);
     },
     placeholderData: keepPreviousData,
@@ -163,7 +172,7 @@ export function Clientes() {
               Clientes
             </h1>
             <p className="mt-0.5 text-[13.5px] text-neutral-500">
-              {consulta.data?.total ?? 0} cadastros
+              {consulta.data?.total ?? 0} {filtro === 'inativos' ? 'desativados' : 'ativos'}
               {consulta.data && consulta.data.semTabela > 0 ? (
                 <>
                   {' · '}

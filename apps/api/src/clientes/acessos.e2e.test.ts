@@ -49,6 +49,14 @@ function sufixo(): string {
   return Math.random().toString(36).toUpperCase().slice(2, 9);
 }
 
+/*
+  Todo cadastro criado aqui sai DESATIVADO no fim — mesma razao do
+  clientes.e2e: "Cliente com portal" acumulado empurra quem importa para fora
+  da primeira pagina. Desativar, nao apagar: o acesso do portal aponta para
+  ele.
+*/
+const criados: string[] = [];
+
 async function cadastroComTabela(): Promise<string> {
   const s = sufixo();
   const tabelas = (
@@ -65,7 +73,9 @@ async function cadastroComTabela(): Promise<string> {
     })
     .expect(201);
 
-  return (criado.body as { id: string }).id;
+  const id = (criado.body as { id: string }).id;
+  criados.push(id);
+  return id;
 }
 
 async function criarAcesso(clienteId: string, email: string): Promise<Criado> {
@@ -92,8 +102,17 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  if (app) await app.close();
-});
+  if (app) {
+    for (const id of criados) {
+      await http
+        .patch(`/api/clientes/${id}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .send({ status: 'INATIVO' });
+    }
+
+    await app.close();
+  }
+}, 60_000);
 
 describe.runIf(temBanco)('criar acesso ao portal', () => {
   it('a credencial criada entra no portal e vê o catálogo da tabela dele', async () => {

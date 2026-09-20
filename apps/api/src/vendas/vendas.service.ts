@@ -402,6 +402,7 @@ export class VendasService {
    */
   async cancelar(id: string, dados: CancelamentoVenda, principal: Principal): Promise<Venda> {
     const contexto = exigirContexto();
+    let desfeito = { titulos: 0, debitos: 0 };
 
     await comEscopoAtual(
       this.prisma,
@@ -431,6 +432,43 @@ export class VendasService {
             mensagem: 'Só uma venda concluída pode ser cancelada.',
           });
         }
+
+        /*
+          O DINHEIRO PRIMEIRO — docs/WALLET.md §6.
+
+          Cancelar estornava o estoque e mais nada: a mercadoria voltava para
+          a prateleira e a divida ficava de pe. Quem levou a prazo continuava
+          devendo por uma venda que o proprio sistema diz nao existir.
+
+          O caixa ja estava protegido (a conferencia so soma venda CONCLUIDA),
+          mas a carteira e o titulo nao — e cada um tem as suas regras e a sua
+          auditoria, por isso o cancelamento CHAMA os dois em vez de escrever
+          nas tabelas deles.
+
+          Vem antes do estorno de estoque de proposito: `cancelarTitulosDeVenda`
+          RECUSA quando ha baixa, e a recusa tem de chegar antes de a transacao
+          ter feito trabalho. Estando tudo na mesma transacao o desfecho seria
+          o mesmo; a diferenca e o erro que a pessoa le.
+        */
+        const titulosCancelados = await this.contas.cancelarTitulosDeVenda(tx, {
+          vendaId: venda.id,
+          numeroVenda: venda.numero,
+          motivo: `Cancelamento da venda ${String(venda.numero)}: ${dados.motivo}`,
+        });
+
+        const debitosEstornados = venda.clienteId
+          ? await this.carteira.estornarPorVendaCancelada(
+              tx,
+              {
+                clienteId: venda.clienteId,
+                vendaId: venda.id,
+                motivo: `Cancelamento da venda ${String(venda.numero)}: ${dados.motivo}`,
+              },
+              principal,
+            )
+          : 0;
+
+        desfeito = { titulos: titulosCancelados, debitos: debitosEstornados };
 
         const local = await this.estoque.resolverLocalDaLoja(tx, venda.localId, venda.lojaId);
 
@@ -481,7 +519,10 @@ export class VendasService {
       entidade: 'venda',
       entidadeId: id,
       atorNome: principal.nome,
-      motivo: dados.motivo,
+      motivo:
+        desfeito.titulos + desfeito.debitos > 0
+          ? `${dados.motivo} (desfeito: ${String(desfeito.debitos)} débito(s) na carteira, ${String(desfeito.titulos)} título(s))`
+          : dados.motivo,
     });
 
     return this.detalhe(id, principal.permissoes.has(PERM.produto.verCusto));

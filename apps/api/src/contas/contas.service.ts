@@ -312,7 +312,27 @@ export class ContasService {
       amarra os dois lados.
     */
     const carteiraMovimentoId: string | null = null;
-    if (titulo.tipo === 'RECEBER' && titulo.clienteId) {
+
+    /*
+      So quem TEM carteira leva a quitacao para o razao dela.
+
+      Isto era `if (RECEBER && clienteId)`, e `lancar` lanca
+      CARTEIRA_NAO_ENCONTRADA para quem nao tem: a baixa inteira morria com
+      404. E o titulo de venda a prazo nasce EXATAMENTE para o cliente sem
+      carteira (WALLET §6) — ou seja, o titulo era criado num caminho e nao
+      podia ser pago em nenhum. Cobranca impossivel, sem erro de compilacao e
+      sem teste que cobrisse.
+
+      Cliente sem carteira quita no proprio titulo: nao ha segundo saldo para
+      mover, que e o ponto do §6.
+    */
+    const carteiraDoCliente = titulo.clienteId
+      ? await comEscopoAtual(this.prisma, async (tx) =>
+          this.carteira.carteiraDoCliente(tx, titulo.clienteId!),
+        )
+      : null;
+
+    if (titulo.tipo === 'RECEBER' && titulo.clienteId && carteiraDoCliente) {
       await this.carteira.lancar(
         titulo.clienteId,
         {
@@ -470,6 +490,66 @@ export class ContasService {
     });
 
     return titulo.id;
+  }
+
+  /**
+   * Cancela os titulos que esta venda gerou.
+   *
+   * Recebe o `tx` de quem chama, como `tituloDeVendaAPrazo`: a venda cancelada
+   * e o titulo cancelado sao o MESMO fato. Se um entrasse sem o outro, a loja
+   * cobraria por mercadoria que voltou para a prateleira — e o cliente
+   * receberia uma cobranca de uma venda que o proprio sistema diz nao existir.
+   *
+   * Titulo com baixa DERRUBA o cancelamento da venda inteira, em vez de apagar
+   * a cobranca do resto em silencio. Dinheiro ja recebido tem de ter dono:
+   * alguem precisa decidir se devolve ou se vira credito, e essa decisao nao e
+   * desta funcao.
+   */
+  async cancelarTitulosDeVenda(
+    tx: ClienteEmTransacao,
+    params: {
+      readonly vendaId: string;
+      readonly numeroVenda: number;
+      readonly motivo: string;
+    },
+  ): Promise<number> {
+    /*
+      Nao so o ABERTO. Um titulo ja PAGO tambem precisa entrar na conferencia:
+      se ficasse de fora, cancelar a venda apagaria a venda e deixaria o
+      dinheiro recebido sem nada a que se referir — e sem ninguem avisado.
+    */
+    const titulos = await tx.tituloFinanceiro.findMany({
+      where: { vendaId: params.vendaId, status: { not: 'CANCELADO' } },
+      select: { id: true, valorPago: true },
+    });
+
+    const comBaixa = titulos.filter((t) => dec(t.valorPago.toFixed(2)).greaterThan(dec(0)));
+
+    if (comBaixa.length > 0) {
+      throw new ConflictException({
+        codigo: 'VENDA_COM_TITULO_BAIXADO',
+        /*
+          Nao manda "estorne a baixa": estorno de baixa nao existe como rota,
+          e mandar alguem apertar um botao que nao ha e pior do que recusar
+          sem explicar. A saida honesta hoje e resolver o dinheiro por fora —
+          devolucao ou credito — e cancelar o titulo no proprio Contas.
+        */
+        mensagem: `A venda ${String(params.numeroVenda)} tem ${String(comBaixa.length)} título(s) com dinheiro recebido. Resolva o recebido primeiro — devolução ou crédito ao cliente —, senão a venda some e o dinheiro fica sem dono.`,
+      });
+    }
+
+    for (const t of titulos) {
+      await tx.tituloFinanceiro.update({
+        where: { id: t.id },
+        data: {
+          status: 'CANCELADO',
+          canceladoEm: new Date(),
+          motivoCancelamento: params.motivo,
+        },
+      });
+    }
+
+    return titulos.length;
   }
 
   // -------------------------------------------------------------------------

@@ -38,9 +38,19 @@ function sufixo(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function autenticado(metodo: 'get' | 'post', rota: string) {
+function autenticado(metodo: 'get' | 'post' | 'patch', rota: string) {
   return http[metodo](rota).set('Authorization', `Bearer ${token}`);
 }
+
+/*
+  Todo cadastro criado aqui entra nesta lista e sai desativado no `afterAll`.
+
+  Sem isso o teste degradava o ambiente que ele proprio usa: 24 "Teste prazo"
+  acumulados na grade de clientes, empurrando quem importa para fora da
+  primeira pagina. Desativar, nao apagar — cliente aparece em venda e em
+  titulo, e `delete` deixaria orfaos.
+*/
+const criados: string[] = [];
 
 async function clienteCom(usaCarteira: boolean): Promise<string> {
   const criado = (
@@ -49,6 +59,7 @@ async function clienteCom(usaCarteira: boolean): Promise<string> {
       .expect(201)
   ).body as { id: string };
 
+  criados.push(criado.id);
   return criado.id;
 }
 
@@ -105,6 +116,16 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  for (const id of criados) {
+    // Pela rota do dominio, nunca por `delete` escondido. Falha aqui nao
+    // derruba a suite: o que importa ja foi verificado.
+    try {
+      await autenticado('patch', `/api/clientes/${id}`).send({ status: 'INATIVO' });
+    } catch {
+      /* ambiente ja derrubado */
+    }
+  }
+
   if (app) await app.close();
 });
 
@@ -141,8 +162,10 @@ describe.runIf(temBanco)('venda a prazo', () => {
     expect(resultado.avisos.some((a) => a.codigo === 'TITULO_A_RECEBER_GERADO')).toBe(true);
 
     const titulos = (
-      await autenticado('get', '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100')
-        .expect(200)
+      await autenticado(
+        'get',
+        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+      ).expect(200)
     ).body as {
       itens: { origem: string; valor: string; descricao: string; contraparte: string }[];
     };
@@ -194,8 +217,10 @@ describe.runIf(temBanco)('venda a prazo', () => {
       dobro. É o erro que o §6 existe para impedir.
     */
     const titulos = (
-      await autenticado('get', '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100')
-        .expect(200)
+      await autenticado(
+        'get',
+        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+      ).expect(200)
     ).body as { itens: { descricao: string }[] };
 
     expect(
@@ -221,8 +246,10 @@ describe.runIf(temBanco)('venda a prazo', () => {
     ).body as { venda: { numero: number } };
 
     const titulos = (
-      await autenticado('get', '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100')
-        .expect(200)
+      await autenticado(
+        'get',
+        '/api/financeiro/titulos?tipo=RECEBER&recorte=todos&limite=100',
+      ).expect(200)
     ).body as { itens: { descricao: string; vencimento: string }[] };
 
     const meu = titulos.itens.find((t) =>
@@ -230,5 +257,135 @@ describe.runIf(temBanco)('venda a prazo', () => {
     );
 
     expect(meu?.vencimento).toBe(vencimento);
+  });
+
+  /*
+    CANCELAMENTO — a outra ponta do §6.
+
+    Cancelar estornava o estoque e mais nada: a mercadoria voltava para a
+    prateleira e a divida ficava de pe. Cada um destes testes cobre um dos
+    tres desfechos possiveis.
+  */
+  it('cancelar venda a prazo ESTORNA o débito na carteira', async () => {
+    const variacaoId = await produtoAbastecido();
+    const clienteId = await clienteCom(true);
+
+    const resultado = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '1', precoUnitario: '320.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '320.00' }],
+        })
+        .expect(201)
+    ).body as { venda: { id: string } };
+
+    const antes = (
+      await autenticado('get', `/api/carteira/${clienteId}/extrato?limite=10`).expect(200)
+    ).body as { carteira: { saldo: string } };
+    expect(Number(antes.carteira.saldo)).toBe(-320);
+
+    await autenticado('post', `/api/vendas/${resultado.venda.id}/cancelar`)
+      .send({ motivo: 'Cliente desistiu na entrega' })
+      .expect(201);
+
+    const depois = (
+      await autenticado('get', `/api/carteira/${clienteId}/extrato?limite=10`).expect(200)
+    ).body as {
+      carteira: { saldo: string };
+      movimentos: { tipo: string; valor: string; sentido: string; estornoDeId: string | null }[];
+    };
+
+    // O saldo volta a zero, e volta por LANÇAMENTO CONTRÁRIO — o razão é
+    // append-only, o débito original continua lá.
+    expect(Number(depois.carteira.saldo)).toBe(0);
+
+    const estorno = depois.movimentos.find((m) => m.tipo === 'ESTORNO_DEBITO');
+    expect(estorno).toBeDefined();
+    expect(estorno!.sentido).toBe('CREDITO');
+    expect(estorno!.valor).toBe('320.00');
+    expect(estorno!.estornoDeId).not.toBeNull();
+
+    expect(depois.movimentos.some((m) => m.tipo === 'VENDA_A_PRAZO')).toBe(true);
+  });
+
+  it('cancelar venda a prazo CANCELA o título', async () => {
+    const variacaoId = await produtoAbastecido();
+    const clienteId = await clienteCom(false);
+
+    const resultado = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '1', precoUnitario: '140.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '140.00' }],
+        })
+        .expect(201)
+    ).body as { venda: { id: string; numero: number } };
+
+    await autenticado('post', `/api/vendas/${resultado.venda.id}/cancelar`)
+      .send({ motivo: 'Erro de digitação no pedido' })
+      .expect(201);
+
+    const titulos = (
+      await autenticado(
+        'get',
+        `/api/financeiro/titulos?tipo=RECEBER&recorte=todos&termo=Venda%20${String(resultado.venda.numero)}%20a%20prazo`,
+      ).expect(200)
+    ).body as { itens: { descricao: string; status: string }[] };
+
+    const meu = titulos.itens.find((t) =>
+      t.descricao.includes(`Venda ${String(resultado.venda.numero)}`),
+    );
+
+    expect(meu).toBeDefined();
+    expect(meu!.status).toBe('CANCELADO');
+  });
+
+  it('título com baixa DERRUBA o cancelamento — o dinheiro recebido precisa de dono', async () => {
+    const variacaoId = await produtoAbastecido();
+    const clienteId = await clienteCom(false);
+
+    const resultado = (
+      await autenticado('post', '/api/vendas')
+        .send({
+          lojaId,
+          clienteId,
+          itens: [{ variacaoId, quantidade: '1', precoUnitario: '200.00' }],
+          pagamentos: [{ forma: 'PRAZO', valor: '200.00' }],
+        })
+        .expect(201)
+    ).body as { venda: { id: string; numero: number } };
+
+    const titulos = (
+      await autenticado(
+        'get',
+        `/api/financeiro/titulos?tipo=RECEBER&recorte=todos&termo=Venda%20${String(resultado.venda.numero)}%20a%20prazo`,
+      ).expect(200)
+    ).body as { itens: { id: string; descricao: string }[] };
+
+    const meu = titulos.itens.find((t) =>
+      t.descricao.includes(`Venda ${String(resultado.venda.numero)}`),
+    );
+    expect(meu).toBeDefined();
+
+    // Baixa PARCIAL: o título segue em aberto, mas com dinheiro dentro.
+    await autenticado('post', `/api/financeiro/titulos/${meu!.id}/baixar`)
+      .send({ valor: '80.00', pagoEm: '2026-09-20', forma: 'PIX' })
+      .expect(201);
+
+    const recusa = await autenticado('post', `/api/vendas/${resultado.venda.id}/cancelar`)
+      .send({ motivo: 'Tentativa de cancelamento indevida' })
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('VENDA_COM_TITULO_BAIXADO');
+
+    // E nada mudou: a venda continua de pé, com o estoque baixado.
+    const venda = (await autenticado('get', `/api/vendas/${resultado.venda.id}`).expect(200))
+      .body as { status: string };
+
+    expect(venda.status).toBe('CONCLUIDA');
   });
 });

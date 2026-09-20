@@ -72,7 +72,15 @@ let clienteId: string;
  */
 const criados: string[] = [];
 
-function autenticado(metodo: 'get' | 'post' | 'put' | 'delete', rota: string) {
+/** Cadastros criados aqui. Saem DESATIVADOS, nunca apagados. */
+const clientesCriados: string[] = [];
+
+/** Sufixo aleatorio: nome fixo passa na primeira execucao e colide na segunda. */
+function sufixo(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+function autenticado(metodo: 'get' | 'post' | 'put' | 'patch' | 'delete', rota: string) {
   return http[metodo](rota).set('Authorization', `Bearer ${token}`);
 }
 
@@ -129,6 +137,10 @@ afterAll(async () => {
       await autenticado('post', `/api/financeiro/titulos/${id}/cancelar`).send({
         motivo: 'Limpeza do teste de ponta a ponta',
       });
+    }
+
+    for (const id of clientesCriados) {
+      await autenticado('patch', `/api/clientes/${id}`).send({ status: 'INATIVO' });
     }
 
     await app.close();
@@ -387,5 +399,51 @@ describe.runIf(temBanco)('contas', () => {
       .get('/api/financeiro/titulos')
       .set('Authorization', `Bearer ${tokenCliente}`)
       .expect(401);
+  });
+
+  /*
+    O titulo de venda a prazo nasce para o cliente SEM carteira (WALLET §6), e
+    a baixa dele chamava `carteira.lancar` de qualquer jeito: 404 e cobranca
+    impossivel. Um titulo que so pode ser criado e nunca recebido e pior do
+    que nao existir.
+  */
+  it('título a receber de cliente SEM carteira aceita baixa', async () => {
+    const cliente = (
+      await autenticado('post', '/api/clientes')
+        .send({ nome: `Sem carteira ${sufixo()}`, usaCarteira: false })
+        .expect(201)
+    ).body as { id: string };
+
+    clientesCriados.push(cliente.id);
+
+    const titulos = (
+      await autenticado('post', '/api/financeiro/titulos')
+        .send({
+          tipo: 'RECEBER',
+          clienteId: cliente.id,
+          descricao: `Cobranca sem carteira ${sufixo()}`,
+          vencimento: '2026-12-01',
+          valor: '150.00',
+        })
+        .expect(201)
+    ).body as { id: string }[];
+
+    const tituloId = titulos[0]!.id;
+
+    const depois = (
+      await autenticado('post', `/api/financeiro/titulos/${tituloId}/baixar`)
+        .send({ valor: '150.00', pagoEm: '2026-09-20', forma: 'PIX' })
+        .expect(201)
+    ).body as { status: string; valorPago: string };
+
+    expect(depois.status).toBe('PAGO');
+    expect(depois.valorPago).toBe('150.00');
+
+    // E o cliente continua sem carteira: quitar um título não inventa uma.
+    const carteiras = (await autenticado('get', '/api/carteira?limite=100').expect(200)).body as {
+      itens: { clienteId: string }[];
+    };
+
+    expect(carteiras.itens.some((c) => c.clienteId === cliente.id)).toBe(false);
   });
 });
