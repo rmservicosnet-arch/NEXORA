@@ -37,6 +37,8 @@ interface LinhaPagamento {
   readonly chave: number;
   forma: FormaPagamento;
   valor: string;
+  /** Só o crédito parcela. A API aceita de 1 a 36. */
+  parcelas: number;
 }
 
 const FORMAS: { valor: FormaPagamento; rotulo: string }[] = [
@@ -50,8 +52,11 @@ const FORMAS: { valor: FormaPagamento; rotulo: string }[] = [
   { valor: 'CARTEIRA', rotulo: 'Carteira' },
 ];
 
-/** Quantos itens a vitrine mostra quando ninguém digitou nada ainda. */
-const NA_VITRINE = 24;
+/** Quantos achados a busca mostra de uma vez. */
+const NA_BUSCA = 15;
+
+/** Parcelas possíveis no crédito. A API aceita 36; o balcão não passa de 12. */
+const PARCELAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 function brl(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -75,7 +80,7 @@ export function Pdv() {
   const [carrinho, setCarrinho] = useState<LinhaCarrinho[]>([]);
   const [desconto, setDesconto] = useState('');
   const [pagamentos, setPagamentos] = useState<LinhaPagamento[]>([
-    { chave: 1, forma: 'DINHEIRO', valor: '' },
+    { chave: 1, forma: 'DINHEIRO', valor: '', parcelas: 1 },
   ]);
   const [erro, setErro] = useState<string | null>(null);
   const [concluida, setConcluida] = useState<ResultadoVenda | null>(null);
@@ -132,11 +137,11 @@ export function Pdv() {
   const busca = useQuery({
     queryKey: ['pdv', 'itens', termo, lojaId, tabelaPrecoId],
     queryFn: () => {
-      const p = new URLSearchParams({ termo, lojaId, limite: String(NA_VITRINE) });
+      const p = new URLSearchParams({ termo, lojaId, limite: String(NA_BUSCA) });
       if (tabelaPrecoId) p.set('tabelaPrecoId', tabelaPrecoId);
       return pedir<ItemParaVenda[]>(`/vendas/itens?${p.toString()}`);
     },
-    enabled: Boolean(lojaId) && (termo.trim().length === 0 || termo.trim().length >= 2),
+    enabled: Boolean(lojaId) && termo.trim().length >= 2,
   });
 
   const clientes = useQuery({
@@ -290,14 +295,20 @@ export function Pdv() {
           ...(Number(desconto || 0) > 0 ? { desconto: Number(desconto).toFixed(2) } : {}),
           pagamentos: pagamentos
             .filter((p) => Number(p.valor || 0) > 0)
-            .map((p) => ({ forma: p.forma, valor: Number(p.valor).toFixed(2), parcelas: 1 })),
+            .map((p) => ({
+              forma: p.forma,
+              valor: Number(p.valor).toFixed(2),
+              // Parcela só existe no crédito; nas outras formas mandar outro
+              // número seria gravar uma condição que não foi combinada.
+              parcelas: p.forma === 'CREDITO' ? p.parcelas : 1,
+            })),
         },
       }),
     onSuccess: async (resultado) => {
       setConcluida(resultado);
       setCarrinho([]);
       setDesconto('');
-      setPagamentos([{ chave: 1, forma: 'DINHEIRO', valor: '' }]);
+      setPagamentos([{ chave: 1, forma: 'DINHEIRO', valor: '', parcelas: 1 }]);
       setMaisFormas(false);
       setErro(null);
       await fila.invalidateQueries({ queryKey: ['estoque'] });
@@ -385,7 +396,12 @@ export function Pdv() {
       const outras = atuais.slice(1).reduce((s, p) => s + Number(p.valor || 0), 0);
       const restante = Math.max(0, totais.total - outras);
       return [
-        { ...primeira, forma, valor: restante > 0 ? restante.toFixed(2) : '' },
+        {
+          ...primeira,
+          forma,
+          valor: restante > 0 ? restante.toFixed(2) : '',
+          parcelas: forma === 'CREDITO' ? primeira.parcelas : 1,
+        },
         ...atuais.slice(1),
       ];
     });
@@ -480,23 +496,6 @@ export function Pdv() {
           aria-label="Catálogo"
           className="flex min-h-0 flex-1 flex-col gap-3 p-4 sm:px-[18px]"
         >
-          <div className="relative shrink-0">
-            <span className="pointer-events-none absolute left-4 top-[15px] text-primary-600">
-              <CodigoBarras />
-            </span>
-            <input
-              ref={campoBusca}
-              value={termo}
-              onChange={(e) => setTermo(e.target.value)}
-              placeholder="Escaneie o código de barras ou digite o nome do produto…"
-              aria-label="Código de barras ou nome do produto"
-              className="h-[52px] w-full rounded-lg border-2 border-primary-600 bg-white pl-[46px] pr-[74px] text-[16px] shadow-sm placeholder:text-neutral-400"
-            />
-            <kbd className="absolute right-3.5 top-[15px] inline-flex h-[22px] min-w-[26px] items-center justify-center rounded border border-b-2 border-neutral-200 bg-neutral-50 px-1.5 font-mono text-[11.5px] font-medium text-neutral-600">
-              F2
-            </kbd>
-          </div>
-
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             <div className="relative">
               <button
@@ -625,6 +624,76 @@ export function Pdv() {
             </div>
           </div>
 
+          <div className="relative shrink-0">
+            <span className="pointer-events-none absolute left-4 top-[15px] text-primary-600">
+              <CodigoBarras />
+            </span>
+            <input
+              ref={campoBusca}
+              value={termo}
+              onChange={(e) => setTermo(e.target.value)}
+              placeholder="Escaneie o código de barras ou digite o nome do produto…"
+              aria-label="Código de barras ou nome do produto"
+              className="h-[52px] w-full rounded-lg border-2 border-primary-600 bg-white pl-[46px] pr-[74px] text-[16px] shadow-sm placeholder:text-neutral-400"
+            />
+            <kbd className="absolute right-3.5 top-[15px] inline-flex h-[22px] min-w-[26px] items-center justify-center rounded border border-b-2 border-neutral-200 bg-neutral-50 px-1.5 font-mono text-[11.5px] font-medium text-neutral-600">
+              F2
+            </kbd>
+          </div>
+
+          {/*
+            Achados da busca em lista, não em grade: a grade de vitrine saiu
+            porque quem opera o balcão procura pelo código, e o espaço vale
+            mais para o carrinho.
+          */}
+          {termo.trim().length >= 2 && itens.length > 0 ? (
+            <div className="max-h-[260px] shrink-0 overflow-auto rounded-md border border-neutral-100 bg-white shadow-sm">
+              {itens.map((i) => (
+                <button
+                  key={i.variacaoId}
+                  type="button"
+                  onClick={() => {
+                    adicionar(i);
+                    setTermo('');
+                    campoBusca.current?.focus();
+                  }}
+                  className="flex w-full items-center gap-3 border-b border-neutral-50 px-3 py-2 text-left last:border-0 hover:bg-neutral-25"
+                >
+                  <span className="size-9 shrink-0 overflow-hidden rounded bg-primary-50">
+                    {i.imagemPrincipalId ? (
+                      <Foto imagemId={i.imagemPrincipalId} alt={i.produto} className="size-full" />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] text-neutral-900">
+                      {i.produto}
+                    </span>
+                    <span className="block truncate font-mono text-[11.5px] text-neutral-500">
+                      {i.sku} · {i.descricaoVariacao}
+                    </span>
+                  </span>
+                  <span
+                    className={juntar(
+                      'shrink-0 font-mono text-[12px]',
+                      Number(i.saldo) <= 0 ? 'text-[var(--color-perigo)]' : 'text-neutral-500',
+                    )}
+                  >
+                    {i.saldo} un
+                  </span>
+                  <span className="shrink-0 font-mono text-[13.5px] font-medium text-neutral-900">
+                    {i.preco ? `R$ ${i.preco}` : 'sem preço'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {termo.trim().length >= 2 && busca.isSuccess && itens.length === 0 ? (
+            <p className="shrink-0 text-[13px] text-neutral-500">
+              Nada encontrado para &quot;{termo.trim()}&quot;.
+            </p>
+          ) : null}
+
           {concluida ? (
             <Aviso tom="sucesso" titulo={`Venda ${concluida.venda.numero} concluída`}>
               Total de R$ {concluida.venda.total}
@@ -645,68 +714,63 @@ export function Pdv() {
             </Aviso>
           ) : null}
 
-          <div className="grid min-h-0 flex-1 auto-rows-[152px] grid-cols-2 content-start gap-3 overflow-auto sm:grid-cols-3 xl:grid-cols-4">
-            {itens.map((i) => (
-              <CartaoProduto key={i.variacaoId} item={i} aoAdicionar={() => adicionar(i)} />
-            ))}
-          </div>
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm">
+            <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-100 px-4 py-3">
+              <h2 className="font-display text-[18px] font-bold text-neutral-900">Carrinho</h2>
+              <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary-50 px-1.5 font-mono text-[12px] font-medium text-primary-700">
+                {carrinho.reduce((s, l) => s + l.quantidade, 0)}
+              </span>
+              <span className="flex-1" />
+              {carrinho.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={limparVenda}
+                  className="flex h-[30px] items-center gap-1.5 rounded px-2 text-[13px] font-medium text-[var(--color-perigo)]"
+                >
+                  <Lixeira />
+                  Limpar
+                </button>
+              ) : null}
+            </div>
 
-          {busca.isSuccess && itens.length === 0 ? (
-            <p className="shrink-0 text-[13px] text-neutral-500">
-              {termo.trim()
-                ? `Nada encontrado para "${termo.trim()}".`
-                : 'Nenhum item ativo nesta loja.'}
-            </p>
-          ) : null}
+            <div className="min-h-0 flex-1 overflow-auto">
+              {carrinho.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+                  <p className="font-display text-[16px] font-semibold text-neutral-700">
+                    Carrinho vazio
+                  </p>
+                  <p className="max-w-[300px] text-[13.5px] leading-5 text-neutral-500">
+                    Escaneie um código de barras ou procure o produto pelo nome para começar a
+                    venda.
+                  </p>
+                </div>
+              ) : (
+                carrinho.map((l) => (
+                  <LinhaItem
+                    key={l.variacaoId}
+                    linha={l}
+                    podeDarDesconto={podeDarDesconto}
+                    aoAlterar={(m) => alterar(l.variacaoId, m)}
+                    aoRemover={() =>
+                      setCarrinho((a) => a.filter((x) => x.variacaoId !== l.variacaoId))
+                    }
+                  />
+                ))
+              )}
+            </div>
+          </section>
         </section>
 
         <aside
-          aria-label="Carrinho"
-          className="flex w-full shrink-0 flex-col border-t border-neutral-100 bg-white lg:w-[424px] lg:border-l lg:border-t-0"
+          aria-label="Pagamento"
+          className="flex w-full shrink-0 flex-col justify-end border-t border-neutral-100 bg-white lg:w-[424px] lg:border-l lg:border-t-0"
         >
-          <div className="flex shrink-0 items-center gap-2.5 border-b border-neutral-100 px-[18px] py-3.5">
-            <h2 className="font-display text-[18px] font-bold text-neutral-900">Carrinho</h2>
-            <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary-50 px-1.5 font-mono text-[12px] font-medium text-primary-700">
-              {carrinho.reduce((s, l) => s + l.quantidade, 0)}
-            </span>
-            <span className="flex-1" />
-            {carrinho.length > 0 ? (
-              <button
-                type="button"
-                onClick={limparVenda}
-                className="flex h-[30px] items-center gap-1.5 rounded px-2 text-[13px] font-medium text-[var(--color-perigo)]"
-              >
-                <Lixeira />
-                Limpar
-              </button>
-            ) : null}
+          {/* O título fica no alto e o bloco embaixo: o botão de finalizar
+              mora sempre no mesmo canto, que é o que a mão decora. */}
+          <div className="hidden shrink-0 items-center border-b border-neutral-100 px-[18px] py-3.5 lg:flex">
+            <h2 className="font-display text-[18px] font-bold text-neutral-900">Pagamento</h2>
           </div>
-
-          <div className="min-h-0 flex-1 overflow-auto">
-            {carrinho.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
-                <p className="font-display text-[16px] font-semibold text-neutral-700">
-                  Carrinho vazio
-                </p>
-                <p className="max-w-[260px] text-[13.5px] leading-5 text-neutral-500">
-                  Escaneie um código de barras ou toque em um produto para começar a venda.
-                </p>
-              </div>
-            ) : (
-              carrinho.map((l) => (
-                <LinhaItem
-                  key={l.variacaoId}
-                  linha={l}
-                  podeDarDesconto={podeDarDesconto}
-                  aoAlterar={(m) => alterar(l.variacaoId, m)}
-                  aoRemover={() =>
-                    setCarrinho((a) => a.filter((x) => x.variacaoId !== l.variacaoId))
-                  }
-                />
-              ))
-            )}
-          </div>
-
+          <div className="hidden flex-1 lg:block" />
           <div className="shrink-0 border-t border-neutral-100 bg-neutral-25">
             <div className="flex flex-col gap-2 px-[18px] pb-3 pt-3.5">
               <Linha
@@ -796,6 +860,35 @@ export function Pdv() {
                       aria-label={`Valor em ${p.forma}`}
                       className="h-9 w-[120px] rounded-md border border-neutral-200 px-2.5 text-right font-mono text-[14px]"
                     />
+                    {/*
+                      Parcelas só no crédito, e ao lado do valor: é ali que a
+                      pergunta aparece no balcão — "em quantas vezes?".
+                    */}
+                    {p.forma === 'CREDITO' ? (
+                      <label className="flex shrink-0 items-center gap-1">
+                        <span className="sr-only">Parcelas</span>
+                        <select
+                          value={p.parcelas}
+                          onChange={(e) =>
+                            setPagamentos((a) =>
+                              a.map((x) =>
+                                x.chave === p.chave
+                                  ? { ...x, parcelas: Number(e.target.value) }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className="h-9 rounded-md border border-neutral-200 bg-white px-1.5 text-[13px]"
+                        >
+                          {PARCELAS.map((n) => (
+                            <option key={n} value={n}>
+                              {n}x
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+
                     {indice > 0 ? (
                       <button
                         type="button"
@@ -822,6 +915,7 @@ export function Pdv() {
                             chave: Math.max(...a.map((x) => x.chave)) + 1,
                             forma: e.target.value as FormaPagamento,
                             valor: totais.falta > 0 ? totais.falta.toFixed(2) : '',
+                            parcelas: 1,
                           },
                         ]);
                         setMaisFormas(false);
@@ -919,78 +1013,6 @@ function PastilhaTabela({
       )}
     >
       {rotulo}
-    </button>
-  );
-}
-
-/**
- * O cartão do produto na vitrine.
- *
- * O saldo aparece no cartão porque a decisão de bipar ou não é tomada aqui —
- * descobrir que não tem no estoque depois de somar ao carrinho é tarde.
- */
-function CartaoProduto({
-  item,
-  aoAdicionar,
-}: {
-  readonly item: ItemParaVenda;
-  readonly aoAdicionar: () => void;
-}) {
-  const saldo = Number(item.saldo);
-  const semPreco = item.preco === null;
-
-  return (
-    <button
-      type="button"
-      onClick={aoAdicionar}
-      className={juntar(
-        'flex flex-col gap-2 rounded-md border bg-white p-3 text-left shadow-sm hover:border-primary-600',
-        saldo < 0 ? 'border-[var(--color-perigo)]' : 'border-neutral-200',
-      )}
-    >
-      <div className="flex gap-2.5">
-        <span className="size-10 shrink-0 overflow-hidden rounded bg-primary-50">
-          {item.imagemPrincipalId ? (
-            <Foto imagemId={item.imagemPrincipalId} alt={item.produto} className="size-full" />
-          ) : null}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 block text-[13px] font-medium leading-[17px] text-neutral-900">
-            {item.produto}
-          </span>
-          <span className="block truncate font-mono text-[10.5px] text-neutral-400">
-            {item.sku}
-          </span>
-        </span>
-      </div>
-
-      <span
-        className={juntar(
-          'font-mono text-[17px] font-medium',
-          semPreco ? 'text-[var(--color-atencao)]' : 'text-neutral-900',
-        )}
-      >
-        {semPreco ? 'sem preço' : `R$ ${item.preco ?? ''}`}
-      </span>
-
-      <span className="mt-auto flex items-center justify-between gap-2">
-        <span
-          className={juntar(
-            'inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-[11.5px] font-semibold',
-            saldo < 0
-              ? 'bg-[var(--color-perigo-fundo)] text-[var(--color-perigo)]'
-              : saldo === 0
-                ? 'bg-[var(--color-atencao-fundo)] text-[var(--color-atencao)]'
-                : 'bg-neutral-50 text-neutral-600',
-          )}
-        >
-          {saldo <= 0 ? <Alerta /> : null}
-          {saldo} un
-        </span>
-        <span className="flex size-6 items-center justify-center rounded bg-primary-50 text-primary-600">
-          <Mais />
-        </span>
-      </span>
     </button>
   );
 }
