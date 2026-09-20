@@ -334,3 +334,57 @@ export const relatorioDescontosSchema = z.object({
   vendedores: z.array(linhaDescontoSchema),
 });
 export type RelatorioDescontos = z.infer<typeof relatorioDescontosSchema>;
+
+// ---------------------------------------------------------------------------
+// Cancelamentos e devolucoes
+// ---------------------------------------------------------------------------
+
+export const filtroCancelamentosSchema = z.object({
+  dias: z.coerce.number().int().min(1).max(365).default(30),
+  lojaId: z.string().uuid().optional(),
+  limite: z.coerce.number().int().min(1).max(200).default(80),
+});
+export type FiltroCancelamentos = z.infer<typeof filtroCancelamentosSchema>;
+
+export const linhaCancelamentoSchema = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  em: z.string(),
+  loja: z.string(),
+  vendedor: z.string(),
+  cliente: z.string().nullable(),
+  total: z.string(),
+  motivo: z.string().nullable(),
+  /**
+   * Minutos entre a venda e o cancelamento.
+   *
+   * Cancelar em dois minutos e cancelar tres dias depois sao problemas
+   * diferentes: o primeiro e digitacao, o segundo e mercadoria que voltou.
+   */
+  minutosAte: z.number().int(),
+});
+export type LinhaCancelamento = z.infer<typeof linhaCancelamentoSchema>;
+
+export const relatorioCancelamentosSchema = z.object({
+  dias: z.number().int(),
+  canceladas: z.number().int(),
+  concluidas: z.number().int(),
+  /** Participacao das canceladas no total de vendas fechadas. */
+  taxa: z.string(),
+  valorCancelado: z.string(),
+  /** Quantas foram canceladas em menos de 10 minutos: erro de digitacao. */
+  naHora: z.number().int(),
+  porMotivo: z.array(
+    z.object({ motivo: z.string(), quantidade: z.number().int(), valor: z.string() }),
+  ),
+  /**
+   * Devolucao PARCIAL de venda ainda nao existe no sistema.
+   *
+   * A coluna `venda_item.quantidade_devolvida` esta no banco e nenhuma tela a
+   * grava. Zero aqui e ausencia de recurso, nao ausencia de devolucao — e a
+   * tela diz isso em vez de mostrar um zero tranquilizador.
+   */
+  devolucoesRegistradas: z.number().int(),
+  itens: z.array(linhaCancelamentoSchema),
+});
+export type RelatorioCancelamentos = z.infer<typeof relatorioCancelamentosSchema>;

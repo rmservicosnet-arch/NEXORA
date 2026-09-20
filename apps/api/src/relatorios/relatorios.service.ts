@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  FiltroCancelamentos,
   FiltroDescontos,
   FiltroFormas,
   FiltroGiro,
@@ -12,6 +13,7 @@ import type {
   LinhaDesconto,
   LinhaForma,
   PosicaoEstoque,
+  RelatorioCancelamentos,
   RelatorioDescontos,
   RelatorioFormas,
   RelatorioGiro,
@@ -277,6 +279,148 @@ export class RelatoriosService {
         porLoja,
         dimensao: filtro.dimensao,
         ranking,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Cancelamentos e devoluções
+  // -------------------------------------------------------------------------
+
+  /**
+   * O que foi desfeito — e quanto tempo depois.
+   *
+   * Cancelar em dois minutos e cancelar três dias depois são problemas
+   * diferentes: o primeiro é digitação, o segundo é mercadoria que voltou.
+   * Um número só — "168 canceladas" — junta os dois e não serve para nada.
+   *
+   * Devolução parcial ainda não existe: `venda_item.quantidade_devolvida` está
+   * no banco e nenhuma tela a grava. O zero vai no contrato com nome próprio
+   * para a tela poder dizer que é ausência de recurso, e não boa notícia.
+   */
+  async cancelamentos(filtro: FiltroCancelamentos): Promise<RelatorioCancelamentos> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const recorte = filtro.lojaId ? 'AND v.loja_id = $2::uuid' : '';
+      const parametros: unknown[] = [filtro.dias, ...(filtro.lojaId ? [filtro.lojaId] : [])];
+
+      /* Cancelada conta pela data do CANCELAMENTO; concluída, pela da venda. */
+      const janelaCancelada = `
+        (v.cancelada_em AT TIME ZONE 'America/Sao_Paulo')::date
+        > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int`;
+
+      const cancelada = `v.status = 'CANCELADA' AND ${janelaCancelada} ${recorte}`;
+
+      const [linhas, resumo, motivos, devolvidas] = await Promise.all([
+        tx.$queryRawUnsafe<
+          {
+            id: string;
+            numero: number;
+            em: Date;
+            loja: string;
+            vendedor: string;
+            cliente: string | null;
+            total: string;
+            motivo: string | null;
+            minutos: string;
+          }[]
+        >(
+          `
+          SELECT v.id,
+                 v.numero,
+                 v.cancelada_em AS em,
+                 lj.nome AS loja,
+                 u.nome AS vendedor,
+                 c.nome AS cliente,
+                 v.total::text,
+                 v.motivo_cancelamento AS motivo,
+                 floor(extract(epoch FROM v.cancelada_em - v.criado_em) / 60)::text AS minutos
+            FROM venda v
+            JOIN loja lj ON lj.id = v.loja_id
+            JOIN usuario u ON u.id = v.vendedor_id
+            LEFT JOIN cliente c ON c.id = v.cliente_id
+           WHERE ${cancelada}
+           ORDER BY v.cancelada_em DESC
+           LIMIT ${String(filtro.limite)}
+          `,
+          ...parametros,
+        ),
+
+        tx.$queryRawUnsafe<
+          { canceladas: bigint; valor: string; na_hora: bigint; concluidas: bigint }[]
+        >(
+          `
+          SELECT count(*) FILTER (WHERE v.status = 'CANCELADA' AND ${janelaCancelada})
+                   AS canceladas,
+                 coalesce(
+                   sum(v.total) FILTER (WHERE v.status = 'CANCELADA' AND ${janelaCancelada}),
+                   0
+                 )::text AS valor,
+                 count(*) FILTER (
+                   WHERE v.status = 'CANCELADA' AND ${janelaCancelada}
+                     AND v.cancelada_em - v.criado_em < interval '10 minutes'
+                 ) AS na_hora,
+                 count(*) FILTER (
+                   WHERE v.status = 'CONCLUIDA'
+                     AND (v.concluida_em AT TIME ZONE 'America/Sao_Paulo')::date
+                         > (now() AT TIME ZONE 'America/Sao_Paulo')::date - $1::int
+                 ) AS concluidas
+            FROM venda v
+           WHERE true ${recorte}
+          `,
+          ...parametros,
+        ),
+
+        tx.$queryRawUnsafe<{ motivo: string | null; quantidade: bigint; valor: string }[]>(
+          `
+          SELECT v.motivo_cancelamento AS motivo,
+                 count(*) AS quantidade,
+                 sum(v.total)::text AS valor
+            FROM venda v
+           WHERE ${cancelada}
+           GROUP BY v.motivo_cancelamento
+           ORDER BY count(*) DESC
+           LIMIT 10
+          `,
+          ...parametros,
+        ),
+
+        tx.$queryRawUnsafe<{ devolvidas: bigint }[]>(
+          `
+          SELECT count(*) AS devolvidas
+            FROM venda_item i
+           WHERE i.quantidade_devolvida > 0
+          `,
+        ),
+      ]);
+
+      const canceladas = Number(resumo[0]?.canceladas ?? 0);
+      const concluidas = Number(resumo[0]?.concluidas ?? 0);
+      const fechadas = canceladas + concluidas;
+
+      return {
+        dias: filtro.dias,
+        canceladas,
+        concluidas,
+        taxa: fechadas > 0 ? dec(canceladas).dividedBy(fechadas).times(100).toFixed(1) : '0.0',
+        valorCancelado: dec(resumo[0]?.valor ?? '0').toFixed(2),
+        naHora: Number(resumo[0]?.na_hora ?? 0),
+        porMotivo: motivos.map((m) => ({
+          motivo: m.motivo ?? 'Sem motivo informado',
+          quantidade: Number(m.quantidade),
+          valor: dec(m.valor).toFixed(2),
+        })),
+        devolucoesRegistradas: Number(devolvidas[0]?.devolvidas ?? 0),
+        itens: linhas.map((l) => ({
+          id: l.id,
+          numero: l.numero,
+          em: l.em.toISOString(),
+          loja: l.loja,
+          vendedor: l.vendedor,
+          cliente: l.cliente,
+          total: dec(l.total).toFixed(2),
+          motivo: l.motivo,
+          minutosAte: Number(l.minutos),
+        })),
       };
     });
   }

@@ -133,7 +133,11 @@ const GRUPOS: readonly Grupo[] = [
         descricao: 'Por vendedor. Controle, não curiosidade',
         para: '/relatorios/descontos',
       },
-      { nome: 'Cancelamentos e devoluções', descricao: 'Volume, motivo e impacto' },
+      {
+        nome: 'Cancelamentos e devoluções',
+        descricao: 'Volume, motivo e quanto tempo depois',
+        para: '/relatorios/cancelamentos',
+      },
       { nome: 'Comparativo entre lojas', descricao: 'Mesma métrica, lojas lado a lado' },
     ],
   },

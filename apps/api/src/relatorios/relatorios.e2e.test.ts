@@ -148,6 +148,27 @@ interface Descontos {
   }[];
 }
 
+interface Cancelamentos {
+  dias: number;
+  canceladas: number;
+  concluidas: number;
+  taxa: string;
+  valorCancelado: string;
+  naHora: number;
+  porMotivo: { motivo: string; quantidade: number; valor: string }[];
+  devolucoesRegistradas: number;
+  itens: {
+    numero: number;
+    em: string;
+    loja: string;
+    vendedor: string;
+    cliente: string | null;
+    total: string;
+    motivo: string | null;
+    minutosAte: number;
+  }[];
+}
+
 async function entrar(rota: string, dados: { email: string; senha: string }): Promise<string> {
   const r = await http
     .post(rota)
@@ -766,5 +787,105 @@ describe.runIf(temBanco)('descontos concedidos', () => {
       .expect(400);
 
     await http.get('/api/relatorios/descontos').expect(401);
+  });
+});
+
+describe.runIf(temBanco)('cancelamentos e devolu\u00e7\u00f5es', () => {
+  /**
+   * A taxa \u00e9 sobre as vendas FECHADAS \u2014 canceladas mais conclu\u00eddas. Dividir
+   * s\u00f3 pelas conclu\u00eddas daria uma taxa acima de 100% numa loja ruim.
+   */
+  it('a taxa compara canceladas com tudo que fechou', async () => {
+    const r = await http
+      .get('/api/relatorios/cancelamentos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const c = r.body as Cancelamentos;
+    const fechadas = c.canceladas + c.concluidas;
+
+    if (fechadas > 0) {
+      expect(Number(c.taxa)).toBeCloseTo((c.canceladas / fechadas) * 100, 1);
+    }
+    expect(Number(c.taxa)).toBeLessThanOrEqual(100);
+  });
+
+  /** "Na hora" \u00e9 digita\u00e7\u00e3o; o resto \u00e9 mercadoria que j\u00e1 tinha sa\u00eddo. */
+  it('as desfeitas na hora nunca passam do total', async () => {
+    const r = await http
+      .get('/api/relatorios/cancelamentos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const c = r.body as Cancelamentos;
+    expect(c.naHora).toBeLessThanOrEqual(c.canceladas);
+
+    for (const i of c.itens) {
+      expect(i.minutosAte).toBeGreaterThanOrEqual(0);
+      expect(i.total).toMatch(/^\d+\.\d{2}$/);
+    }
+  });
+
+  it('os motivos n\u00e3o passam do que foi cancelado', async () => {
+    const r = await http
+      .get('/api/relatorios/cancelamentos?dias=365')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const c = r.body as Cancelamentos;
+    const soma = c.porMotivo.reduce((s, m) => s + m.quantidade, 0);
+
+    expect(soma).toBeLessThanOrEqual(c.canceladas);
+    for (const m of c.porMotivo) expect(m.motivo.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * O resumo conta o per\u00edodo; a lista \u00e9 uma p\u00e1gina dele. Contar a p\u00e1gina
+   * faria a taxa cair sozinha ao pedir menos linhas.
+   */
+  it('o resumo n\u00e3o muda com o tamanho da p\u00e1gina', async () => {
+    const [pequena, grande] = await Promise.all([
+      http
+        .get('/api/relatorios/cancelamentos?dias=365&limite=5')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+      http
+        .get('/api/relatorios/cancelamentos?dias=365&limite=200')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+    ]);
+
+    const a = pequena.body as Cancelamentos;
+    const b = grande.body as Cancelamentos;
+
+    expect(a.canceladas).toBe(b.canceladas);
+    expect(a.taxa).toBe(b.taxa);
+    expect(a.valorCancelado).toBe(b.valorCancelado);
+    expect(a.itens.length).toBeLessThanOrEqual(5);
+  });
+
+  /**
+   * Devolu\u00e7\u00e3o parcial n\u00e3o existe: nenhuma tela grava
+   * `venda_item.quantidade_devolvida`. O n\u00famero vem em campo pr\u00f3prio para a
+   * tela dizer que \u00e9 aus\u00eancia de recurso, e n\u00e3o boa not\u00edcia.
+   */
+  it('o contador de devolu\u00e7\u00f5es vem separado', async () => {
+    const r = await http
+      .get('/api/relatorios/cancelamentos?dias=30')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(200);
+
+    const c = r.body as Cancelamentos;
+    expect(c.devolucoesRegistradas).toBeGreaterThanOrEqual(0);
+    expect(typeof c.devolucoesRegistradas).toBe('number');
+  });
+
+  it('recusa per\u00edodo fora do intervalo e exige sess\u00e3o', async () => {
+    await http
+      .get('/api/relatorios/cancelamentos?dias=400')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
+
+    await http.get('/api/relatorios/cancelamentos').expect(401);
   });
 });
