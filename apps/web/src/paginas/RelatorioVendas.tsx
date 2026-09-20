@@ -19,10 +19,10 @@ function brl(v: string | number): string {
 }
 
 const DIAS = [
-  { valor: 7, rotulo: 'Últimos 7 dias' },
-  { valor: 14, rotulo: 'Últimos 14 dias' },
-  { valor: 30, rotulo: 'Últimos 30 dias' },
-  { valor: 90, rotulo: 'Últimos 90 dias' },
+  { valor: 7, rotulo: '7 dias' },
+  { valor: 14, rotulo: '14 dias' },
+  { valor: 30, rotulo: '30 dias' },
+  { valor: 90, rotulo: '90 dias' },
 ];
 
 const DIMENSOES: { chave: DimensaoVendas; nome: string; descricao: string }[] = [
@@ -34,7 +34,7 @@ const DIMENSOES: { chave: DimensaoVendas; nome: string; descricao: string }[] = 
   {
     chave: 'produto',
     nome: 'Produto',
-    descricao: 'O que mais saiu, em valor. A quantidade está ao lado.',
+    descricao: 'O que mais saiu, em valor. A quantidade está na exportação.',
   },
   { chave: 'cliente', nome: 'Cliente', descricao: 'Quem compra mais. Sem cliente = consumidor.' },
   {
@@ -55,6 +55,24 @@ const FORMAS: Record<string, string> = {
   PRAZO: 'A prazo',
   CARTEIRA: 'Carteira',
 };
+
+/**
+ * A rampa de uma cor só, do escuro ao claro.
+ *
+ * Forma de pagamento não tem ordem natural de categoria — o que ordena é o
+ * tamanho. Uma rampa sequencial diz isso; cinco matizes diferentes diriam
+ * que são cinco coisas sem relação. DESIGN_SYSTEM.md §4.
+ */
+const RAMPA = [
+  'var(--color-primary-700)',
+  'var(--color-primary-500)',
+  'var(--color-primary-400)',
+  'var(--color-primary-300)',
+  'var(--color-primary-200)',
+  'var(--color-primary-100)',
+  'var(--color-neutral-200)',
+  'var(--color-neutral-100)',
+];
 
 /**
  * Vendas no período.
@@ -94,6 +112,7 @@ export function RelatorioVendas() {
   });
 
   const dados = consulta.data;
+  const escolhida = DIMENSOES.find((d) => d.chave === dimensao)!;
 
   function exportar() {
     if (!dados) return;
@@ -113,8 +132,6 @@ export function RelatorioVendas() {
     URL.revokeObjectURL(url);
   }
 
-  const escolhida = DIMENSOES.find((d) => d.chave === dimensao)!;
-
   return (
     <>
       <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
@@ -129,32 +146,36 @@ export function RelatorioVendas() {
 
         <div className="flex-1" />
 
-        <select
-          value={dias}
-          onChange={(e) => setDias(Number(e.target.value))}
-          aria-label="Período"
-          className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
-        >
-          {DIAS.map((d) => (
-            <option key={d.valor} value={d.valor}>
-              {d.rotulo}
-            </option>
-          ))}
-        </select>
+        <Filtro rotulo="Período">
+          <select
+            value={dias}
+            onChange={(e) => setDias(Number(e.target.value))}
+            aria-label="Período"
+            className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+          >
+            {DIAS.map((d) => (
+              <option key={d.valor} value={d.valor}>
+                {d.rotulo}
+              </option>
+            ))}
+          </select>
+        </Filtro>
 
-        <select
-          value={lojaId}
-          onChange={(e) => setLojaId(e.target.value)}
-          aria-label="Loja"
-          className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
-        >
-          <option value="">Todas as lojas</option>
-          {(lojas.data ?? []).map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.nome}
-            </option>
-          ))}
-        </select>
+        <Filtro rotulo="Loja">
+          <select
+            value={lojaId}
+            onChange={(e) => setLojaId(e.target.value)}
+            aria-label="Loja"
+            className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+          >
+            <option value="">Todas</option>
+            {(lojas.data ?? []).map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nome}
+              </option>
+            ))}
+          </select>
+        </Filtro>
 
         <Botao variante="secundario" onClick={exportar} disabled={!dados}>
           Exportar
@@ -162,7 +183,7 @@ export function RelatorioVendas() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-4 sm:p-6">
-        <div>
+        <div className="shrink-0">
           <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
             Vendas no período
           </h1>
@@ -189,69 +210,133 @@ export function RelatorioVendas() {
 
         {dados ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Indicador
+            <div className="grid shrink-0 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+              <Kpi
                 rotulo="Faturamento"
                 valor={`R$ ${brl(dados.total)}`}
-                nota={`${dados.vendas} ${dados.vendas === 1 ? 'venda' : 'vendas'}`}
+                nota={`${dados.vendas} ${dados.vendas === 1 ? 'venda concluída' : 'vendas concluídas'}`}
               />
-              <Indicador
+              <Kpi
                 rotulo="Ticket médio"
                 valor={`R$ ${brl(dados.ticketMedio)}`}
                 nota="por venda concluída"
               />
-              <Indicador rotulo="Itens vendidos" valor={dados.itens} nota="unidades que saíram" />
+              <Kpi rotulo="Itens vendidos" valor={dados.itens} nota="unidades que saíram" />
               {dados.margem !== undefined ? (
-                <Indicador
+                <Kpi
                   rotulo="Margem bruta"
                   valor={dados.margem === null ? '—' : `${dados.margem}%`}
                   nota="sobre o custo congelado na saída"
-                  tom={dados.margem !== null && Number(dados.margem) < 25 ? 'perigo' : 'normal'}
+                  restrito
                 />
               ) : null}
             </div>
 
-            <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-              <Grafico dados={dados} />
+            <div className="flex min-h-0 flex-1 flex-col gap-3.5 xl:flex-row">
+              <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-neutral-100 bg-white p-4 shadow-sm sm:p-5">
+                <Grafico dados={dados} />
 
-              <div className="flex flex-col gap-3.5">
-                <Distribuicao
-                  titulo="Formas de pagamento"
-                  linhas={dados.formasPagamento.map((f) => ({
-                    nome: FORMAS[f.forma] ?? f.forma,
-                    total: f.total,
-                    participacao: f.participacao,
-                  }))}
-                />
-                <Distribuicao
-                  titulo="Por loja"
-                  linhas={dados.porLoja.map((l) => ({
-                    nome: l.loja,
-                    total: l.total,
-                    participacao: l.participacao,
-                  }))}
-                />
-              </div>
-            </div>
+                <div className="mt-4 shrink-0 border-t border-neutral-50 pt-4">
+                  <h3 className="mb-2.5 font-display text-[14px] font-semibold text-neutral-900">
+                    Formas de pagamento
+                  </h3>
 
-            <section className="flex flex-col overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3">
-                <div className="min-w-0">
+                  {dados.formasPagamento.length === 0 ? (
+                    <p className="text-[12.5px] text-neutral-400">Nada recebido no período.</p>
+                  ) : (
+                    <>
+                      {/* Uma barra só, empilhada: a comparação é entre partes
+                          de um todo, e cinco barras soltas perderiam o todo. */}
+                      <div className="flex h-3.5 gap-0.5 overflow-hidden rounded">
+                        {dados.formasPagamento.map((f, i) => (
+                          <div
+                            key={f.forma}
+                            title={`${FORMAS[f.forma] ?? f.forma} · R$ ${brl(f.total)} · ${f.participacao}%`}
+                            style={{
+                              width: `${f.participacao}%`,
+                              background: RAMPA[i] ?? RAMPA[RAMPA.length - 1],
+                            }}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+                        {dados.formasPagamento.map((f, i) => (
+                          <div key={f.forma} className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className="size-2 shrink-0 rounded-[2px]"
+                                style={{ background: RAMPA[i] ?? RAMPA[RAMPA.length - 1] }}
+                              />
+                              <span className="truncate text-[12px] text-neutral-700">
+                                {FORMAS[f.forma] ?? f.forma}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 font-mono text-[12.5px] font-medium text-neutral-900">
+                              R$ {brl(f.total)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4 shrink-0 border-t border-neutral-50 pt-3.5">
+                  <h3 className="mb-2 font-display text-[14px] font-semibold text-neutral-900">
+                    Por loja
+                  </h3>
+
+                  {dados.porLoja.length === 0 ? (
+                    <p className="text-[12.5px] text-neutral-400">Nenhuma venda no período.</p>
+                  ) : (
+                    dados.porLoja.map((l) => (
+                      <div key={l.loja} className="flex h-7 items-center gap-3">
+                        <span className="w-[108px] shrink-0 truncate text-[12.5px] text-neutral-700">
+                          {l.loja}
+                        </span>
+                        <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-50">
+                          <span
+                            className="block h-full rounded-full bg-primary-300"
+                            style={{
+                              width: `${Math.min(Number(l.participacao), 100).toFixed(1)}%`,
+                            }}
+                          />
+                        </span>
+                        <span className="w-[96px] shrink-0 text-right font-mono text-[12.5px] text-neutral-900">
+                          R$ {brl(l.total)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section
+                aria-label="Ranking de vendas"
+                className="flex w-full shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-sm xl:w-[460px]"
+              >
+                <div className="shrink-0 px-4 pb-3 pt-4">
                   <h2 className="font-display text-[15px] font-semibold text-neutral-900">
                     Ranking por {escolhida.nome.toLowerCase()}
                   </h2>
-                  <p className="text-[12.5px] text-neutral-500">{escolhida.descricao}</p>
+                  <p className="mt-0.5 text-[12.5px] text-neutral-500">{escolhida.descricao}</p>
                 </div>
 
-                <div className="flex flex-1 flex-wrap items-center justify-end gap-1.5">
+                <div
+                  role="tablist"
+                  aria-label="Dimensão do ranking"
+                  className="flex shrink-0 flex-wrap gap-1.5 px-4 pb-3"
+                >
                   {DIMENSOES.map((d) => (
                     <button
                       key={d.chave}
                       type="button"
-                      aria-pressed={dimensao === d.chave}
+                      role="tab"
+                      aria-selected={dimensao === d.chave}
                       onClick={() => trocarDimensao(d.chave)}
                       className={juntar(
-                        'h-8 rounded-full border px-3 text-[12.5px] font-medium',
+                        'h-8 rounded-full border px-3 text-[12px] font-medium',
                         dimensao === d.chave
                           ? 'border-primary-600 bg-primary-600 text-white'
                           : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-25',
@@ -261,94 +346,80 @@ export function RelatorioVendas() {
                     </button>
                   ))}
                 </div>
-              </div>
 
-              {dados.ranking.length === 0 ? (
-                <EstadoVazio
-                  titulo="Nenhuma venda no período"
-                  descricao="Aumente o período ou troque a loja."
-                />
-              ) : (
-                <>
-                  <div className="hidden grid-cols-[40px_minmax(0,1fr)_120px_110px_100px_90px] gap-3 border-b border-neutral-100 bg-neutral-25 px-4 py-2 sm:grid">
-                    {['#', escolhida.nome, 'Valor', 'Participação', 'Qtd.', 'Margem']
-                      .filter((c) => c !== 'Margem' || dados.ranking[0]?.margem !== undefined)
-                      .map((c, i) => (
-                        <span
-                          key={c}
-                          className={juntar(
-                            'text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500',
-                            i >= 2 ? 'text-right' : '',
-                          )}
-                        >
-                          {c}
-                        </span>
-                      ))}
-                  </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4">
+                  {dados.ranking.length === 0 ? (
+                    <EstadoVazio
+                      titulo="Nenhuma venda no período"
+                      descricao="Aumente o período ou troque a loja."
+                    />
+                  ) : (
+                    dados.ranking.map((r, i) => (
+                      <div key={r.nome} className="border-b border-neutral-50 py-2.5 last:border-0">
+                        <div className="flex items-baseline gap-2.5">
+                          <span className="w-4 shrink-0 font-mono text-[11.5px] text-neutral-300">
+                            {i + 1}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-neutral-900">
+                            {r.nome}
+                          </span>
+                          <span className="shrink-0 font-mono text-[13px] font-medium text-neutral-900">
+                            R$ {brl(r.valor)}
+                          </span>
+                        </div>
 
-                  {dados.ranking.map((r, i) => (
-                    <div
-                      key={r.nome}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-neutral-50 px-4 py-2.5 last:border-0 sm:grid sm:grid-cols-[40px_minmax(0,1fr)_120px_110px_100px_90px]"
-                    >
-                      <span className="font-mono text-[12px] text-neutral-400">{i + 1}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-neutral-900 sm:flex-none">
-                        {r.nome}
-                      </span>
-                      <span className="font-mono text-[13px] font-medium text-neutral-900 sm:text-right">
-                        R$ {brl(r.valor)}
-                      </span>
-
-                      {/* A participação é barra e número: a barra compara, o
-                          número confere. */}
-                      <span className="flex items-center gap-2 sm:justify-end">
-                        <span className="hidden h-1.5 w-12 overflow-hidden rounded-full bg-neutral-100 sm:block">
+                        <div className="mt-1.5 flex items-center gap-2.5">
+                          <span className="w-4 shrink-0" />
+                          <span className="h-[7px] min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-50">
+                            <span
+                              className={juntar(
+                                'block h-full rounded-full',
+                                i === 0 ? 'bg-primary-600' : 'bg-primary-300',
+                              )}
+                              style={{
+                                width: `${Math.min(Number(r.participacao), 100).toFixed(1)}%`,
+                              }}
+                            />
+                          </span>
+                          <span className="w-10 shrink-0 text-right font-mono text-[11px] text-neutral-500">
+                            {r.participacao}%
+                          </span>
                           <span
-                            className="block h-full rounded-full bg-primary-600"
-                            style={{
-                              width: `${Math.min(Number(r.participacao), 100).toFixed(1)}%`,
-                            }}
-                          />
-                        </span>
-                        <span className="font-mono text-[12.5px] text-neutral-600">
-                          {r.participacao}%
-                        </span>
-                      </span>
+                            className={juntar(
+                              'w-[74px] shrink-0 text-right text-[11px]',
+                              r.margem === undefined
+                                ? 'text-neutral-300'
+                                : r.margem === null
+                                  ? 'text-neutral-300'
+                                  : Number(r.margem) < 25
+                                    ? 'text-[var(--color-perigo)]'
+                                    : 'text-[var(--color-sucesso)]',
+                            )}
+                          >
+                            {r.margem === undefined
+                              ? `${r.quantidade} un`
+                              : r.margem === null
+                                ? 'sem custo'
+                                : `margem ${r.margem}%`}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
 
-                      <span className="font-mono text-[12.5px] text-neutral-500 sm:text-right">
-                        {r.quantidade}
-                      </span>
-
-                      {r.margem !== undefined ? (
-                        <span
-                          className={juntar(
-                            'font-mono text-[12.5px] font-medium sm:text-right',
-                            r.margem === null
-                              ? 'text-neutral-300'
-                              : Number(r.margem) < 25
-                                ? 'text-[var(--color-perigo)]'
-                                : 'text-[var(--color-sucesso)]',
-                          )}
-                        >
-                          {r.margem === null ? '—' : `${r.margem}%`}
-                        </span>
-                      ) : null}
-                    </div>
-                  ))}
-
-                  <div className="flex h-11 shrink-0 items-center gap-4 border-t border-neutral-100 bg-neutral-25 px-4 text-[12.5px] text-neutral-500">
-                    <span>
-                      {dados.ranking.length} {dados.ranking.length === 1 ? 'linha' : 'linhas'} ·
-                      ordenado por valor
-                    </span>
-                    <div className="flex-1" />
-                    <span className="font-mono font-semibold text-neutral-900">
-                      R$ {brl(dados.total)}
-                    </span>
-                  </div>
-                </>
-              )}
-            </section>
+                <div className="flex shrink-0 items-center justify-between border-t border-neutral-100 bg-neutral-25 px-4 py-2.5">
+                  <span className="text-[12px] text-neutral-500">
+                    {dados.ranking.length === 12
+                      ? `Top 12 por ${escolhida.nome.toLowerCase()}`
+                      : `Total de ${dados.ranking.length} ${dados.ranking.length === 1 ? 'linha' : 'linhas'}`}
+                  </span>
+                  <span className="font-mono text-[13px] font-semibold text-neutral-900">
+                    R$ {brl(dados.total)}
+                  </span>
+                </div>
+              </section>
+            </div>
           </>
         ) : null}
       </main>
@@ -356,31 +427,49 @@ export function RelatorioVendas() {
   );
 }
 
-function Indicador({
+/** Filtro no cabeçalho: rótulo à esquerda, valor escolhido em destaque. */
+function Filtro({
+  rotulo,
+  children,
+}: {
+  readonly rotulo: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <span className="flex h-[35px] items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5">
+      <span className="text-[13px] text-neutral-500">{rotulo}</span>
+      {children}
+    </span>
+  );
+}
+
+function Kpi({
   rotulo,
   valor,
   nota,
-  tom = 'normal',
+  restrito = false,
 }: {
   readonly rotulo: string;
   readonly valor: string;
   readonly nota: string;
-  readonly tom?: 'normal' | 'perigo';
+  readonly restrito?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-100 bg-white px-4 py-3 shadow-sm">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-neutral-500">
-        {rotulo}
-      </p>
-      <p
-        className={juntar(
-          'mt-1 font-mono text-[22px] font-semibold',
-          tom === 'perigo' ? 'text-[var(--color-perigo)]' : 'text-neutral-900',
-        )}
-      >
+    <div className="rounded-lg border border-neutral-100 bg-white px-4 py-3.5 shadow-sm">
+      <div className="flex items-center gap-1.5">
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
+          {rotulo}
+        </p>
+        {restrito ? (
+          <span className="text-neutral-400" title="Exige permissão de custo">
+            <Cadeado />
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1.5 font-display text-[27px] font-bold leading-8 text-neutral-900">
         {valor}
       </p>
-      <p className="mt-0.5 text-[11.5px] text-neutral-500">{nota}</p>
+      <p className="mt-1 text-[12px] text-neutral-500">{nota}</p>
     </div>
   );
 }
@@ -397,20 +486,20 @@ function Grafico({ dados }: { readonly dados: RelatorioVendasDto }) {
   const fracoes = [1, 0.66, 0.33, 0];
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-neutral-100 bg-white p-4 shadow-sm">
+    <div className="shrink-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-[15px] font-semibold text-neutral-900">
           Faturamento por dia
         </h2>
-        <span className="font-mono text-[12px] text-neutral-500">
+        <span className="text-[12.5px] text-neutral-500">
           média diária R$ {brl(dados.mediaDiaria)}
         </span>
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex h-[176px] w-[46px] shrink-0 flex-col justify-between py-[2px] text-right">
+      <div className="mt-4 flex gap-2.5">
+        <div className="flex h-[168px] w-8 shrink-0 flex-col items-end justify-between">
           {fracoes.map((f) => (
-            <span key={f} className="font-mono text-[10px] text-neutral-400">
+            <span key={f} className="font-mono text-[10.5px] leading-none text-neutral-400">
               {maior === 0
                 ? '0'
                 : (teto * f).toLocaleString('pt-BR', {
@@ -421,28 +510,36 @@ function Grafico({ dados }: { readonly dados: RelatorioVendasDto }) {
           ))}
         </div>
 
-        <div className="relative min-w-0 flex-1">
-          <div className="absolute inset-0 flex flex-col justify-between" aria-hidden="true">
-            {fracoes.map((f) => (
-              <div key={f} className="border-t border-neutral-50" />
-            ))}
-          </div>
-
-          <div className="relative flex h-[176px] items-end gap-[3px]">
-            {dados.porDia.map((p, indice) => {
-              const vazio = Number(p.total) === 0;
-              const altura = vazio ? 2 : Math.max((Number(p.total) / teto) * 100, 2);
-              const ultimo = indice === dados.porDia.length - 1;
-
-              return (
+        <div className="min-w-0 flex-1">
+          <div className="relative h-[168px]">
+            <div className="absolute inset-0 flex flex-col justify-between" aria-hidden="true">
+              {fracoes.map((f, i) => (
                 <div
-                  key={p.dia}
-                  /* `h-full` no trilho: o pai usa `items-end`, que desliga o
-                     `stretch`, e sem altura a porcentagem vira `auto`. */
-                  className="group flex h-full flex-1 items-end"
-                  title={`${new Date(`${p.dia}T12:00:00`).toLocaleDateString('pt-BR')} · R$ ${brl(p.total)} · ${String(p.vendas)} ${p.vendas === 1 ? 'venda' : 'vendas'}`}
-                >
-                  <div className="flex h-full w-full flex-col items-center justify-end gap-1">
+                  key={f}
+                  className={juntar(
+                    'border-t',
+                    i === fracoes.length - 1
+                      ? 'border-neutral-200'
+                      : 'border-dashed border-neutral-100',
+                  )}
+                />
+              ))}
+            </div>
+
+            <div className="absolute inset-0 flex items-end gap-2">
+              {dados.porDia.map((p, indice) => {
+                const vazio = Number(p.total) === 0;
+                const altura = vazio ? 2 : Math.max((Number(p.total) / teto) * 100, 2);
+                const ultimo = indice === dados.porDia.length - 1;
+
+                return (
+                  <div
+                    key={p.dia}
+                    /* `h-full` no trilho: o pai usa `items-end`, que desliga o
+                       `stretch`, e sem altura a porcentagem vira `auto`. */
+                    className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+                    title={`${new Date(`${p.dia}T12:00:00`).toLocaleDateString('pt-BR')} · R$ ${brl(p.total)} · ${String(p.vendas)} ${p.vendas === 1 ? 'venda' : 'vendas'}`}
+                  >
                     {ultimo && !vazio ? (
                       <span className="whitespace-nowrap font-mono text-[11px] font-medium text-neutral-900">
                         {brl(p.total)}
@@ -451,70 +548,47 @@ function Grafico({ dados }: { readonly dados: RelatorioVendasDto }) {
                     <div
                       className={juntar(
                         'w-full rounded-t',
-                        vazio
-                          ? 'bg-neutral-100'
-                          : ultimo
-                            ? 'bg-primary-600'
-                            : 'bg-primary-300 group-hover:bg-primary-400',
+                        vazio ? 'bg-neutral-100' : ultimo ? 'bg-primary-600' : 'bg-primary-300',
                       )}
                       style={{ height: `${altura.toFixed(1)}%` }}
                     />
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-1.5 flex gap-2">
+            {dados.porDia.map((p) => (
+              <span
+                key={p.dia}
+                className="flex-1 text-center font-mono text-[10.5px] text-neutral-400"
+              >
+                {p.dia.slice(8)}
+              </span>
+            ))}
           </div>
         </div>
       </div>
-
-      <div className="flex gap-[3px] pl-[54px]">
-        {dados.porDia.map((p) => (
-          <span key={p.dia} className="flex-1 text-center font-mono text-[9.5px] text-neutral-400">
-            {p.dia.slice(8)}
-          </span>
-        ))}
-      </div>
-    </section>
+    </div>
   );
 }
 
-function Distribuicao({
-  titulo,
-  linhas,
-}: {
-  readonly titulo: string;
-  readonly linhas: { nome: string; total: string; participacao: string }[];
-}) {
+function Cadeado() {
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-neutral-100 bg-white shadow-sm">
-      <h2 className="border-b border-neutral-100 px-4 py-2.5 font-display text-[14px] font-semibold text-neutral-900">
-        {titulo}
-      </h2>
-
-      {linhas.length === 0 ? (
-        <p className="px-4 py-3 text-[12.5px] text-neutral-400">Nada no período.</p>
-      ) : (
-        linhas.map((l) => (
-          <div
-            key={l.nome}
-            className="flex items-center gap-2.5 border-b border-neutral-50 px-4 py-2 last:border-0"
-          >
-            <span className="min-w-0 flex-1 truncate text-[12.5px] text-neutral-700">{l.nome}</span>
-            <span className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-100">
-              <span
-                className="block h-full rounded-full bg-primary-600"
-                style={{ width: `${Math.min(Number(l.participacao), 100).toFixed(1)}%` }}
-              />
-            </span>
-            <span className="w-10 shrink-0 text-right font-mono text-[11.5px] text-neutral-500">
-              {l.participacao}%
-            </span>
-            <span className="w-[92px] shrink-0 text-right font-mono text-[12.5px] font-medium text-neutral-900">
-              R$ {brl(l.total)}
-            </span>
-          </div>
-        ))
-      )}
-    </section>
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
   );
 }

@@ -143,81 +143,98 @@ export function RelatorioEstoque() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 sm:p-6">
-        <div>
-          <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
-            Posição de estoque
-          </h1>
-          <p className="mt-0.5 text-[13.5px] text-neutral-500">
-            {dados
-              ? `${dados.variacoes} ${dados.variacoes === 1 ? 'variação' : 'variações'} · ${dados.produtos} ${dados.produtos === 1 ? 'produto' : 'produtos'} · posição em ${new Date(dados.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
-              : 'Carregando…'}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={lojaId}
-            onChange={(e) => {
-              setLojaId(e.target.value);
-              setLocalId('');
-            }}
-            aria-label="Loja"
-            className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
-          >
-            <option value="">Todas as lojas</option>
-            {(lojas.data ?? []).map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.nome}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={localId}
-            onChange={(e) => setLocalId(e.target.value)}
-            aria-label="Local"
-            className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
-          >
-            <option value="">Todos os locais</option>
-            {locais.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.loja} · {o.nome}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={categoriaId}
-            onChange={(e) => setCategoriaId(e.target.value)}
-            aria-label="Categoria"
-            className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12.5px]"
-          >
-            <option value="">Todas as categorias</option>
-            {(apoio.data?.categorias ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-
-          <div className="hidden flex-1 sm:block" />
-
-          {RECORTES.map((r) => (
-            <button
-              key={r.chave}
-              type="button"
-              aria-pressed={recorte === r.chave}
-              onClick={() => setRecorte(r.chave)}
-              className={juntar(
-                'h-8 rounded-full border px-3.5 text-[12.5px] font-medium',
-                recorte === r.chave
-                  ? 'border-primary-600 bg-primary-600 text-white'
-                  : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-25',
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-[22px] font-bold leading-7 text-neutral-900">
+              Posição de estoque
+            </h1>
+            <p className="mt-0.5 text-[13.5px] text-neutral-500">
+              {dados ? (
+                <>
+                  {dados.variacoes} {dados.variacoes === 1 ? 'variação' : 'variações'} ·{' '}
+                  {dados.produtos} {dados.produtos === 1 ? 'produto' : 'produtos'} · posição em{' '}
+                  <strong className="font-semibold text-neutral-900">
+                    {new Date(dados.em).toLocaleString('pt-BR', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                  </strong>
+                </>
+              ) : (
+                'Carregando…'
               )}
-            >
-              {r.nome}
-            </button>
-          ))}
+            </p>
+          </div>
+
+          {/* Os filtros ficam na linha do título, como no desenho: rótulo à
+              esquerda, escolha em destaque. */}
+          <div className="flex flex-wrap gap-2">
+            <Filtro rotulo="Loja">
+              <select
+                value={lojaId}
+                onChange={(e) => {
+                  setLojaId(e.target.value);
+                  setLocalId('');
+                }}
+                aria-label="Loja"
+                className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+              >
+                <option value="">Todas</option>
+                {(lojas.data ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                  </option>
+                ))}
+              </select>
+            </Filtro>
+
+            <Filtro rotulo="Local">
+              <select
+                value={localId}
+                onChange={(e) => setLocalId(e.target.value)}
+                aria-label="Local"
+                className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+              >
+                <option value="">Todos</option>
+                {locais.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.loja} · {o.nome}
+                  </option>
+                ))}
+              </select>
+            </Filtro>
+
+            <Filtro rotulo="Categoria">
+              <select
+                value={categoriaId}
+                onChange={(e) => setCategoriaId(e.target.value)}
+                aria-label="Categoria"
+                className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+              >
+                <option value="">Todas</option>
+                {(apoio.data?.categorias ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+            </Filtro>
+
+            <Filtro rotulo="Recorte">
+              <select
+                value={recorte}
+                onChange={(e) => setRecorte(e.target.value as Recorte)}
+                aria-label="Recorte"
+                className="bg-transparent text-[13px] font-medium text-neutral-900 outline-none"
+              >
+                {RECORTES.map((r) => (
+                  <option key={r.chave} value={r.chave}>
+                    {r.nome}
+                  </option>
+                ))}
+              </select>
+            </Filtro>
+          </div>
         </div>
 
         {consulta.isPending ? <EstadoCarregando titulo="Contando o estoque…" /> : null}
@@ -236,10 +253,10 @@ export function RelatorioEstoque() {
 
         {dados ? (
           <>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <div className="flex shrink-0 flex-col gap-3.5 lg:flex-row">
               {comCusto ? <ValorDoEstoque dados={dados} /> : null}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid flex-1 auto-rows-fr gap-3 sm:grid-cols-2">
                 <Indicador
                   rotulo="Variações em estoque"
                   valor={String(dados.variacoes)}
@@ -290,26 +307,59 @@ export function RelatorioEstoque() {
                       ))
                     )}
                   </div>
-                </div>
-              </div>
 
-              <div className="flex h-11 shrink-0 flex-wrap items-center gap-x-5 gap-y-1 border-t border-neutral-100 bg-neutral-25 px-4 text-[12.5px] text-neutral-500">
-                <span>
-                  Exibindo {dados.itens.length} de {dados.variacoes} · ordenado por valor
-                </span>
-                <div className="flex-1" />
-                <span className="font-mono text-neutral-700">{dados.totalExibido.unidades} un</span>
-                {dados.totalExibido.valor !== undefined ? (
-                  <span className="font-mono font-semibold text-neutral-900">
-                    R$ {brl(dados.totalExibido.valor)}
-                  </span>
-                ) : null}
+                  {/*
+                    O rodapé é a MESMA grade das linhas: o total de unidades cai
+                    sob "Saldo" e o de valor sob "Valor". Alinhado à direita, em
+                    flex, o número ficaria embaixo de coluna nenhuma.
+                  */}
+                  <div
+                    className={juntar(
+                      'hidden shrink-0 items-center gap-3 border-t-2 border-neutral-200 bg-neutral-25 px-4 py-3 sm:grid',
+                      comCusto ? GRADE_COM_CUSTO : GRADE_SEM_CUSTO,
+                    )}
+                  >
+                    <span className="col-span-3 text-[12.5px] font-semibold text-neutral-700">
+                      Exibindo {dados.itens.length} de {dados.variacoes}{' '}
+                      {dados.variacoes === 1 ? 'variação' : 'variações'} · ordenado por valor
+                    </span>
+                    <span className="text-right font-mono text-[12.5px] text-neutral-600">
+                      {dados.totalExibido.unidades}
+                    </span>
+                    <span />
+                    {comCusto ? (
+                      <>
+                        <span />
+                        <span className="text-right font-mono text-[14px] font-semibold text-neutral-900">
+                          R$ {brl(dados.totalExibido.valor ?? 0)}
+                        </span>
+                        <span />
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </section>
           </>
         ) : null}
       </main>
     </>
+  );
+}
+
+/** Filtro no alto: rótulo à esquerda, escolha em destaque. */
+function Filtro({
+  rotulo,
+  children,
+}: {
+  readonly rotulo: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <span className="flex h-[35px] items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5">
+      <span className="text-[13px] text-neutral-500">{rotulo}</span>
+      {children}
+    </span>
   );
 }
 
@@ -321,33 +371,42 @@ export function RelatorioEstoque() {
  */
 function ValorDoEstoque({ dados }: { readonly dados: PosicaoEstoque }) {
   return (
-    <section className="rounded-lg border border-neutral-100 bg-white p-4 shadow-sm">
-      <h2 className="font-display text-[15px] font-semibold text-neutral-900">Valor do estoque</h2>
+    <section className="w-full shrink-0 rounded-lg border border-neutral-100 bg-white p-4 shadow-sm lg:w-[480px]">
+      <h2 className="mb-3 font-display text-[14px] font-semibold text-neutral-900">
+        Valor do estoque
+      </h2>
 
-      <div className="mt-2.5 flex items-baseline justify-between gap-3">
-        <span className="text-[13px] text-neutral-600">Saldos positivos</span>
-        <span className="font-mono text-[15px] text-neutral-900">
+      <div className="flex items-baseline justify-between gap-3 pb-2.5">
+        <span className="inline-flex items-center gap-2 text-[13.5px] text-neutral-700">
+          <span className="size-2.5 rounded-[2px] bg-[var(--color-sucesso)]" />
+          Saldos positivos
+        </span>
+        <span className="font-mono text-[16px] font-medium text-neutral-900">
           R$ {brl(dados.valorPositivos ?? 0)}
         </span>
       </div>
 
-      <div className="mt-1.5 flex items-baseline justify-between gap-3">
-        <span className="text-[13px] text-neutral-600">Efeito dos saldos negativos</span>
-        <span className="font-mono text-[15px] text-[var(--color-perigo)]">
+      <div className="flex items-baseline justify-between gap-3 border-t border-neutral-50 py-2.5">
+        <span className="inline-flex items-center gap-2 text-[13.5px] text-neutral-700">
+          <span className="size-2.5 rounded-[2px] bg-[var(--color-perigo)]" />
+          Efeito dos saldos negativos
+        </span>
+        <span className="font-mono text-[16px] font-medium text-[var(--color-perigo)]">
           − R$ {brl(dados.efeitoNegativos ?? 0)}
         </span>
       </div>
 
-      <div className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-neutral-100 pt-2.5">
-        <span className="text-[14px] font-semibold text-neutral-900">Valor líquido</span>
-        <span className="font-mono text-[22px] font-bold leading-7 text-neutral-900">
+      <div className="flex items-center justify-between gap-3 border-t-2 border-neutral-900 pt-2.5">
+        <span className="font-display text-[15px] font-bold text-neutral-900">Valor líquido</span>
+        <span className="font-display text-[30px] font-bold leading-9 text-neutral-900">
           R$ {brl(dados.valorLiquido ?? 0)}
         </span>
       </div>
 
-      <p className="mt-2 text-[12px] leading-[17px] text-neutral-500">
-        Saldo negativo entra com sinal e reduz o patrimônio. Somar só os positivos daria R${' '}
-        {brl(dados.efeitoNegativos ?? 0)} a mais do que existe.
+      <p className="mt-2.5 text-[12px] leading-[17px] text-neutral-500">
+        Saldo negativo entra com sinal e <strong className="text-neutral-700">reduz</strong> o
+        patrimônio. Somar só os positivos daria R$ {brl(dados.efeitoNegativos ?? 0)} a mais do que
+        existe.
       </p>
     </section>
   );
@@ -368,12 +427,12 @@ function Indicador({
 }) {
   const conteudo = (
     <>
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-neutral-500">
+      <p className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
         {rotulo}
       </p>
       <p
         className={juntar(
-          'mt-1 font-mono text-[22px] font-semibold',
+          'mt-1.5 font-display text-[24px] font-bold leading-7',
           tom === 'perigo'
             ? 'text-[var(--color-perigo)]'
             : tom === 'atencao'
@@ -383,7 +442,7 @@ function Indicador({
       >
         {valor}
       </p>
-      <p className="mt-0.5 text-[11.5px] text-neutral-500">{nota}</p>
+      <p className="mt-1 text-[12px] text-neutral-500">{nota}</p>
     </>
   );
 
@@ -436,7 +495,7 @@ function Cabecalho({ comCusto }: { readonly comCusto: boolean }) {
 }
 
 const GRADE_COM_CUSTO = 'sm:grid-cols-[140px_minmax(0,1fr)_170px_90px_70px_110px_120px_56px]';
-const GRADE_SEM_CUSTO = 'sm:grid-cols-[140px_minmax(0,1fr)_170px_90px_70px]';
+const GRADE_SEM_CUSTO = 'sm:grid-cols-[132px_minmax(0,1fr)_132px_74px_74px]';
 
 function Linha({ item, comCusto }: { readonly item: LinhaPosicao; readonly comCusto: boolean }) {
   const saldo = Number(item.saldo);
