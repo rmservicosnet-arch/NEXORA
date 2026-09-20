@@ -739,6 +739,33 @@ describe.runIf(temBanco)('formas de pagamento', () => {
     }
   });
 
+  /**
+   * O que entrou tem de ser o que foi faturado.
+   *
+   * `venda_pagamento` guarda o entregue e `venda.troco` o devolvido: se o
+   * troco de uma venda nao for gravado, o recebido passa a ser maior que o
+   * faturado e ninguem percebe — a diferenca some entre dois relatórios que
+   * ninguem compara. Ja aconteceu: três vendas fechadas entre o deploy do
+   * schema e o da aplicação somavam R$ 37,50 a mais.
+   */
+  it('o recebido bate com o faturado do mesmo período', async () => {
+    const [formas, vendas] = await Promise.all([
+      http
+        .get('/api/relatorios/formas-pagamento?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+      http
+        .get('/api/relatorios/vendas?dias=30')
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200),
+    ]);
+
+    expect(Number((formas.body as Formas).total)).toBeCloseTo(
+      Number((vendas.body as Vendas).total),
+      2,
+    );
+  });
+
   it('recusa período fora do intervalo e exige sessão', async () => {
     await http
       .get('/api/relatorios/formas-pagamento?dias=999')

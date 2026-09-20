@@ -41,15 +41,24 @@ function passo(texto: string): void {
 // ---------------------------------------------------------------------------
 
 type Lancamento =
-  | { readonly sentido: 'ENTRADA'; readonly tipo: TipoEntrada; readonly quantidade: number; readonly custo: string; readonly quando: string; readonly documento?: string }
-  | { readonly sentido: 'SAIDA'; readonly tipo: TipoSaida; readonly quantidade: number; readonly quando: string; readonly documento?: string };
+  | {
+      readonly sentido: 'ENTRADA';
+      readonly tipo: TipoEntrada;
+      readonly quantidade: number;
+      readonly custo: string;
+      readonly quando: string;
+      readonly documento?: string;
+    }
+  | {
+      readonly sentido: 'SAIDA';
+      readonly tipo: TipoSaida;
+      readonly quantidade: number;
+      readonly quando: string;
+      readonly documento?: string;
+    };
 
 type TipoEntrada = 'ENTRADA_COMPRA' | 'ENTRADA_AJUSTE' | 'ENTRADA_TRANSFERENCIA';
-type TipoSaida =
-  | 'SAIDA_VENDA'
-  | 'SAIDA_AJUSTE'
-  | 'SAIDA_TRANSFERENCIA'
-  | 'SAIDA_AVARIA';
+type TipoSaida = 'SAIDA_VENDA' | 'SAIDA_AJUSTE' | 'SAIDA_TRANSFERENCIA' | 'SAIDA_AVARIA';
 
 async function criarRazao(
   prisma: PrismaClient,
@@ -395,7 +404,12 @@ async function main(): Promise<void> {
       categoria: 'Kimonos',
       marca: 'Shiai',
       variacoes: [
-        { sku: 'KIM-TRC-A2-BR', descricao: 'A2 · Branco', preco: '489.90', barras: '7891000000011' },
+        {
+          sku: 'KIM-TRC-A2-BR',
+          descricao: 'A2 · Branco',
+          preco: '489.90',
+          barras: '7891000000011',
+        },
         { sku: 'KIM-TRC-A3-AZ', descricao: 'A3 · Azul', preco: '529.90', barras: '7891000000028' },
       ],
     },
@@ -414,7 +428,12 @@ async function main(): Promise<void> {
       categoria: 'Faixas',
       marca: 'Dan',
       variacoes: [
-        { sku: 'FXA-CLR-260-AZ', descricao: '260 cm · Azul', preco: '64.90', barras: '7891000000042' },
+        {
+          sku: 'FXA-CLR-260-AZ',
+          descricao: '260 cm · Azul',
+          preco: '64.90',
+          barras: '7891000000042',
+        },
       ],
     },
     {
@@ -432,7 +451,12 @@ async function main(): Promise<void> {
       categoria: 'Equipamentos',
       marca: 'Dojo Pro',
       variacoes: [
-        { sku: 'TAT-EVA-20-AZ', descricao: '20 mm · Azul', preco: '89.90', barras: '7891000000066' },
+        {
+          sku: 'TAT-EVA-20-AZ',
+          descricao: '20 mm · Azul',
+          preco: '89.90',
+          barras: '7891000000066',
+        },
       ],
     },
     {
@@ -501,14 +525,64 @@ async function main(): Promise<void> {
     localId: depositoCentro,
     atorId: adminId,
     lancamentos: [
-      { sentido: 'ENTRADA', tipo: 'ENTRADA_COMPRA', quantidade: 30, custo: '36.00', quando: '2026-09-02T14:05:00Z', documento: 'CP-0201' },
-      { sentido: 'ENTRADA', tipo: 'ENTRADA_COMPRA', quantidade: 20, custo: '42.00', quando: '2026-09-08T09:40:00Z', documento: 'CP-0208' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_AVARIA', quantidade: 3, quando: '2026-09-11T17:30:00Z', documento: 'AJ-0107' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_TRANSFERENCIA', quantidade: 25, quando: '2026-09-13T08:55:00Z', documento: 'TR-0044' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_VENDA', quantidade: 16, quando: '2026-09-15T10:18:00Z', documento: '001251' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_VENDA', quantidade: 4, quando: '2026-09-18T16:40:00Z', documento: '001268' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_VENDA', quantidade: 8, quando: '2026-09-19T11:05:00Z', documento: '001279' },
-      { sentido: 'SAIDA', tipo: 'SAIDA_VENDA', quantidade: 6, quando: '2026-09-19T14:22:00Z', documento: '001284' },
+      {
+        sentido: 'ENTRADA',
+        tipo: 'ENTRADA_COMPRA',
+        quantidade: 30,
+        custo: '36.00',
+        quando: '2026-09-02T14:05:00Z',
+        documento: 'CP-0201',
+      },
+      {
+        sentido: 'ENTRADA',
+        tipo: 'ENTRADA_COMPRA',
+        quantidade: 20,
+        custo: '42.00',
+        quando: '2026-09-08T09:40:00Z',
+        documento: 'CP-0208',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_AVARIA',
+        quantidade: 3,
+        quando: '2026-09-11T17:30:00Z',
+        documento: 'AJ-0107',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_TRANSFERENCIA',
+        quantidade: 25,
+        quando: '2026-09-13T08:55:00Z',
+        documento: 'TR-0044',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_VENDA',
+        quantidade: 16,
+        quando: '2026-09-15T10:18:00Z',
+        documento: '001251',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_VENDA',
+        quantidade: 4,
+        quando: '2026-09-18T16:40:00Z',
+        documento: '001268',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_VENDA',
+        quantidade: 8,
+        quando: '2026-09-19T11:05:00Z',
+        documento: '001279',
+      },
+      {
+        sentido: 'SAIDA',
+        tipo: 'SAIDA_VENDA',
+        quantidade: 6,
+        quando: '2026-09-19T14:22:00Z',
+        documento: '001284',
+      },
     ],
   });
 
@@ -549,7 +623,9 @@ async function main(): Promise<void> {
       ],
     });
   }
-  passo(`Estoque inicial lançado — tatame terminou em ${tatame.saldo.toString()} un a ${tatame.custoMedio.toFixed(2)}`);
+  passo(
+    `Estoque inicial lançado — tatame terminou em ${tatame.saldo.toString()} un a ${tatame.custoMedio.toFixed(2)}`,
+  );
 
   // --- Clientes, acesso ao portal e carteira -------------------------------
 
@@ -608,19 +684,82 @@ async function main(): Promise<void> {
     const LIMITE_CREDITO = dec('5000.00');
 
     const lancamentos = [
-      { tipo: 'DEPOSITO', sentido: 'CREDITO', valor: '2000.00', doc: 'Transferência bancária', quando: '2026-09-02T10:12:00Z', justificativa: null },
-      { tipo: 'VENDA_A_PRAZO', sentido: 'DEBITO', valor: '3480.00', doc: 'Venda #001196', quando: '2026-09-05T15:48:00Z', justificativa: null },
-      { tipo: 'QUITACAO', sentido: 'CREDITO', valor: '1480.00', doc: 'Pix · E31a9f42', quando: '2026-09-09T09:30:00Z', justificativa: null },
-      { tipo: 'VENDA_A_PRAZO', sentido: 'DEBITO', valor: '5240.00', doc: 'Venda #001228', quando: '2026-09-11T16:05:00Z', justificativa: null },
-      { tipo: 'DEVOLUCAO_VENDA', sentido: 'CREDITO', valor: '620.00', doc: 'Devolução #001228', quando: '2026-09-13T11:20:00Z', justificativa: null },
-      { tipo: 'QUITACAO', sentido: 'CREDITO', valor: '2000.00', doc: 'Pix · 7c04bb19', quando: '2026-09-15T14:02:00Z', justificativa: null },
-      { tipo: 'VENDA_A_PRAZO', sentido: 'DEBITO', valor: '2180.00', doc: 'Venda #001268', quando: '2026-09-17T10:44:00Z', justificativa: null },
+      {
+        tipo: 'DEPOSITO',
+        sentido: 'CREDITO',
+        valor: '2000.00',
+        doc: 'Transferência bancária',
+        quando: '2026-09-02T10:12:00Z',
+        justificativa: null,
+      },
+      {
+        tipo: 'VENDA_A_PRAZO',
+        sentido: 'DEBITO',
+        valor: '3480.00',
+        doc: 'Venda #001196',
+        quando: '2026-09-05T15:48:00Z',
+        justificativa: null,
+      },
+      {
+        tipo: 'QUITACAO',
+        sentido: 'CREDITO',
+        valor: '1480.00',
+        doc: 'Pix · E31a9f42',
+        quando: '2026-09-09T09:30:00Z',
+        justificativa: null,
+      },
+      // Este ja passa do limite: saldo vai a −5.240,00 com limite de 5.000,00.
+      {
+        tipo: 'VENDA_A_PRAZO',
+        sentido: 'DEBITO',
+        valor: '5240.00',
+        doc: 'Venda #001228',
+        quando: '2026-09-11T16:05:00Z',
+        justificativa: 'Excedeu o limite — autorizado pelo gestor',
+      },
+      {
+        tipo: 'DEVOLUCAO_VENDA',
+        sentido: 'CREDITO',
+        valor: '620.00',
+        doc: 'Devolução #001228',
+        quando: '2026-09-13T11:20:00Z',
+        justificativa: null,
+      },
+      {
+        tipo: 'QUITACAO',
+        sentido: 'CREDITO',
+        valor: '2000.00',
+        doc: 'Pix · 7c04bb19',
+        quando: '2026-09-15T14:02:00Z',
+        justificativa: null,
+      },
+      {
+        tipo: 'VENDA_A_PRAZO',
+        sentido: 'DEBITO',
+        valor: '2180.00',
+        doc: 'Venda #001268',
+        quando: '2026-09-17T10:44:00Z',
+        justificativa: null,
+      },
       // Ajuste manual: dos tipos que criam dinheiro sem contrapartida.
       // Justificativa é obrigatória — ver docs/WALLET.md §7.
-      { tipo: 'AJUSTE_CREDITO', sentido: 'CREDITO', valor: '180.00', doc: 'Ajuste manual', quando: '2026-09-18T17:25:00Z', justificativa: 'Frete cobrado a mais na venda #001268' },
-      // Este passa do limite: saldo fica em −6.560,00 com limite de 5.000,00.
-      // Permitido com autorização, nunca silencioso.
-      { tipo: 'VENDA_A_PRAZO', sentido: 'DEBITO', valor: '1940.00', doc: 'Venda #001279', quando: '2026-09-19T11:05:00Z', justificativa: 'Excedeu o limite — autorizado pelo gestor' },
+      {
+        tipo: 'AJUSTE_CREDITO',
+        sentido: 'CREDITO',
+        valor: '180.00',
+        doc: 'Ajuste manual',
+        quando: '2026-09-18T17:25:00Z',
+        justificativa: 'Frete cobrado a mais na venda #001268',
+      },
+      // Idem: saldo fica em −6.560,00. Permitido com autorização, nunca silencioso.
+      {
+        tipo: 'VENDA_A_PRAZO',
+        sentido: 'DEBITO',
+        valor: '1940.00',
+        doc: 'Venda #001279',
+        quando: '2026-09-19T11:05:00Z',
+        justificativa: 'Excedeu o limite — autorizado pelo gestor',
+      },
     ] as const;
 
     let saldo = dec(0);
@@ -631,6 +770,21 @@ async function main(): Promise<void> {
 
       // saldo + limite < 0 significa que o débito passou do que foi liberado.
       const excedeu = saldo.plus(LIMITE_CREDITO).lessThan(0);
+
+      /*
+        O seed obedece a mesma regra do serviço.
+
+        Quem excede precisa de justificativa — e quem escreve o seed decide os
+        valores um a um, sem refazer a conta de saldo de cabeça. Já passou: um
+        lançamento no meio da lista excedia o limite e ninguém percebeu, porque
+        o comentário dizia que só o último excedia. Mexer num valor acima
+        empurra o saldo e transforma outro lançamento em excedente.
+      */
+      if (excedeu && !l.justificativa) {
+        throw new Error(
+          `Lançamento de ${l.valor} em ${l.quando} passa do limite sem justificativa.`,
+        );
+      }
 
       await prisma.carteiraMovimento.create({
         data: {

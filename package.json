@@ -34,6 +34,7 @@
     "db:verificar": "dotenv -e .env -- tsx scripts/verificar-banco.ts",
     "db:sync-perfis": "dotenv -e .env -- tsx scripts/sincronizar-perfis.ts",
     "expirar": "dotenv -e .env -- tsx scripts/expirar.ts",
+    "corrigir:troco": "dotenv -e .env -- tsx scripts/corrigir-troco.ts",
     "expirar:ci": "tsx scripts/expirar.ts",
     "db:sync-perfis:ci": "tsx scripts/sincronizar-perfis.ts"
   },

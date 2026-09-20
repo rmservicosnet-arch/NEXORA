@@ -176,6 +176,8 @@ o runtime.
 | Antes e depois despejados como JSON | Quem audita compara chave a chave e a alteração passa batido. Devolva só os campos que mudaram |
 | Enum do Postgres comparado com `text[]` | `p.status = ANY($1::text[])` dá "operador não existe". O cast vai no enum: `p.status::text` |
 | Vetor de parâmetros compartilhado entre consultas | Uma consulta que não usa `$1` recebe o parâmetro e o Postgres recusa a ligação inteira. Cada consulta com os seus |
+| Campo novo gravado pela aplicação depois de o schema subir | As linhas fechadas no meio ficam com o default. `venda.troco` zerado somava R$ 37,50 de dinheiro que voltou ao cliente. Confira o invariante depois de todo deploy em duas partes |
+| Seed que decide valor a valor e confia no comentário | Mexer num lançamento empurra o saldo e transforma OUTRO em excedente. O seed obedece à mesma regra do serviço: excedeu sem justificativa, ele para |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes

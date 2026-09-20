@@ -303,6 +303,18 @@ describe.runIf(temBanco)('limite de credito', () => {
 
     expect(depois.movimentos[0]!.excedeuLimite).toBe(true);
 
+    /*
+      A justificativa vai para o RAZAO, nao so para a conferencia.
+
+      `conferirLimite` a exigia e o chamador a descartava: o movimento ficava
+      marcado como excedido e sem uma linha dizendo por que foi autorizado.
+      Quem revisasse depois via a marca e nenhuma explicacao — o relatorio
+      "Acima do limite" existe justamente para ser lido por quem nao estava la.
+    */
+    expect(depois.movimentos[0]!.justificativa).toBe(
+      'Acordo comercial fora do limite, autorizado pela diretoria',
+    );
+
     // Desfaz, para nao deixar o cenario torto para os testes seguintes.
     await http
       .post(`/api/carteira/${clienteId}/lancamentos/${depois.movimentos[0]!.id}/estornar`)
