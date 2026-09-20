@@ -4,7 +4,13 @@ import {
   type ItemDaTabela,
   type PaginaItensTabela,
 } from '@estoque/contracts';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 
@@ -55,15 +61,30 @@ export function PrecosDaTabela() {
     queryFn: () => pedir<ApoioProduto>('/produtos/apoio'),
   });
 
-  const consulta = useQuery({
+  /**
+   * A lista cresce por página, sem trocar de página.
+   *
+   * O servidor já devolvia `proximoCursor` e a tela o ignorava: com 3.888
+   * variações, quem precisava da 81ª rolava até o fim e não achava caminho
+   * nenhum.
+   *
+   * Páginas numeradas seriam piores AQUI: esta tela guarda preço digitado e
+   * não salvo. Trocar de página desmontaria as linhas com rascunho e o
+   * trabalho sumiria sem aviso. Acrescentando, tudo que foi digitado continua
+   * na tela até o botão Salvar.
+   */
+  const consulta = useInfiniteQuery({
     queryKey: ['tabelas-preco', tabelaId, 'itens', busca, categoriaId, soSemPreco],
-    queryFn: () => {
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
       const p = new URLSearchParams({ limite: '80' });
       if (busca) p.set('busca', busca);
       if (categoriaId) p.set('categoriaId', categoriaId);
       if (soSemPreco) p.set('semPreco', 'true');
+      if (pageParam) p.set('cursor', pageParam);
       return pedir<PaginaItensTabela>(`/tabelas-preco/${tabelaId}/itens?${p.toString()}`);
     },
+    getNextPageParam: (ultima) => ultima.proximoCursor,
     placeholderData: keepPreviousData,
   });
 
@@ -87,7 +108,10 @@ export function PrecosDaTabela() {
     },
   });
 
-  const itens = consulta.data?.itens ?? [];
+  const paginas = consulta.data?.pages ?? [];
+  const itens = paginas.flatMap((p) => p.itens);
+  /* O resumo vem da primeira página: descreve a tabela, não o que foi lido. */
+  const resumo = paginas[0];
 
   /** Só o que mudou de verdade — digitar e apagar de volta não é alteração. */
   const pendentes = itens
@@ -121,7 +145,7 @@ export function PrecosDaTabela() {
     );
     const a = document.createElement('a');
     a.href = url;
-    a.download = `precos-${consulta.data?.tabela.chave.toLowerCase() ?? 'tabela'}.csv`;
+    a.download = `precos-${resumo?.tabela.chave.toLowerCase() ?? 'tabela'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -130,7 +154,7 @@ export function PrecosDaTabela() {
     return <EstadoCarregando titulo="Carregando os preços…" />;
   }
 
-  if (consulta.isError || !consulta.data) {
+  if (consulta.isError || !resumo) {
     return (
       <EstadoErro
         titulo="Não foi possível carregar"
@@ -144,7 +168,7 @@ export function PrecosDaTabela() {
     );
   }
 
-  const { tabela, semPreco, total, margemMedia } = consulta.data;
+  const { tabela, semPreco, margemMedia } = resumo;
   const mostrarCusto = itens.some((i) => i.custoMedio !== undefined);
 
   return (
@@ -190,7 +214,7 @@ export function PrecosDaTabela() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 p-4 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="flex flex-wrap items-center gap-2.5 font-display text-[22px] font-bold leading-7 text-neutral-900">
               {tabela.nome}
@@ -225,21 +249,32 @@ export function PrecosDaTabela() {
           </Botao>
         </div>
 
+        {/*
+          `shrink-0` em tudo que não é a lista.
+
+          Sem isso a página inteira passou a rolar: o menu lateral subia junto
+          e sumia, e quem estava na linha 60 perdia a navegação. Quem rola é a
+          região de dentro; o shell trava a altura na tela.
+        */}
         {erro ? (
-          <Aviso tom="perigo" titulo="Não foi possível concluir">
-            {erro}
-          </Aviso>
+          <div className="shrink-0">
+            <Aviso tom="perigo" titulo="Não foi possível concluir">
+              {erro}
+            </Aviso>
+          </div>
         ) : null}
 
         {gravar.isSuccess && pendentes.length === 0 ? (
-          <Aviso tom="sucesso">
-            {gravar.data.gravados}{' '}
-            {gravar.data.gravados === 1 ? 'preço gravado' : 'preços gravados'}
-            {gravar.data.removidos > 0 ? ` · ${gravar.data.removidos} removidos` : ''}.
-          </Aviso>
+          <div className="shrink-0">
+            <Aviso tom="sucesso">
+              {gravar.data.gravados}{' '}
+              {gravar.data.gravados === 1 ? 'preço gravado' : 'preços gravados'}
+              {gravar.data.removidos > 0 ? ` · ${gravar.data.removidos} removidos` : ''}.
+            </Aviso>
+          </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <input
             type="search"
             value={termo}
@@ -313,11 +348,28 @@ export function PrecosDaTabela() {
             </div>
           )}
 
-          <div className="flex h-11 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-100 bg-neutral-25 px-4 text-[12.5px] text-neutral-500">
+          <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-100 bg-neutral-25 px-4 py-1.5 text-[12.5px] text-neutral-500">
+            {/*
+              O denominador conta o RECORTE, não a tabela inteira. Com
+              `total`, filtrar uma categoria de 12 itens dizia "12 de 3888" e
+              mandava procurar 3.876 linhas que o filtro tinha excluído.
+            */}
             <span>
-              Exibindo {itens.length} de {soSemPreco ? semPreco : total}
-              {consulta.data.proximoCursor ? ' · há mais itens' : ''}
+              Exibindo {itens.length} de {resumo.totalFiltrado}
+              {resumo.totalFiltrado === 1 ? ' item' : ' itens'}
+              {soSemPreco ? ' sem preço' : ''}
             </span>
+
+            {consulta.hasNextPage ? (
+              <Botao
+                variante="secundario"
+                carregando={consulta.isFetchingNextPage}
+                onClick={() => void consulta.fetchNextPage()}
+              >
+                Carregar mais
+              </Botao>
+            ) : null}
+
             <div className="flex-1" />
             {margemMedia !== null ? (
               <span>

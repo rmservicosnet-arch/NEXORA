@@ -238,11 +238,13 @@ export class TabelasService {
         ...(filtro.semPreco ? { precos: { none: { tabelaPrecoId: tabelaId } } } : {}),
       };
 
-      const [total, semPreco, linhas] = await Promise.all([
+      const [total, semPreco, totalFiltrado, linhas] = await Promise.all([
         tx.variacao.count({ where: { status: 'ATIVO' } }),
         tx.variacao.count({
           where: { status: 'ATIVO', precos: { none: { tabelaPrecoId: tabelaId } } },
         }),
+        // O mesmo `recorte` da listagem: o rodape conta o que a lista mostra.
+        tx.variacao.count({ where: recorte }),
         tx.variacao.findMany({
           where: recorte,
           orderBy: [{ produto: { nome: 'asc' } }, { sku: 'asc' }],
@@ -305,6 +307,7 @@ export class TabelasService {
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
         total,
         semPreco,
+        totalFiltrado,
         margemMedia:
           podeVerCusto && comMargem > 0 ? somaMargem.dividedBy(comMargem).toFixed(1) : null,
       };

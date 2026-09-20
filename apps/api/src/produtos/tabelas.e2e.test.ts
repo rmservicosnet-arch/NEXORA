@@ -57,6 +57,22 @@ async function entrar(dados: { email: string; senha: string }): Promise<string> 
   return (resposta.body as { tokenAcesso: string }).tokenAcesso;
 }
 
+interface PaginaItens {
+  itens: { variacaoId: string; sku: string }[];
+  proximoCursor: string | null;
+  total: number;
+  semPreco: number;
+  totalFiltrado: number;
+}
+
+async function itens(tabelaId: string, query = ''): Promise<PaginaItens> {
+  const resposta = await http
+    .get(`/api/tabelas-preco/${tabelaId}/itens${query}`)
+    .set('Authorization', `Bearer ${tokenAdmin}`)
+    .expect(200);
+  return resposta.body as PaginaItens;
+}
+
 async function listar(): Promise<Tabela[]> {
   const resposta = await http
     .get('/api/tabelas-preco')
@@ -248,4 +264,87 @@ describe.runIf(temBanco)('permissões', () => {
       .send({ nome: 'Renomeada indevidamente' })
       .expect(403);
   });
+});
+
+describe.runIf(temBanco)('itens da tabela', () => {
+  /**
+   * O rodape conta o que a LISTA mostra.
+   *
+   * Enquanto o denominador era `total`, filtrar uma categoria de 12 itens
+   * mantinha "Exibindo 12 de 3888" — o numero convidava a procurar 3.876
+   * linhas que o filtro tinha acabado de excluir.
+   */
+  it('o total filtrado acompanha o recorte', async () => {
+    const tabela = (await listar())[0]!;
+
+    const todos = await itens(tabela.id, '?limite=5');
+    const semPreco = await itens(tabela.id, '?limite=5&semPreco=true');
+
+    expect(todos.totalFiltrado).toBe(todos.total);
+    expect(semPreco.totalFiltrado).toBe(semPreco.semPreco);
+    expect(semPreco.totalFiltrado).toBeLessThanOrEqual(todos.totalFiltrado);
+  });
+
+  it('a busca reduz o total filtrado, e nao o total da tabela', async () => {
+    const tabela = (await listar())[0]!;
+
+    const todos = await itens(tabela.id, '?limite=5');
+    const primeiro = todos.itens[0];
+    if (!primeiro) return;
+
+    const buscado = await itens(tabela.id, `?limite=5&busca=${encodeURIComponent(primeiro.sku)}`);
+
+    // O cabecalho fala da tabela inteira; o rodape, do recorte.
+    expect(buscado.total).toBe(todos.total);
+    expect(buscado.totalFiltrado).toBeLessThanOrEqual(todos.totalFiltrado);
+    expect(buscado.totalFiltrado).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * O cursor existia no servidor e a tela o ignorava: com 3.888 variacoes,
+   * quem precisava da 81a rolava ate o fim e nao achava caminho nenhum.
+   */
+  it('o cursor leva para a pagina seguinte, sem repetir linha', async () => {
+    const tabela = (await listar())[0]!;
+
+    const primeira = await itens(tabela.id, '?limite=10');
+    if (primeira.proximoCursor === null) return;
+
+    const segunda = await itens(
+      tabela.id,
+      `?limite=10&cursor=${encodeURIComponent(primeira.proximoCursor)}`,
+    );
+
+    const vistos = new Set(primeira.itens.map((i) => i.variacaoId));
+    for (const i of segunda.itens) expect(vistos.has(i.variacaoId)).toBe(false);
+
+    expect(primeira.totalFiltrado).toBe(segunda.totalFiltrado);
+  });
+
+  /** Seguir o cursor ate o fim chega ao total anunciado, sem sobra nem falta. */
+  it('seguir o cursor ate o fim fecha com o total filtrado', async () => {
+    const tabela = (await listar())[0]!;
+
+    const vistos = new Set<string>();
+    let cursor: string | null = null;
+    let total: number | null = null;
+    let voltas = 0;
+
+    do {
+      const pagina: PaginaItens = await itens(
+        tabela.id,
+        `?limite=200&semPreco=true${cursor ? `&cursor=${cursor}` : ''}`,
+      );
+      // O anunciado nao pode mudar no meio do caminho: seria outra lista.
+      total ??= pagina.totalFiltrado;
+      expect(pagina.totalFiltrado).toBe(total);
+
+      for (const i of pagina.itens) vistos.add(i.variacaoId);
+      cursor = pagina.proximoCursor;
+      voltas += 1;
+    } while (cursor !== null && voltas < 40);
+
+    expect(cursor).toBeNull();
+    expect(vistos.size).toBe(total);
+  }, 60_000);
 });

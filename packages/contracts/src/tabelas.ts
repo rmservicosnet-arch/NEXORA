@@ -93,9 +93,23 @@ export const paginaItensTabelaSchema = z.object({
   tabela: tabelaPrecoSchema,
   itens: z.array(itemDaTabelaSchema),
   proximoCursor: z.string().nullable(),
-  /** Quantas variacoes ativas existem, e quantas estao sem preco aqui. */
+  /**
+   * Quantas variacoes ativas existem, e quantas estao sem preco aqui.
+   *
+   * Descrevem a TABELA inteira: o cabecalho fala dela, nao do recorte.
+   */
   total: z.number().int(),
   semPreco: z.number().int(),
+  /**
+   * Quantas linhas o recorte atual tem — com busca, categoria e "so sem
+   * preco" aplicados.
+   *
+   * Existe separado de `total` porque o rodape conta o que a LISTA mostra.
+   * Enquanto era `total`, filtrar por uma categoria de 12 itens mantinha
+   * "Exibindo 12 de 3888": o numero convidava a procurar 3876 linhas que o
+   * filtro tinha acabado de excluir.
+   */
+  totalFiltrado: z.number().int(),
   /** Media das margens dos itens COM preco. `null` sem acesso ao custo. */
   margemMedia: z.string().nullable(),
 });

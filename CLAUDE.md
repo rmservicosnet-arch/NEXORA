@@ -178,6 +178,9 @@ o runtime.
 | Vetor de parâmetros compartilhado entre consultas | Uma consulta que não usa `$1` recebe o parâmetro e o Postgres recusa a ligação inteira. Cada consulta com os seus |
 | Campo novo gravado pela aplicação depois de o schema subir | As linhas fechadas no meio ficam com o default. `venda.troco` zerado somava R$ 37,50 de dinheiro que voltou ao cliente. Confira o invariante depois de todo deploy em duas partes |
 | Seed que decide valor a valor e confia no comentário | Mexer num lançamento empurra o saldo e transforma OUTRO em excedente. O seed obedece à mesma regra do serviço: excedeu sem justificativa, ele para |
+| Cursor devolvido pelo servidor e ignorado pela tela | `proximoCursor` voltava e nada o usava: com 3.888 variações, quem precisava da 81ª rolava até o fim e não achava caminho |
+| Denominador do rodapé contando fora do recorte | "Exibindo 2 de 3888" com um filtro de 2 itens manda procurar 3.886 linhas que o filtro excluiu. O rodapé conta o que a LISTA mostra |
+| Página numerada em tela com rascunho | Trocar de página desmonta as linhas com preço digitado e o trabalho some sem aviso. Acrescente ao fim; quem grava é o botão |
 | Token do outro domínio numa rota | Dá **401**, não 403: falha na autenticação, não na permissão. É o desenho do ADR-009 |
 
 ## Testes
