@@ -530,8 +530,26 @@ export class EstoqueService {
       const temMais = linhas.length > filtro.limite;
       const pagina = temMais ? linhas.slice(0, filtro.limite) : linhas;
 
+      /**
+       * O nome de quem movimentou.
+       *
+       * `movimento_estoque.ator_id` é uuid sem chave estrangeira — o razão é
+       * append-only e não pode depender de uma linha que alguém apague. Por
+       * isso o nome se resolve aqui, numa consulta só para a página inteira,
+       * e não por join.
+       *
+       * Antes o contrato devolvia o próprio id, e a coluna "Usuário" da tela
+       * mostrava um uuid.
+       */
+      const atorIds = [...new Set(pagina.map((m) => m.atorId).filter((id) => id !== null))];
+      const usuarios = await tx.usuario.findMany({
+        where: { id: { in: atorIds } },
+        select: { id: true, nome: true },
+      });
+      const nomes = new Map(usuarios.map((u) => [u.id, u.nome]));
+
       return {
-        itens: pagina.map((m) => this.paraContrato(m, podeVerCusto)),
+        itens: pagina.map((m) => this.paraContrato(m, podeVerCusto, nomes)),
         proximoCursor: temMais ? (pagina[pagina.length - 1]?.id ?? null) : null,
       };
     });
@@ -610,6 +628,7 @@ export class EstoqueService {
           produto: v.produto.nome,
           imagemPrincipalId: v.produto.imagens[0]?.id ?? null,
           saldoTotal: saldoTotal.toFixed(0),
+          estoqueMinimo: dec(v.estoqueMinimo.toString()).toFixed(0),
           saldosPorLocal,
           casouCodigoBarras: v.codigoBarras === termo,
         };
@@ -924,6 +943,7 @@ export class EstoqueService {
       local: { nome: string; loja: { nome: string } };
     },
     podeVerCusto: boolean,
+    nomes?: ReadonlyMap<string, string>,
   ): Movimento {
     const base: Movimento = {
       id: m.id,
@@ -943,7 +963,9 @@ export class EstoqueService {
       saldoNegativo: m.saldoNegativo,
       justificativa: m.justificativa,
       documentoNumero: m.documentoNumero,
-      ator: m.atorId,
+      // Sem nome resolvido cai no tipo do ator: "Sistema" é melhor que um
+      // uuid, e melhor que vazio — alguém fez, e a tela precisa dizer quem.
+      ator: (m.atorId ? nomes?.get(m.atorId) : null) ?? (m.atorId ? null : 'Sistema'),
     };
 
     if (!podeVerCusto) {

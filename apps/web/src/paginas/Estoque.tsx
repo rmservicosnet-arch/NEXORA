@@ -1,4 +1,10 @@
-import { PERM, type LocalResumo, type Movimento, type PaginaMovimentos } from '@estoque/contracts';
+import {
+  PERM,
+  type LocalResumo,
+  type Movimento,
+  type PaginaMovimentos,
+  type VariacaoParaMovimento,
+} from '@estoque/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -8,6 +14,7 @@ import { Botao } from '../ui/Botao';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 import { juntar } from '../ui/juntar';
 import { PainelMovimento } from './estoque/PainelMovimento';
+import { RazaoDoItem } from './estoque/RazaoDoItem';
 
 const LARGURA_MINIMA = 'min-w-[980px]';
 
@@ -40,6 +47,18 @@ export function Estoque() {
   const [filtro, setFiltro] = useState('todos');
   const [localId, setLocalId] = useState('');
   const [painelAberto, setPainelAberto] = useState(false);
+  /**
+   * Qual item está com o razão aberto.
+   *
+   * A lista global responde "o que aconteceu"; o razão responde "o que
+   * aconteceu com ESTE item", que é a pergunta de quem vai decidir sobre
+   * ele. A proposta desenha a segunda; a primeira é como se chega nela.
+   */
+  const [aberto, setAberto] = useState<{
+    variacaoId: string;
+    sku: string;
+    localId: string;
+  } | null>(null);
 
   const podeMovimentar =
     pode(PERM.estoque.entradaManual) ||
@@ -63,6 +82,17 @@ export function Estoque() {
     placeholderData: keepPreviousData,
   });
 
+  const doItem = useQuery({
+    queryKey: ['estoque', 'variacao', aberto?.sku],
+    queryFn: () =>
+      pedir<VariacaoParaMovimento[]>(
+        `/estoque/variacoes?termo=${encodeURIComponent(aberto?.sku ?? '')}`,
+      ),
+    enabled: aberto !== null,
+  });
+
+  const variacaoAberta = doItem.data?.find((v) => v.id === aberto?.variacaoId) ?? null;
+
   const itens = movimentos.data?.itens ?? [];
 
   // Mesma regra dos produtos: a coluna existe porque o servidor mandou o campo.
@@ -71,6 +101,21 @@ export function Estoque() {
   const colunas = mostrarCusto
     ? 'grid-cols-[132px_150px_minmax(0,1fr)_150px_120px_86px_110px_110px]'
     : 'grid-cols-[132px_150px_minmax(0,1fr)_150px_120px_86px_110px]';
+
+  if (aberto && variacaoAberta) {
+    return (
+      <RazaoDoItem
+        variacao={variacaoAberta}
+        localId={aberto.localId}
+        aoTrocarLocal={(id) => setAberto({ ...aberto, localId: id })}
+        aoAjustar={() => {
+          setAberto(null);
+          setPainelAberto(true);
+        }}
+        aoVoltar={() => setAberto(null)}
+      />
+    );
+  }
 
   return (
     <>
@@ -177,7 +222,15 @@ export function Estoque() {
 
               <div className={juntar('min-h-0 flex-1 overflow-y-auto', LARGURA_MINIMA)}>
                 {itens.map((m) => (
-                  <Linha key={m.id} movimento={m} colunas={colunas} mostrarCusto={mostrarCusto} />
+                  <Linha
+                    key={m.id}
+                    movimento={m}
+                    colunas={colunas}
+                    mostrarCusto={mostrarCusto}
+                    aoAbrir={() =>
+                      setAberto({ variacaoId: m.variacaoId, sku: m.sku, localId: m.localId })
+                    }
+                  />
                 ))}
               </div>
 
@@ -227,10 +280,12 @@ function Linha({
   movimento,
   colunas,
   mostrarCusto,
+  aoAbrir,
 }: {
   readonly movimento: Movimento;
   readonly colunas: string;
   readonly mostrarCusto: boolean;
+  readonly aoAbrir: () => void;
 }) {
   const entrada = movimento.sentido === 'ENTRADA';
   const quantidade = Number(movimento.quantidade);
@@ -239,13 +294,15 @@ function Linha({
   const quando = new Date(movimento.criadoEm);
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={aoAbrir}
       className={juntar(
-        'grid h-[46px] items-center gap-2.5 border-b border-neutral-50 px-4',
+        'grid h-[46px] w-full items-center gap-2.5 border-b border-neutral-50 px-4 text-left hover:bg-neutral-25',
         movimento.saldoNegativo && 'bg-[#fdf5f5]',
         colunas,
       )}
-      title={movimento.justificativa ?? undefined}
+      title={`Abrir o razão de ${movimento.sku}${movimento.justificativa ? ` · ${movimento.justificativa}` : ''}`}
     >
       <span className="font-mono text-[11.5px] text-neutral-500">
         {quando.toLocaleDateString('pt-BR')}{' '}
@@ -305,6 +362,6 @@ function Linha({
           {movimento.custoUnitario ? `R$ ${Number(movimento.custoUnitario).toFixed(2)}` : '—'}
         </span>
       ) : null}
-    </div>
+    </button>
   );
 }

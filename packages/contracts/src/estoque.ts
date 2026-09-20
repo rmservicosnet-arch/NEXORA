@@ -237,6 +237,8 @@ export const variacaoParaMovimentoSchema = z.object({
   produto: z.string(),
   imagemPrincipalId: z.string().nullable(),
   saldoTotal: z.string(),
+  /** Abaixo disto o item precisa de reposicao. Vai no painel do razao. */
+  estoqueMinimo: z.string(),
   saldosPorLocal: z.array(
     z.object({
       localId: z.string(),
