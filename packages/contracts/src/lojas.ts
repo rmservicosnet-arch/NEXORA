@@ -39,3 +39,34 @@ export const lojaPainelSchema = z.object({
   variacoesNegativas: z.number().int(),
 });
 export type LojaPainel = z.infer<typeof lojaPainelSchema>;
+
+/**
+ * Abrir uma loja.
+ *
+ * O local padrao de venda nasce junto, e nao depois: e dele que o PDV baixa o
+ * estoque. Loja sem ele existe no cadastro e nao vende — o erro so apareceria
+ * no balcao, com o cliente esperando.
+ */
+export const novaLojaSchema = z.object({
+  nome: z.string().trim().min(2).max(120),
+  /** Sem ele, sai do nome: "Loja Shopping" vira LOJA_SHOPPING. */
+  codigo: z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^[A-Z][A-Z0-9_]*$/, 'O codigo aceita letras maiusculas, numeros e _')
+    .optional(),
+  /** O nome do primeiro local, que ja nasce como padrao de venda. */
+  localPadrao: z.string().trim().min(2).max(120).default('Balcao'),
+});
+export type NovaLoja = z.infer<typeof novaLojaSchema>;
+
+export const alteracaoLojaSchema = z.object({
+  nome: z.string().trim().min(2).max(120).optional(),
+  /**
+   * Desativar tira a loja do PDV e dos seletores; o estoque dela continua
+   * onde esta. Nao e exclusao — historico de venda aponta para ela.
+   */
+  status: z.enum(['ATIVO', 'INATIVO']).optional(),
+});
+export type AlteracaoLoja = z.infer<typeof alteracaoLojaSchema>;

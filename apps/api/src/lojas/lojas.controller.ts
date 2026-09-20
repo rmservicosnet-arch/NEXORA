@@ -1,11 +1,45 @@
-import { Controller, Get, Inject, Param } from '@nestjs/common';
-import { PERM, type LojaPainel } from '@estoque/contracts';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import {
+  alteracaoLojaSchema,
+  novaLojaSchema,
+  PERM,
+  type AlteracaoLoja,
+  type LojaPainel,
+  type NovaLoja,
+} from '@estoque/contracts';
 import { dec } from '@estoque/core';
-import { comEscopoAtual, type PrismaClient } from '@estoque/db';
+import { comEscopoAtual, exigirContexto, type PrismaClient } from '@estoque/db';
 
 import { PrincipalAtual, EscopoLoja, Permissoes } from '../comum/decoradores';
+import { ZodPipe } from '../comum/zod.pipe';
 import type { Principal } from '../auth/dominios';
 import { PRISMA } from '../infra/prisma/prisma.module';
+
+/**
+ * Deriva o codigo a partir do nome.
+ *
+ * "Loja Shopping" vira LOJA_SHOPPING. Acentos caem: o codigo e identificador
+ * e vai aparecer em log, em `where` e em conversa de suporte.
+ */
+function codigoDe(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 30);
+}
 
 interface LojaResumo {
   readonly id: string;
@@ -45,6 +79,101 @@ export class LojasController {
         codigo: l.codigo,
         locais: l._count.locais,
       }));
+  }
+
+  /**
+   * Abre uma loja, com o local padrao de venda junto.
+   *
+   * O local nasce na mesma transacao de proposito: sem ele o PDV nao sabe de
+   * onde baixar o estoque, e a loja ficaria cadastrada e sem vender. Criar um
+   * e "depois lembrar de criar o local" e exatamente o passo que se esquece.
+   *
+   * Quem abre fica vinculado a ela. Sem isso a loja nasce invisivel para o
+   * proprio autor — a lista mostra apenas as lojas as quais se tem vinculo, e
+   * o efeito seria um botao que aparentemente nao faz nada.
+   */
+  @Post()
+  @Permissoes(PERM.loja.criar)
+  async criar(
+    @Body(new ZodPipe(novaLojaSchema)) dados: NovaLoja,
+    @PrincipalAtual() principal: Principal,
+  ): Promise<{ id: string }> {
+    const codigo = dados.codigo ?? codigoDe(dados.nome);
+
+    if (codigo.length < 2) {
+      throw new ConflictException({
+        codigo: 'CODIGO_INVALIDO',
+        mensagem: 'O nome nao produz um codigo valido. Informe o codigo.',
+      });
+    }
+
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const repetido = await tx.loja.findFirst({ where: { codigo }, select: { nome: true } });
+      if (repetido) {
+        throw new ConflictException({
+          codigo: 'CODIGO_JA_EXISTE',
+          mensagem: `O codigo ${codigo} ja e da loja ${repetido.nome}.`,
+        });
+      }
+
+      const contexto = exigirContexto();
+
+      const loja = await tx.loja.create({
+        data: { tenantId: contexto.tenantId, nome: dados.nome, codigo },
+        select: { id: true },
+      });
+
+      await tx.localEstoque.create({
+        data: {
+          tenantId: contexto.tenantId,
+          lojaId: loja.id,
+          nome: dados.localPadrao,
+          codigo: codigoDe(dados.localPadrao).slice(0, 30),
+          padraoVenda: true,
+        },
+      });
+
+      await tx.usuarioLojaAcesso.create({
+        data: { tenantId: contexto.tenantId, lojaId: loja.id, usuarioId: principal.id },
+      });
+
+      return { id: loja.id };
+    });
+  }
+
+  /**
+   * Renomear ou desativar.
+   *
+   * Desativar nao apaga: venda, pedido e movimento antigos continuam
+   * apontando para esta loja. Ela some do PDV e dos seletores, e o estoque
+   * dela continua onde esta — inclusive para ser transferido.
+   */
+  @Patch(':lojaId')
+  @Permissoes(PERM.loja.editar)
+  async alterar(
+    @Param('lojaId') lojaId: string,
+    @Body(new ZodPipe(alteracaoLojaSchema)) dados: AlteracaoLoja,
+  ): Promise<{ id: string }> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const loja = await tx.loja.findFirst({ where: { id: lojaId }, select: { id: true } });
+
+      if (!loja) {
+        throw new NotFoundException({
+          codigo: 'LOJA_NAO_ENCONTRADA',
+          mensagem: 'Loja nao encontrada.',
+        });
+      }
+
+      await tx.loja.update({
+        where: { id: lojaId },
+        data: {
+          ...(dados.nome ? { nome: dados.nome } : {}),
+          ...(dados.status ? { status: dados.status } : {}),
+        },
+      });
+
+      return { id: lojaId };
+    });
   }
 
   /**

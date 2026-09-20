@@ -27,6 +27,10 @@ export const PERMISSOES: readonly DefinicaoPermissao[] = [
   { chave: 'preco.editar', grupo: 'preco', descricao: 'Alterar preços' },
   { chave: 'preco.aplicar_desconto', grupo: 'preco', descricao: 'Conceder desconto na venda' },
 
+  // --- Lojas ---------------------------------------------------------------
+  { chave: 'loja.criar', grupo: 'loja', descricao: 'Cadastrar lojas e locais de estoque' },
+  { chave: 'loja.editar', grupo: 'loja', descricao: 'Alterar lojas e locais de estoque' },
+
   // --- Estoque -------------------------------------------------------------
   { chave: 'estoque.visualizar', grupo: 'estoque', descricao: 'Ver saldos e movimentações' },
   { chave: 'estoque.entrada_manual', grupo: 'estoque', descricao: 'Lançar entrada manual' },
@@ -77,11 +81,19 @@ export const PERMISSOES: readonly DefinicaoPermissao[] = [
     descricao: 'Ajuste manual — cria dinheiro, exige justificativa',
   },
   { chave: 'carteira.definir_limite', grupo: 'carteira', descricao: 'Definir limite de crédito' },
-  { chave: 'carteira.exceder_limite', grupo: 'carteira', descricao: 'Autorizar débito acima do limite' },
+  {
+    chave: 'carteira.exceder_limite',
+    grupo: 'carteira',
+    descricao: 'Autorizar débito acima do limite',
+  },
   { chave: 'carteira.estornar', grupo: 'carteira', descricao: 'Estornar movimento' },
 
   // --- Financeiro, caixa e comissão ---------------------------------------
-  { chave: 'financeiro.visualizar', grupo: 'financeiro', descricao: 'Ver contas a pagar e receber' },
+  {
+    chave: 'financeiro.visualizar',
+    grupo: 'financeiro',
+    descricao: 'Ver contas a pagar e receber',
+  },
   { chave: 'financeiro.baixar', grupo: 'financeiro', descricao: 'Baixar título' },
   { chave: 'financeiro.estornar', grupo: 'financeiro', descricao: 'Estornar baixa' },
   { chave: 'caixa.abrir', grupo: 'caixa', descricao: 'Abrir caixa' },
@@ -178,6 +190,9 @@ export const PERFIS: readonly DefinicaoPerfil[] = [
       (c) =>
         c !== 'portal.acessar' &&
         !c.startsWith('usuario.') &&
+        // Abrir loja é decisão da empresa, não da operação: muda a estrutura
+        // que todo o resto pendura — locais, caixa, vínculo de equipe.
+        !c.startsWith('loja.') &&
         c !== 'integracao.configurar' &&
         c !== 'configuracao.editar',
     ),
@@ -287,7 +302,12 @@ export const PERFIS: readonly DefinicaoPerfil[] = [
     chave: 'CONSULTA',
     nome: 'Consulta',
     descricao: 'Leitura do essencial, sem custo',
-    permissoes: ['produto.visualizar', 'preco.visualizar', 'estoque.visualizar', 'relatorio.visualizar'],
+    permissoes: [
+      'produto.visualizar',
+      'preco.visualizar',
+      'estoque.visualizar',
+      'relatorio.visualizar',
+    ],
   },
   {
     chave: 'CLIENTE_PORTAL',

@@ -1,8 +1,13 @@
-import type { LojaPainel } from '@estoque/contracts';
-import { useQuery } from '@tanstack/react-query';
+import { PERM, type LojaPainel } from '@estoque/contracts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { ErroRequisicao, pedir } from '../api/cliente';
+import { useSessao } from '../auth/sessao';
+import { Aviso } from '../ui/Aviso';
+import { Botao } from '../ui/Botao';
+import { Campo } from '../ui/Campo';
 import { juntar } from '../ui/juntar';
 import { EstadoCarregando, EstadoErro, EstadoVazio } from '../ui/Estados';
 
@@ -17,18 +22,51 @@ function brl(v: string | number): string {
  * mostra só as lojas às quais o seu usuário está vinculado.
  */
 export function Lojas() {
+  const { pode } = useSessao();
+  const fila = useQueryClient();
+
+  const [criando, setCriando] = useState(false);
+  const [nome, setNome] = useState('');
+  const [localPadrao, setLocalPadrao] = useState('Balcão');
+  const [erro, setErro] = useState<string | null>(null);
+
   const consulta = useQuery({
     queryKey: ['lojas', 'painel'],
     queryFn: () => pedir<LojaPainel[]>('/lojas/painel'),
   });
 
+  const criar = useMutation({
+    mutationFn: () =>
+      pedir<{ id: string }>('/lojas', {
+        method: 'POST',
+        body: { nome: nome.trim(), localPadrao: localPadrao.trim() || 'Balcão' },
+      }),
+    onSuccess: async () => {
+      setCriando(false);
+      setNome('');
+      setLocalPadrao('Balcão');
+      setErro(null);
+      await fila.invalidateQueries({ queryKey: ['lojas'] });
+    },
+    onError: (e) => {
+      setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível abrir a loja.');
+    },
+  });
+
   const lojas = consulta.data ?? [];
+  const podeCriar = pode(PERM.loja.criar);
 
   return (
     <>
       <header className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-3 border-b border-neutral-100 bg-white px-4 py-2 sm:px-6">
         <span className="text-[13.5px] font-medium text-neutral-900">Lojas</span>
         <div className="flex-1" />
+        {podeCriar && !criando ? (
+          <Botao variante="primario" onClick={() => setCriando(true)}>
+            <Mais />
+            Nova loja
+          </Botao>
+        ) : null}
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 sm:p-6">
@@ -39,6 +77,56 @@ export function Lojas() {
             tem vínculo · permissão diz o que você pode fazer, vínculo diz onde
           </p>
         </div>
+
+        {erro ? (
+          <Aviso tom="perigo" titulo="Não foi possível abrir a loja">
+            {erro}
+          </Aviso>
+        ) : null}
+
+        {criando ? (
+          <section className="flex flex-col gap-3 rounded-md border border-neutral-100 bg-white p-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo
+                rotulo="Nome da loja"
+                value={nome}
+                autoFocus
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Loja Shopping"
+                ajuda="O código sai do nome: Loja Shopping vira LOJA_SHOPPING."
+              />
+              <Campo
+                rotulo="Local padrão de venda"
+                value={localPadrao}
+                onChange={(e) => setLocalPadrao(e.target.value)}
+                placeholder="Balcão"
+                ajuda="Nasce junto com a loja: é dele que o PDV baixa o estoque."
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Botao
+                variante="primario"
+                carregando={criar.isPending}
+                disabled={nome.trim().length < 2}
+                onClick={() => {
+                  setErro(null);
+                  criar.mutate();
+                }}
+              >
+                Abrir loja
+              </Botao>
+              <Botao variante="secundario" onClick={() => setCriando(false)}>
+                Cancelar
+              </Botao>
+            </div>
+
+            <p className="text-[12px] text-neutral-500">
+              Abrir a loja não vincula você a ela: vínculo é outra decisão, e é o que diz quem opera
+              onde.
+            </p>
+          </section>
+        ) : null}
 
         {consulta.isPending ? <EstadoCarregando titulo="Carregando lojas…" /> : null}
 
@@ -203,6 +291,24 @@ function CartaoLoja({ loja }: { readonly loja: LojaPainel }) {
         </Link>
       </div>
     </section>
+  );
+}
+
+function Mais() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.3"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
   );
 }
 

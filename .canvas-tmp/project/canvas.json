@@ -1,0 +1,361 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "AppCliente.dc.html": {
+      "h": 844,
+      "title": "App cliente — Catálogo e pedido",
+      "w": 390,
+      "x": 1520,
+      "y": 3960
+    },
+    "AppClienteAceite.dc.html": {
+      "h": 844,
+      "title": "App cliente — Aceitar alteração",
+      "w": 390,
+      "x": 1990,
+      "y": 3960
+    },
+    "AppClienteCarteira.dc.html": {
+      "h": 844,
+      "title": "App cliente — Minha carteira",
+      "w": 390,
+      "x": 1520,
+      "y": 6600
+    },
+    "AppEquipeConfirmar.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "App equipe — Ajustar e confirmar",
+      "w": 390,
+      "x": 2930,
+      "y": 3960
+    },
+    "AppEquipePedidos.dc.html": {
+      "h": 844,
+      "title": "App equipe — Fila e notificação",
+      "w": 390,
+      "x": 2460,
+      "y": 3960
+    },
+    "Carteira.dc.html": {
+      "h": 900,
+      "title": "Carteira — Extrato do cliente",
+      "w": 1440,
+      "x": 0,
+      "y": 6600
+    },
+    "Catalogo.dc.html": {
+      "h": 900,
+      "title": "Catálogo — Publicação",
+      "w": 1440,
+      "x": 3040,
+      "y": 1320
+    },
+    "Configuracoes.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Configurações — Modo de checkout",
+      "w": 1440,
+      "x": 3040,
+      "y": 2640
+    },
+    "Dashboard.dc.html": {
+      "h": 900,
+      "title": "Dashboard — Visão geral",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Estoque.dc.html": {
+      "h": 900,
+      "title": "Estoque — Razão de movimentações",
+      "w": 1440,
+      "x": 0,
+      "y": 3960
+    },
+    "Login.dc.html": {
+      "h": 900,
+      "title": "Login",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "PDV — Ponto de venda (inalterado)",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "PdvMobile.dc.html": {
+      "h": 844,
+      "title": "App equipe — Leitura de código",
+      "w": 390,
+      "x": 3400,
+      "y": 3960
+    },
+    "PedidoDetalhe.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Pedido — Confirmação parcial",
+      "w": 1440,
+      "x": 1520,
+      "y": 2640
+    },
+    "PedidosFila.dc.html": {
+      "h": 900,
+      "title": "Pedidos — Fila de confirmação",
+      "w": 1440,
+      "x": 0,
+      "y": 2640
+    },
+    "ProdutoEditar.dc.html": {
+      "h": 900,
+      "title": "Produto — Fotos",
+      "w": 1440,
+      "x": 1520,
+      "y": 1320
+    },
+    "Produtos.dc.html": {
+      "h": 900,
+      "title": "Produtos — Listagem",
+      "w": 1440,
+      "x": 0,
+      "y": 1320
+    },
+    "RelatorioEstoque.dc.html": {
+      "h": 900,
+      "title": "Relatório — Posição de estoque",
+      "w": 1440,
+      "x": 1520,
+      "y": 5280
+    },
+    "RelatorioVendas.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Relatório — Vendas e rankings",
+      "w": 1440,
+      "x": 3040,
+      "y": 5280
+    },
+    "RelatoriosHub.dc.html": {
+      "h": 900,
+      "title": "Relatórios — Índice dos 36",
+      "w": 1440,
+      "x": 0,
+      "y": 5280
+    },
+    "TabelasPreco.dc.html": {
+      "h": 900,
+      "title": "Tabelas de preço — Lista",
+      "w": 1440,
+      "x": 0,
+      "y": 7920
+    },
+    "TabelaPrecoItens.dc.html": {
+      "h": 900,
+      "title": "Tabela de preço — Preencher preços",
+      "w": 1440,
+      "x": 1520,
+      "y": 7920
+    },
+    "Clientes.dc.html": {
+      "h": 900,
+      "title": "Clientes — Cadastro",
+      "w": 1440,
+      "x": 3040,
+      "y": 7920
+    },
+    "Lojas.dc.html": {
+      "h": 900,
+      "title": "Lojas e locais de estoque",
+      "w": 1440,
+      "x": 3040,
+      "y": 9240
+    },
+    "ClientesMobile.dc.html": {
+      "h": 844,
+      "title": "Clientes — celular",
+      "w": 390,
+      "x": 6080,
+      "y": 7920
+    },
+    "TabelaPrecoMobile.dc.html": {
+      "h": 844,
+      "title": "Tabela de preço — celular",
+      "w": 390,
+      "x": 6550,
+      "y": 7920
+    },
+    "LojasMobile.dc.html": {
+      "h": 844,
+      "title": "Lojas — celular",
+      "w": 390,
+      "x": 7020,
+      "y": 7920
+    },
+    "ClienteDetalhe.dc.html": {
+      "h": 900,
+      "title": "Cliente — Cadastro completo",
+      "w": 1440,
+      "x": 4560,
+      "y": 9240
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-19T15:05:27.220Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "n1": {
+      "color": "blue",
+      "text": "O PDV não muda: é a venda interna de balcão, com baixa de estoque, financeiro e comissão no ato. Clique nos produtos e troque a tabela de preços para ver o desconto e o total recalcularem. Os valores saem de centavos inteiros — nunca float.",
+      "w": 380,
+      "x": 4560,
+      "y": 0
+    },
+    "n2": {
+      "color": "orange",
+      "text": "O razão de estoque mostra a política de custo médio por escrito: a entrada de 08/09 recalcula a média para R$ 38,40, e a de 02/09 redefine o custo porque o saldo anterior era zero. As duas saídas em vermelho levam o saldo a −12 sem alterar o custo médio.",
+      "w": 380,
+      "x": 4560,
+      "y": 3960
+    },
+    "n3": {
+      "color": "teal",
+      "text": "As fotos ficam em armazenamento de objetos, nunca no banco. Cada upload gera thumb 96, card 400 e zoom 1200 em WebP, de forma assíncrona — por isso existe o estado processando. Variação sem foto própria herda a capa, e produto sem foto nenhuma não pode ser publicado no catálogo.",
+      "w": 380,
+      "x": 4560,
+      "y": 1320
+    },
+    "n4": {
+      "color": "purple",
+      "text": "A equipe confere, e também INCLUI e REMOVE itens depois de falar com o cliente. Experimente: inclua uma sugestão no rodapé da tabela, remova um item na lixeira, ajuste quantidades. Se o total passar do que o cliente enviou, o botão muda para 'Enviar para aceite' — cobrar acima do enviado exige o aceite dele. Reserva só na confirmação; baixa só no faturamento.",
+      "w": 380,
+      "x": 4560,
+      "y": 2640
+    },
+    "n5": {
+      "color": "green",
+      "text": "Dois aplicativos nativos, um só código. A equipe ajusta e confirma pelo celular — é onde o trabalho acontece. O cliente vê o que mudou, quem mudou e por quê, e aceita com um toque quando o valor sobe. Disponibilidade aparece como disponível ou indisponível, nunca a quantidade. O push não carrega cliente nem valor.",
+      "w": 380,
+      "x": 3870,
+      "y": 3960
+    },
+    "n6": {
+      "color": "blue",
+      "text": "No ranking de vendas, troque a dimensão: vendedor, produto, cliente, tabela de preço, categoria. A margem aparece porque a venda congela o custo do item na saída — se usasse o custo de hoje, a margem de março mudaria toda vez que chegasse uma compra em outubro. Note que Revendedor tem a menor margem, 29,6%.",
+      "w": 380,
+      "x": 4560,
+      "y": 5280
+    },
+    "n7": {
+      "color": "red",
+      "text": "Saldo POSITIVO = crédito do cliente. NEGATIVO = ele deve à loja. A convenção não se inverte em nenhuma camada. O saldo é derivado de um razão imutável, com saldo antes e depois em cada linha — a mesma estrutura do estoque. Este cliente está R$ 1.560,00 acima do limite: permitido com autorização, nunca silencioso.",
+      "w": 380,
+      "x": 4560,
+      "y": 6600
+    },
+    "t1": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Fundação — acesso, visão geral e PDV interno",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Produtos e catálogo — cadastro, fotos e publicação",
+      "w": 240,
+      "x": 0,
+      "y": 1020
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Pedidos com confirmação — fila, conferência e configuração",
+      "w": 240,
+      "x": 0,
+      "y": 2340
+    },
+    "t4": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Estoque e aplicativos nativos — razão, cliente e equipe",
+      "w": 240,
+      "x": 0,
+      "y": 3660
+    },
+    "t5": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Relatórios — 36 no catálogo, dois construídos",
+      "w": 240,
+      "x": 0,
+      "y": 4980
+    },
+    "t6": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Carteira do revendedor — extrato da equipe e do cliente",
+      "w": 240,
+      "x": 0,
+      "y": 6300
+    },
+    "t7": {
+      "kind": "title1",
+      "maxW": 6000,
+      "text": "Cadastros — tabela de preço, clientes e lojas",
+      "w": 240,
+      "x": 0,
+      "y": 7620
+    },
+    "n8": {
+      "color": "orange",
+      "text": "Três telas que existem no sistema e ainda não tinham desenho. A tabela de preço agora ABRE: clicar nela leva à lista de produtos com o preço da tabela ao lado do custo e do preço padrão, com a margem calculada a cada linha e o filtro \"só os sem preço\" — que é a fila de trabalho real, porque item sem preço some do catálogo daquele cliente. Em Clientes, o aviso de cadastro sem tabela vem em faixa, não em nota de rodapé: sem tabela o cliente entra no portal e vê uma loja vazia. Em Lojas, o local padrão de venda aparece marcado — é dele que o PDV baixa o estoque.",
+      "w": 380,
+      "x": 7560,
+      "y": 7920
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Login.dc.html",
+    "Dashboard.dc.html",
+    "Produtos.dc.html",
+    "ProdutoEditar.dc.html",
+    "Catalogo.dc.html",
+    "PedidosFila.dc.html",
+    "PedidoDetalhe.dc.html",
+    "Configuracoes.dc.html",
+    "Estoque.dc.html",
+    "AppCliente.dc.html",
+    "AppEquipePedidos.dc.html",
+    "AppClienteAceite.dc.html",
+    "AppEquipeConfirmar.dc.html",
+    "PdvMobile.dc.html",
+    "RelatoriosHub.dc.html",
+    "RelatorioEstoque.dc.html",
+    "RelatorioVendas.dc.html",
+    "Carteira.dc.html",
+    "AppClienteCarteira.dc.html",
+    "TabelasPreco.dc.html",
+    "TabelaPrecoItens.dc.html",
+    "Clientes.dc.html",
+    "Lojas.dc.html",
+    "ClientesMobile.dc.html",
+    "TabelaPrecoMobile.dc.html",
+    "LojasMobile.dc.html",
+    "ClienteDetalhe.dc.html"
+  ],
+  "pages": [],
+  "title": "Estoque SaaS — Telas"
+}

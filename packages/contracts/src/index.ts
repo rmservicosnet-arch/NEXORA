@@ -94,12 +94,16 @@ export {
 } from './visao-geral.js';
 
 export {
+  alteracaoLojaSchema,
   localDaLojaSchema,
   lojaPainelSchema,
   lojaResumoSchema,
+  novaLojaSchema,
+  type AlteracaoLoja,
   type LocalDaLoja,
   type LojaPainel,
   type LojaResumo,
+  type NovaLoja,
 } from './lojas.js';
 
 export {

@@ -26,6 +26,10 @@ export const PERM = {
     editar: 'preco.editar',
     aplicarDesconto: 'preco.aplicar_desconto',
   },
+  loja: {
+    criar: 'loja.criar',
+    editar: 'loja.editar',
+  },
   estoque: {
     visualizar: 'estoque.visualizar',
     entradaManual: 'estoque.entrada_manual',
