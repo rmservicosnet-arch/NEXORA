@@ -43,12 +43,34 @@ Uma extension intercepta toda operação e injeta `tenant_id` em `where` e em
 `data`, a partir do contexto da requisição (AsyncLocalStorage).
 
 Consultas que precisam cruzar tenants existem — são poucas e todas
-administrativas (métricas da plataforma, suporte). Elas usam um cliente
-distinto e explícito, `prismaUnscoped`, cujo uso:
+administrativas (métricas da plataforma, suporte).
 
-- exige perfil `PLATFORM_ADMIN`;
-- é registrado em `audit_log` sempre;
-- é proibido por regra de lint fora de `apps/api/src/platform/`.
+> **Correção, ADR-011.** Este documento prescrevia um cliente Prisma distinto,
+> `prismaUnscoped`. Ele nunca foi construído, e não podia ser: `criarPrisma`
+> **recusa** papel com `BYPASSRLS` e derruba a inicialização, e conectar a
+> aplicação com `DIRECT_URL` está entre as regras que não se negociam. A regra
+> de lint existia e guardava um símbolo fantasma, num diretório que não
+> existia.
+
+O que cruza empresas são **funções `SECURITY DEFINER`** — o mesmo mecanismo de
+`disponivel_no_local`, com o sinal invertido: lá o `tenant_id` é filtrado à
+mão porque cruzar seria o vazamento; aqui cruzar é o propósito, e a proteção
+muda de lugar:
+
+- cada função devolve um recorte **fixo e administrativo** — nome, contagem,
+  situação. Nenhuma devolve dado de negócio, então não dá para enumerar o que
+  uma empresa vende;
+- `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE` só para o papel da aplicação;
+- quem pode chamá-las é decidido pelo **domínio do token**: um token de
+  funcionário numa rota de plataforma dá **401**, porque o segredo de
+  assinatura é outro;
+- toda ação é registrada no `audit_log` **da empresa afetada** — não num
+  diário da plataforma. Trilha que só o visitante lê não é trilha;
+- uma chamada fora de `apps/api/src/plataforma/` é erro de lint.
+
+**Criar uma empresa não usa nenhuma delas.** Abrindo o escopo já com o id da
+empresa nova, o `WITH CHECK (id = app.tenant_id)` da política é satisfeito e a
+inserção roda com `estoque_app`, o papel sem privilégio.
 
 ### Camada 3 — Row-Level Security
 
@@ -95,6 +117,12 @@ Plataforma
      └─ Loja
          └─ Local de estoque
 ```
+
+O nível de cima existe desde sempre neste desenho e passou a existir em código
+com o ADR-011: `plataforma_admin` é o **terceiro principal**, com tabela, rota
+de login e segredo de assinatura próprios — e é o único sem empresa. Não é uma
+bandeira no `usuario`: um funcionário marcado continuaria preso a um tenant, e
+quem criaria a primeira empresa?
 
 O token carrega o tenant. Loja e local são verificados por requisição contra
 os vínculos do usuário (`user_store_access`). `TenantGuard` resolve o tenant;

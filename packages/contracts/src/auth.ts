@@ -52,6 +52,15 @@ export const usuarioSessaoSchema = z.object({
   empresa: z.string().optional(),
   permissoes: z.array(z.string()),
   lojaIds: z.array(z.string()),
+  /**
+   * Sessão de SUPORTE da plataforma, aberta em nome desta pessoa.
+   *
+   * Quando vem preenchido, quem está usando o sistema não é o dono da conta:
+   * é alguém da plataforma, com prazo e com motivo registrado na auditoria
+   * desta empresa. A tela diz isso em voz alta — acesso de fora que ninguém
+   * vê na tela é exatamente o que esta marca impede.
+   */
+  suporteDe: z.string().optional(),
 });
 export type UsuarioSessao = z.infer<typeof usuarioSessaoSchema>;
 

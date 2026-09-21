@@ -12,7 +12,15 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-export type PrincipalTipo = 'FUNCIONARIO' | 'CLIENTE' | 'SISTEMA';
+/**
+ * Quem age.
+ *
+ * `SISTEMA` e job; `PLATAFORMA` e o administrador da plataforma agindo
+ * DENTRO de uma empresa. Ele tambem abre escopo de tenant — a diferenca e
+ * que o tenant nao vem do token dele, e sim da empresa que ele escolheu, e
+ * por isso cada acao vira linha no `audit_log` DELA.
+ */
+export type PrincipalTipo = 'FUNCIONARIO' | 'CLIENTE' | 'SISTEMA' | 'PLATAFORMA';
 
 export interface Contexto {
   /** Empresa. Vem da claim do token, sempre. */

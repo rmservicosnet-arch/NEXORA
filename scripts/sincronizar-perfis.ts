@@ -23,7 +23,7 @@
 import { criarPrisma } from '../packages/db/src/client';
 import { comEscopo } from '../packages/db/src/escopo';
 import { contextoDeSistema } from '../packages/db/src/contexto';
-import { PERMISSOES, PERFIS } from '../packages/db/prisma/permissoes';
+import { PERMISSOES, PERFIS } from '../packages/db/src/permissoes';
 
 async function main(): Promise<void> {
   const url = process.env['DIRECT_URL'];

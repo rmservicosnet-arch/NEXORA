@@ -254,6 +254,42 @@ descobrir o estrago em runtime.
 **Consequência:** a migração para NestJS 12 e TypeScript 7 acontece junta,
 quando o `typescript-eslint` acompanhar. São a mesma decisão, não duas.
 
+### ADR-011 — A plataforma é o terceiro domínio de autenticação
+
+**Contexto:** `docs/TENANCY.md` §3 sempre desenhou a hierarquia
+`Plataforma → Tenant → Loja → Local`, e o nível de cima era o único sem
+nenhuma entidade correspondente. Uma empresa só nascia pelo seed — que
+**apaga** a empresa anterior — ou por SQL cru com o papel migrator. Não havia
+rota, módulo, tela nem decisão registrada sobre como uma empresa nasce.
+
+O campo `usuario.plataforma_admin` existia desde a migração inicial e **nada o
+lia**: nenhum guard, nenhum decorator, nenhuma tela.
+
+**Decisão:** um terceiro principal, com tabela (`plataforma_admin`), rota de
+login e **segredo de assinatura próprios** — a mesma estrutura que o ADR-009
+deu a funcionário e cliente. A garantia continua vindo da estrutura e não da
+disciplina: um token de funcionário numa rota de plataforma falha na
+assinatura, dando **401** e não 403.
+
+**Alternativa descartada:** a bandeira no `usuario`. Ela parece mais barata e
+tem dois furos que não fecham: o administrador ficaria **preso a uma empresa**
+— e aí quem cria a primeira? —, e seria derrubado junto se a empresa dele
+fosse suspensa. "Tipo de usuário" numa tabela compartilhada é exatamente o que
+o ADR-009 recusou.
+
+**Consequências:**
+
+- `type Dominio` passa a ter três valores, e `DominioComEmpresa` separa os dois
+  que têm tenant. O compilador cobra cada decisão por domínio — foi ele que
+  encontrou os pontos onde estava escrito "quem não é funcionário é cliente";
+- o que cruza empresas são funções `SECURITY DEFINER`, não um cliente Prisma
+  privilegiado. Ver a correção em `docs/TENANCY.md` §2;
+- criar empresa **não** precisa de bypass: abrindo o escopo com o id da empresa
+  nova, o `WITH CHECK` da política é satisfeito;
+- toda ação da plataforma é registrada no `audit_log` **da empresa afetada**;
+- a sessão de suporte é um token de funcionário **marcado** (`sup`), com 30
+  minutos e sem refresh. A empresa vê quem entrou, quando e por quê.
+
 ### ADR-008 — Pedido e venda são entidades distintas
 
 **Contexto:** clientes externos montam carrinho no aplicativo e enviam um

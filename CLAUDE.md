@@ -251,6 +251,12 @@ o runtime.
 | Dia do calendário usado como instante | `new Date('2026-09-20')` é meia-noite em UTC — 21h do dia 19 em Brasília. Como TETO escondia o dia 20 inteiro; como PISO só deixava passar o que fosse gravado depois das 21h. O filtro por data do razão não devolvia nada e não dava erro. `inicioDoDia` e `fimDoDia`, e o recorte é por DIA |
 | Filtro que a API aceita e a tela não oferece | `de` e `ate` estavam no contrato do razão desde o começo, o serviço os usava, e a tela nunca os mandava. O defeito nem aparecia: ninguém conseguia chegar nele |
 | Recorte vazio explicado como lista vazia | "Nenhum movimento" faz quem lê achar que o razão está vazio. Quando há recorte, o vazio DIZ o recorte: "nenhum movimento de 01/01/2020 até 02/01/2020 — o razão não está vazio" |
+| Regra de lint guardando um símbolo que não existe | `prismaUnscoped` e `apps/api/src/platform/` estavam no `eslint.config.mjs` e em `docs/TENANCY.md` — e nenhum dos dois existia. Pior do que não proteger: parece proteção. Regra nova só vale contra algo que se pode escrever hoje |
+| `a ? b : c` para decidir por domínio | Com dois domínios o ternário diz a verdade; com três, ele passa a dizer "quem não é funcionário é cliente" — e assina o token da plataforma com o segredo do portal, sem erro de compilação. `Record<Dominio, …>` obriga o compilador a cobrar. Estava em três lugares, e um deles derrubava a requisição com 500 |
+| Conferir só o PRIMEIRO par de segredos | `JWT_FUNCIONARIO ≠ JWT_CLIENTE` bastava com dois. Entrando o terceiro, o da plataforma podia ser igual a qualquer um deles em silêncio — e é o segredo que alcança todas as empresas. Confira todo par |
+| `ALTER TYPE … ADD VALUE` usado na mesma migração | "unsafe use of new value": o PostgreSQL exige o valor COMMITADO antes do uso. Cada migração roda na sua transação — o valor novo vai sozinho numa, o resto vem na seguinte |
+| Teste que loga e não confere o login | O `POST /auth/entrar` não existia (é `/login`), o token vinha `undefined`, e a rota recusava com 401 — que era exatamente o que o teste esperava. Passava provando nada. Todo passo que prepara o cenário leva `.expect()` |
+| Rota nova com vocabulário próprio | Eu escrevi `entrar`/`renovar`/`sair` enquanto `auth/` e `portal/auth` usam `login`/`refresh`/`logout`. Duas linguagens para a mesma coisa na mesma API. Antes de nomear rota, olhe como a irmã dela se chama |
 
 ## Testes
 

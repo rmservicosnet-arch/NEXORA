@@ -472,9 +472,7 @@ export const relatorioFilaSchema = z.object({
   horasMedias: z.string().nullable(),
   /** Mediana: uma confirmacao esquecida por uma semana distorce a media. */
   horasMediana: z.string().nullable(),
-  faixas: z.array(
-    z.object({ faixa: z.string(), pedidos: z.number().int(), valor: z.string() }),
-  ),
+  faixas: z.array(z.object({ faixa: z.string(), pedidos: z.number().int(), valor: z.string() })),
   itens: z.array(linhaFilaSchema),
 });
 export type RelatorioFila = z.infer<typeof relatorioFilaSchema>;
@@ -690,9 +688,7 @@ export const relatorioAbertosSchema = z.object({
   totalDevido: z.string(),
   acimaDoLimite: z.number().int(),
   bloqueadas: z.number().int(),
-  faixas: z.array(
-    z.object({ faixa: z.string(), clientes: z.number().int(), valor: z.string() }),
-  ),
+  faixas: z.array(z.object({ faixa: z.string(), clientes: z.number().int(), valor: z.string() })),
   itens: z.array(linhaAbertoSchema),
 });
 export type RelatorioAbertos = z.infer<typeof relatorioAbertosSchema>;

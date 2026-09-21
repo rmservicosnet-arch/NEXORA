@@ -26,7 +26,7 @@ import {
 
 import { criarPrisma, type PrismaClient } from '../src/client';
 import { gerarHashSenha } from '../src/senha';
-import { PERFIS, PERMISSOES } from './permissoes';
+import { PERFIS, PERMISSOES } from '../src/permissoes';
 
 const SLUG_DEMO = 'loja-centro';
 const SENHA_DEMO = 'Estoque@2026';

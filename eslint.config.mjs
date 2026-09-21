@@ -58,23 +58,31 @@ export default tseslint.config(
     },
   },
 
-  // O cliente Prisma sem escopo de tenant é restrito. Ver docs/TENANCY.md §2.
+  /*
+    O que cruza empresas fica confinado. Ver docs/TENANCY.md §2.
+
+    A regra anterior proibia importar `prismaUnscoped` de `@estoque/db`, num
+    diretório `apps/api/src/platform/` — e nenhum dos dois existia. Guardava
+    um símbolo fantasma: `criarPrisma` RECUSA papel com BYPASSRLS e derruba a
+    inicialização, então um cliente sem escopo nunca poderia existir dentro
+    da API.
+
+    O que existe de verdade são as funções `plataforma_*`, `SECURITY DEFINER`,
+    que leem fora do RLS de propósito. Esta regra guarda ELAS: uma chamada
+    dessas fora de `apps/api/src/plataforma/` é o vazamento entre empresas que
+    o RLS existe para impedir.
+  */
   {
     files: ['apps/api/src/**/*.ts'],
-    ignores: ['apps/api/src/platform/**', 'apps/api/src/infra/prisma/**'],
+    ignores: ['apps/api/src/plataforma/**'],
     rules: {
-      'no-restricted-imports': [
+      'no-restricted-syntax': [
         'error',
         {
-          paths: [
-            {
-              name: '@estoque/db',
-              importNames: ['prismaUnscoped'],
-              message:
-                'prismaUnscoped ignora o isolamento de tenant. Use o cliente com escopo. ' +
-                'Uso administrativo legítimo vive em apps/api/src/platform/.',
-            },
-          ],
+          selector: 'TemplateElement[value.raw=/plataforma_/]',
+          message:
+            'As funções plataforma_* são SECURITY DEFINER e atravessam empresas. ' +
+            'Só apps/api/src/plataforma/ pode chamá-las. Ver docs/TENANCY.md §2.',
         },
       ],
     },

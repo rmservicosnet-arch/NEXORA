@@ -9,7 +9,13 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 
 import { AuthService } from '../auth/auth.service';
-import { CHAVE_PRINCIPAL, DOMINIO_FUNCIONARIO, type Dominio } from '../auth/dominios';
+import {
+  CHAVE_PRINCIPAL,
+  DOMINIO_FUNCIONARIO,
+  DOMINIO_PLATAFORMA,
+  type Dominio,
+} from '../auth/dominios';
+import { PlataformaAuthService } from '../auth/plataforma-auth.service';
 import { TokensService } from '../auth/tokens.service';
 import { AuditoriaService } from './auditoria.service';
 import { META_DOMINIO, META_PUBLICO } from './decoradores';
@@ -29,6 +35,7 @@ export class AutenticacaoGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokensService,
     private readonly auth: AuthService,
+    private readonly plataforma: PlataformaAuthService,
     private readonly auditoria: AuditoriaService,
   ) {}
 
@@ -55,6 +62,33 @@ export class AutenticacaoGuard implements CanActivate {
         contexto.getHandler(),
         contexto.getClass(),
       ]) ?? DOMINIO_FUNCIONARIO;
+
+    /*
+      A plataforma sai antes, porque ela e o UNICO caminho em que um id de
+      empresa chega legitimamente pela URL.
+
+      `recusarTenantForjado` existe para impedir que o cliente escolha a
+      empresa; aqui escolher a empresa E a operacao. A protecao muda de
+      lugar, nao desaparece: o token so abre com o segredo da plataforma,
+      nenhuma outra rota do sistema o aceita, e toda acao vira linha em
+      `audit_log` da empresa afetada — visivel para ela, nao so para quem
+      entrou.
+    */
+    if (dominio === DOMINIO_PLATAFORMA) {
+      let sub: string;
+      try {
+        ({ sub } = await this.tokens.verificarPlataforma(token));
+      } catch {
+        throw new UnauthorizedException({
+          codigo: 'TOKEN_INVALIDO',
+          mensagem: 'Sessão inválida ou expirada.',
+        });
+      }
+
+      const principalPlataforma = await this.plataforma.carregarPrincipal(sub);
+      (requisicao as unknown as Record<string, unknown>)[CHAVE_PRINCIPAL] = principalPlataforma;
+      return true;
+    }
 
     let payload;
     try {
@@ -119,6 +153,7 @@ export class AutenticacaoGuard implements CanActivate {
           await this.auditoria.registrar({
             contexto: {
               tenantId: tenantDoToken,
+              // Só chega aqui token de empresa: a plataforma saiu antes.
               principalTipo: principal.dominio === DOMINIO_FUNCIONARIO ? 'FUNCIONARIO' : 'CLIENTE',
               principalId: principal.id,
             },

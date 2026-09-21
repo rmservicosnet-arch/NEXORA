@@ -3,7 +3,13 @@ import { comContexto, type Contexto } from '@estoque/db';
 import type { Observable } from 'rxjs';
 import { from, switchMap } from 'rxjs';
 
-import { CHAVE_PRINCIPAL, DOMINIO_FUNCIONARIO, type Principal } from '../auth/dominios';
+import {
+  CHAVE_PRINCIPAL,
+  DOMINIO_FUNCIONARIO,
+  DOMINIO_PLATAFORMA,
+  type Principal,
+  type PrincipalPlataforma,
+} from '../auth/dominios';
 
 /**
  * Abre o contexto de tenant para o resto da requisição.
@@ -18,11 +24,28 @@ import { CHAVE_PRINCIPAL, DOMINIO_FUNCIONARIO, type Principal } from '../auth/do
 export class ContextoInterceptor implements NestInterceptor {
   intercept(execucao: ExecutionContext, proximo: CallHandler): Observable<unknown> {
     const requisicao = execucao.switchToHttp().getRequest<Record<string, unknown>>();
-    const principal = requisicao[CHAVE_PRINCIPAL] as Principal | undefined;
+    const principal = requisicao[CHAVE_PRINCIPAL] as Principal | PrincipalPlataforma | undefined;
 
     if (!principal) {
       // Rota pública. Não há empresa a definir — e o RLS garante que, sem
       // contexto, nenhuma consulta devolve linha.
+      return proximo.handle();
+    }
+
+    /*
+      A plataforma não tem empresa, e por isso não abre contexto aqui.
+
+      Quem administra a plataforma escolhe a empresa a cada operação, e o
+      serviço abre o escopo dela na hora — com `principalTipo: 'PLATAFORMA'`,
+      que é o que faz a auditoria dizer que quem agiu veio de fora. Abrir um
+      contexto genérico aqui exigiria um `tenantId` que não existe.
+
+      Antes desta guarda o interceptor fazia `[...principal.lojaIds]` para
+      todo principal autenticado, e o da plataforma não tem lojas: a
+      requisição morria com "lojaIds is not iterable", um 500 com pilha em
+      lugar de resposta.
+    */
+    if (principal.dominio === DOMINIO_PLATAFORMA) {
       return proximo.handle();
     }
 

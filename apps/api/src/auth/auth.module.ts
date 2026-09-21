@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { AuthController, PortalAuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PlataformaAuthService } from './plataforma-auth.service';
 import { TokensService } from './tokens.service';
 
 @Module({
@@ -14,7 +15,7 @@ import { TokensService } from './tokens.service';
   ],
   controllers: [AuthController, PortalAuthController],
   // `AuditoriaService` vem do `ComumModule`, que é global.
-  providers: [AuthService, TokensService],
-  exports: [AuthService, TokensService],
+  providers: [AuthService, PlataformaAuthService, TokensService],
+  exports: [AuthService, PlataformaAuthService, TokensService],
 })
 export class AuthModule {}

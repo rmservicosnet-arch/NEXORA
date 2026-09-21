@@ -9,10 +9,14 @@
 import { z } from 'zod';
 
 /**
- * Os dois domínios de autenticação usam segredos DIFERENTES.
+ * Os três domínios de autenticação usam segredos DIFERENTES.
  *
  * Com segredo compartilhado, um token de cliente poderia ser transformado em
  * token de funcionário trocando a claim `aud` e reassinando. Ver ADR-009.
+ *
+ * O terceiro segredo é o da plataforma, e é o que mais importa: com ele
+ * igual ao de funcionário, qualquer usuário de qualquer empresa viraria
+ * administrador de TODAS trocando uma claim.
  */
 const SEGREDO_MINIMO = 32;
 
@@ -36,6 +40,9 @@ export const esquemaAmbiente = z.object({
   JWT_CLIENTE_SECRET: z
     .string()
     .min(SEGREDO_MINIMO, `JWT_CLIENTE_SECRET precisa de ao menos ${SEGREDO_MINIMO} caracteres`),
+  JWT_PLATAFORMA_SECRET: z
+    .string()
+    .min(SEGREDO_MINIMO, `JWT_PLATAFORMA_SECRET precisa de ao menos ${SEGREDO_MINIMO} caracteres`),
   /**
    * Em segundos, não em texto como "15m".
    *
@@ -91,12 +98,30 @@ export function validarAmbiente(bruto: Record<string, unknown>): Ambiente {
 
   const ambiente = resultado.data;
 
-  if (ambiente.JWT_FUNCIONARIO_SECRET === ambiente.JWT_CLIENTE_SECRET) {
-    throw new Error(
-      'JWT_FUNCIONARIO_SECRET e JWT_CLIENTE_SECRET são iguais.\n' +
-        '  Com o mesmo segredo, um token de cliente vira token de funcionário ' +
-        'apenas trocando a claim `aud`. Ver ADR-009.\n',
-    );
+  /*
+    Todo PAR, não só o primeiro. Com dois domínios uma comparação bastava;
+    ao entrar o terceiro, conferir só `funcionario` contra `cliente` deixaria
+    `plataforma` igual a qualquer um dos dois passar em silêncio — e é o
+    segredo que alcança todas as empresas.
+  */
+  const segredos = [
+    ['JWT_FUNCIONARIO_SECRET', ambiente.JWT_FUNCIONARIO_SECRET],
+    ['JWT_CLIENTE_SECRET', ambiente.JWT_CLIENTE_SECRET],
+    ['JWT_PLATAFORMA_SECRET', ambiente.JWT_PLATAFORMA_SECRET],
+  ] as const;
+
+  for (let i = 0; i < segredos.length; i += 1) {
+    for (let j = i + 1; j < segredos.length; j += 1) {
+      const [nomeA, valorA] = segredos[i]!;
+      const [nomeB, valorB] = segredos[j]!;
+      if (valorA === valorB) {
+        throw new Error(
+          `${nomeA} e ${nomeB} são iguais.\n` +
+            '  Com o mesmo segredo, um token de um domínio vira token do outro ' +
+            'apenas trocando a claim `aud`. Ver ADR-009.\n',
+        );
+      }
+    }
   }
 
   if (ambiente.NODE_ENV === 'production' && !ambiente.COOKIE_SECURE) {

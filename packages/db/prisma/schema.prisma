@@ -228,6 +228,12 @@ enum AtorTipo {
   FUNCIONARIO
   CLIENTE
   SISTEMA
+  /// Administrador da plataforma agindo DENTRO de uma empresa.
+  ///
+  /// O registro vai para o `audit_log` da empresa afetada, não para um
+  /// diário separado: é assim que a empresa enxerga que alguém de fora
+  /// entrou. Trilha que só o visitante lê não é trilha.
+  PLATAFORMA
 }
 
 enum Plataforma {
@@ -517,6 +523,71 @@ model CredencialLogin {
   @@unique([dominio, email])
   @@index([empresaId])
   @@map("credencial_login")
+}
+
+/// Quem administra a PLATAFORMA — não uma empresa.
+///
+/// Tabela própria, e não uma bandeira no `usuario`, pela mesma razão do
+/// ADR-009: funcionário e cliente não são "tipos de usuário", são principais
+/// diferentes, com tabela, rota de login e segredo de assinatura próprios. O
+/// administrador de plataforma é o terceiro — e o único sem empresa.
+///
+/// `usuario.plataforma_admin` existia desde a migração inicial e nunca foi
+/// lido por nada. Um funcionário marcado assim continuaria preso a uma
+/// empresa: quem criaria a PRIMEIRA, e o que aconteceria com ele se a
+/// empresa dele fosse suspensa?
+///
+/// **Sem `tenant_id`, de propósito.** A migração de RLS protege toda tabela
+/// que tem aquela coluna; esta precisa ficar de fora, porque quem vive aqui
+/// não pertence a empresa nenhuma. Também não entra em `credencial_login`:
+/// aquele diretório existe para responder "de qual empresa é este e-mail", e
+/// para a plataforma a pergunta não faz sentido.
+model PlataformaAdmin {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  nome      String @db.VarChar(160)
+  /// Único na plataforma inteira. Não colide com os domínios de funcionário
+  /// e de cliente porque não compartilha o diretório com eles.
+  email     String @unique @db.VarChar(180)
+  senhaHash String @map("senha_hash") @db.VarChar(255)
+
+  status        StatusRegistro @default(ATIVO)
+  ultimoLoginEm DateTime?      @map("ultimo_login_em") @db.Timestamptz(3)
+
+  sessoes PlataformaSessao[]
+
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  alteradoEm DateTime @default(now()) @updatedAt @map("alterado_em") @db.Timestamptz(3)
+
+  @@map("plataforma_admin")
+}
+
+/// Sessão de refresh da plataforma.
+///
+/// Espelha `sessao_refresh`, inclusive a revogação por reuso que derruba a
+/// família inteira. Tabela separada porque aquela carrega `tenant_id` NOT
+/// NULL — e o RLS a esconderia de quem não tem empresa.
+model PlataformaSessao {
+  id      String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  adminId String          @map("admin_id") @db.Uuid
+  admin   PlataformaAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 do token. O valor cru nunca é persistido.
+  tokenHash String @unique @map("token_hash") @db.VarChar(64)
+  familiaId String @map("familia_id") @db.Uuid
+
+  expiraEm        DateTime  @map("expira_em") @db.Timestamptz(3)
+  revogadoEm      DateTime? @map("revogado_em") @db.Timestamptz(3)
+  motivoRevogacao String?   @map("motivo_revogacao") @db.VarChar(60)
+
+  userAgent String? @map("user_agent") @db.VarChar(255)
+  ip        String? @db.VarChar(64)
+
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  @@index([adminId])
+  @@index([familiaId])
+  @@index([expiraEm])
+  @@map("plataforma_sessao")
 }
 
 // ===========================================================================

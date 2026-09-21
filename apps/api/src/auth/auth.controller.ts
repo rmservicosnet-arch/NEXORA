@@ -91,6 +91,7 @@ abstract class AuthControllerBase {
         ...(sessao.principal.empresa ? { empresa: sessao.principal.empresa } : {}),
         permissoes: [...sessao.principal.permissoes],
         lojaIds: [...sessao.principal.lojaIds],
+        ...(sessao.principal.suporteDe ? { suporteDe: sessao.principal.suporteDe } : {}),
       },
     };
 
@@ -221,6 +222,7 @@ export class AuthController extends AuthControllerBase {
       ...(principal.empresa ? { empresa: principal.empresa } : {}),
       permissoes: [...principal.permissoes],
       lojaIds: [...principal.lojaIds],
+      ...(principal.suporteDe ? { suporteDe: principal.suporteDe } : {}),
     };
   }
 }

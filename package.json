@@ -33,6 +33,7 @@
     "db:generate:ci": "npm run generate:ci -w @estoque/db",
     "db:verificar": "dotenv -e .env -- tsx scripts/verificar-banco.ts",
     "db:sync-perfis": "dotenv -e .env -- tsx scripts/sincronizar-perfis.ts",
+    "plataforma:admin": "dotenv -e .env -- tsx scripts/criar-admin-plataforma.ts",
     "expirar": "dotenv -e .env -- tsx scripts/expirar.ts",
     "corrigir:troco": "dotenv -e .env -- tsx scripts/corrigir-troco.ts",
     "expirar:ci": "tsx scripts/expirar.ts",

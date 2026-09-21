@@ -13,7 +13,7 @@ import {
   DOMINIO_CLIENTE,
   DOMINIO_FUNCIONARIO,
   type Canal,
-  type Dominio,
+  type DominioComEmpresa,
   type PayloadAcesso,
   type Principal,
 } from './dominios';
@@ -92,7 +92,7 @@ export class AuthService {
   }
 
   private async resolverEmpresa(
-    dominio: Dominio,
+    dominio: DominioComEmpresa,
     email: string,
   ): Promise<{ empresaId: string; principalId: string } | null> {
     const credencial = await this.prisma.credencialLogin.findUnique({
@@ -255,6 +255,9 @@ export class AuthService {
       permissoes,
       lojaIds: new Set(usuario.acessosLoja.map((a) => a.lojaId)),
       plataformaAdmin: usuario.plataformaAdmin,
+      // A marca vem do TOKEN, não do banco: ela descreve esta SESSÃO, não
+      // esta pessoa. O usuário é o mesmo; quem está sentado nele é que não.
+      ...(payload.sup ? { suporteDe: payload.sup } : {}),
     };
   }
 
@@ -339,7 +342,7 @@ export class AuthService {
    */
   async renovar(
     tokenApresentado: string,
-    dominio: Dominio,
+    dominio: DominioComEmpresa,
     dados: Pick<DadosEntrada, 'ip' | 'userAgent'>,
   ): Promise<Sessao> {
     const separador = tokenApresentado.indexOf('.');
@@ -409,7 +412,7 @@ export class AuthService {
   }
 
   /** Encerra a sessão. Revoga a família inteira, não só o token atual. */
-  async sair(tokenApresentado: string, dominio: Dominio): Promise<void> {
+  async sair(tokenApresentado: string, dominio: DominioComEmpresa): Promise<void> {
     const separador = tokenApresentado.indexOf('.');
     if (separador <= 0) {
       return;
