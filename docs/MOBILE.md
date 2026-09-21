@@ -115,3 +115,23 @@ da Fase 6, senão viram retrabalho:
 
 Nenhum desses seis itens é sobre mobile especificamente — todos tornam a API
 melhor. Mas são exatamente os que costumam ser descobertos tarde demais.
+
+## 5. Onde cada um está — auditado em 20/09/2026
+
+Antes de começar o aplicativo, os seis foram conferidos contra o código. Três
+não existiam, e o primeiro era o pior: a tabela `chave_idempotencia` estava
+migrada desde o início e **nenhuma linha de código a lia**. Este documento,
+`docs/ORDERS.md` §7 e `docs/WALLET.md` §5 afirmavam que a chave era enviada —
+o schema dava a impressão de resolvido.
+
+| # | Item | Estado |
+|---|---|---|
+| 1 | Idempotência | **Feito.** `IdempotenciaInterceptor` lê `Idempotency-Key` em POST/PUT/PATCH/DELETE. Reserva a chave, guarda a resposta, devolve a mesma no reenvio. Falha NÃO é guardada: reenviar depois de erro tem de poder tentar de novo |
+| 2 | Cursor | **Já existia.** Onze listagens. Catálogo do portal e buscas têm teto fixo, o que é aceitável: busca por código de barras devolve um item |
+| 3 | Sem cookie | **Feito.** Login e refresh já aceitavam `canal: 'app'`; o **logout só lia o cookie** e devolvia 204 sem revogar nada — no celular a sessão sobrevivia os 30 dias do refresh |
+| 4 | Erro com código | **Feito.** `ErroFiltro` global. Antes, 429, 404 e todo `ErroDominio` de `@estoque/core` saíam sem `codigo` |
+| 5 | Sincronização incremental | **Falta.** Nenhuma rota aceita "só o que mudou desde X". O catálogo do balcão cabe numa carga; vira problema quando não couber |
+| 6 | Versionamento | **Falta.** Prefixo `/api`, sem `/v1`. Só importa quando houver aplicativo instalado em campo atrás do servidor — mas é aí que não dá mais para escolher |
+
+Os dois que faltam não impedem o aplicativo de existir; impedem que ele
+envelheça bem. Estão registrados aqui para não serem descobertos de novo.

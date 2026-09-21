@@ -374,7 +374,7 @@ implemento sem confirmação.
 
 Herda as regras gerais do sistema, com dois pontos próprios:
 
-1. **Envio do carrinho** carrega `Idempotency-Key`. Cliente com conexão ruim
+1. **Envio do carrinho** carrega `Idempotency-Key` — lido pelo `IdempotenciaInterceptor` desde 20/09/2026; antes disso o cabeçalho não era lido por ninguém. Cliente com conexão ruim
    toca "enviar" três vezes e gera **um** pedido.
 2. **Confirmação** trava as linhas de `stock_balance` envolvidas com
    `SELECT … FOR UPDATE`, ordenadas por id. Dois atendentes confirmando

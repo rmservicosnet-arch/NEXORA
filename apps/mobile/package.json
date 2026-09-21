@@ -1,0 +1,38 @@
+{
+  "name": "@estoque/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aplicativo da equipe — PDV com leitor, fila de pedidos e conferência",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild --platform android --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@estoque/contracts": "*",
+    "@expo/log-box": "57.0.4",
+    "@tanstack/react-query": "5.103.1",
+    "expo": "57.0.24",
+    "expo-constants": "57.0.19",
+    "expo-font": "57.0.4",
+    "expo-linking": "57.0.10",
+    "expo-router": "57.0.22",
+    "expo-secure-store": "57.0.4",
+    "expo-splash-screen": "57.0.9",
+    "expo-status-bar": "57.0.1",
+    "react": "19.3.0",
+    "react-native": "0.87.1",
+    "react-native-gesture-handler": "3.3.0",
+    "react-native-reanimated": "4.7.0",
+    "react-native-safe-area-context": "5.10.0",
+    "react-native-screens": "4.28.0",
+    "react-native-vision-camera": "5.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.1",
+    "typescript": "5.9.3"
+  }
+}

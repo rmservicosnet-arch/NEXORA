@@ -270,6 +270,11 @@ o runtime.
 | Coluna de árvore que ninguém escreve nem lê | `categoria.pai_id` existe desde a migração inicial e a única leitura é o guard que eu escrevi. Dar uma tela a ela seria oferecer uma organização que nenhuma outra parte do sistema enxerga |
 | Hook chamado dentro de função comum | `const agir = (x) => useHook(x)` funciona enquanto as chamadas forem fixas e na mesma ordem — e convida o próximo a pôr uma dentro de um `if`. Chame direto |
 | Erro de HMR do Vite lido como erro do código | "does not provide an export named 'App'" depois de um patch que gravou o arquivo em duas etapas: o navegador segurava o módulo quebrado do meio do caminho. O arquivo estava certo. Toque o arquivo e recarregue antes de caçar o defeito |
+| Tabela migrada que ninguém lê | `chave_idempotencia` existia desde a migração inicial, com `corpo_hash` e `resposta`, e nenhuma linha de código a consultava. TRÊS documentos afirmavam que a chave era enviada. Schema completo dá a impressão de "resolvido" mais forte do que qualquer comentário |
+| Interceptor que faz I/O antes do handler | O `AsyncLocalStorage` não sobrevive à transação do Prisma: medido, o contexto está em `intercept` e em `reservar`, e some dentro do `switchMap`. Quem consulta o banco ANTES de chamar o handler tem de REENTRAR com `comContexto`, senão a rota vira 500 |
+| Idempotência que guarda o fracasso | Reenviar é o que o app faz quando a conexão cai. Se a falha ficar gravada, o reenvio recebe o mesmo erro para sempre e nunca tenta de novo. A reserva é solta quando o handler lança — idempotência protege o que DEU CERTO |
+| `logout` que só lê cookie | No celular não há cookie: `sair()` nunca era chamado, o 204 dizia que tudo certo, e o refresh valia os 30 dias inteiros. Aparelho perdido era sessão viva. O token vem do CORPO no canal `app` |
+| Teste que exige do ambiente o que ele desliga | Martelei o login doze vezes esperando 429 — e o throttler é desligado sob teste, de propósito e documentado. O teste nunca passaria, por um motivo que nada tem a ver com o código. Exercite a TRADUÇÃO, não o gatilho |
 
 ## Testes
 

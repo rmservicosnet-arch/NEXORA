@@ -20,9 +20,11 @@ import { AuthService, type Sessao } from './auth.service';
 import {
   esquemaEntrada,
   esquemaRenovacao,
+  esquemaSaida,
   esquemaTrocaDeSenha,
   type EntradaDto,
   type RenovacaoDto,
+  type SaidaDto,
   type TrocaDeSenhaDto,
 } from './auth.dto';
 import { DOMINIO_CLIENTE, DOMINIO_FUNCIONARIO, type Dominio, type Principal } from './dominios';
@@ -185,8 +187,22 @@ export class AuthController extends AuthControllerBase {
   @Publico()
   @Post('logout')
   @HttpCode(204)
-  async sair(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    const token = (req.cookies as Record<string, string> | undefined)?.[this.nomeDoCookie];
+  async sair(
+    @Body(new ZodPipe(esquemaSaida)) dto: SaidaDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    /*
+      O token vem do CORPO no canal `app` e do cookie no `web`.
+
+      Antes só o cookie era lido: no celular `token` era sempre `undefined`,
+      `sair()` nunca era chamado, e a resposta 204 dizia que tudo certo. A
+      sessão seguia válida os 30 dias do refresh — aparelho perdido era
+      sessão viva. Sair tem de revogar de verdade.
+    */
+    const doCookie = (req.cookies as Record<string, string> | undefined)?.[this.nomeDoCookie];
+    const token = dto.canal === 'app' ? dto.refreshToken : doCookie;
+
     if (token) {
       await this.auth.sair(token, this.dominio);
     }
@@ -272,8 +288,22 @@ export class PortalAuthController extends AuthControllerBase {
   @Publico()
   @Post('logout')
   @HttpCode(204)
-  async sair(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    const token = (req.cookies as Record<string, string> | undefined)?.[this.nomeDoCookie];
+  async sair(
+    @Body(new ZodPipe(esquemaSaida)) dto: SaidaDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    /*
+      O token vem do CORPO no canal `app` e do cookie no `web`.
+
+      Antes só o cookie era lido: no celular `token` era sempre `undefined`,
+      `sair()` nunca era chamado, e a resposta 204 dizia que tudo certo. A
+      sessão seguia válida os 30 dias do refresh — aparelho perdido era
+      sessão viva. Sair tem de revogar de verdade.
+    */
+    const doCookie = (req.cookies as Record<string, string> | undefined)?.[this.nomeDoCookie];
+    const token = dto.canal === 'app' ? dto.refreshToken : doCookie;
+
     if (token) {
       await this.auth.sair(token, this.dominio);
     }

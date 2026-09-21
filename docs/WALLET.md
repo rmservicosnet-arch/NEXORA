@@ -87,7 +87,14 @@ Ao finalizar uma venda com essa forma:
 Tudo na **mesma transação** da venda. Venda concluída com pagamento em
 carteira que não debitou é dinheiro que some.
 
-Idempotência: o movimento carrega a mesma `Idempotency-Key` da venda.
+Idempotência: o movimento carrega uma chave derivada da venda
+(`venda:<id>:<tipo>`), gerada no SERVIDOR. Ela protege contra dupla
+contabilização interna — o mesmo débito lançado duas vezes dentro do fluxo.
+
+Contra o REENVIO do aplicativo quem protege é outra coisa: o `Idempotency-Key`
+do cabeçalho, tratado pelo `IdempotenciaInterceptor`. As duas são necessárias
+e resolvem problemas diferentes — até 20/09/2026 este documento dizia que eram
+a mesma, e a do cabeçalho não existia.
 Reprocessar não debita duas vezes.
 
 ## 6. A decisão que evita contar a mesma dívida duas vezes

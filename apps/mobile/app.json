@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Estoque Equipe",
+    "slug": "estoque-equipe",
+    "scheme": "estoque",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "package": "br.com.estoque.equipe",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#222B5C"
+      },
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "O aplicativo usa a câmera para ler o código de barras dos produtos no balcão.",
+          "enableCodeScanner": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

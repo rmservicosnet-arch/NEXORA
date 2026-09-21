@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
@@ -13,6 +13,8 @@ import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { AutenticacaoGuard } from './comum/autenticacao.guard';
 import { ComumModule } from './comum/comum.module';
 import { ContextoInterceptor } from './comum/contexto.interceptor';
+import { ErroFiltro } from './comum/erro.filtro';
+import { IdempotenciaInterceptor } from './comum/idempotencia.interceptor';
 import { EscopoLojaGuard } from './comum/escopo-loja.guard';
 import { PermissoesGuard } from './comum/permissoes.guard';
 import { validarAmbiente } from './configuracao';
@@ -84,6 +86,15 @@ import { VisaoGeralModule } from './visao-geral/visao-geral.module';
     //
     // Guards são globais de propósito: rota nova nasce protegida. Abrir
     // exige `@Publico()` explícito — esquecer fecha, não abre.
+    /*
+      Todo erro sai em `{ codigo, mensagem }`.
+
+      Vem antes de tudo porque filtro de exceção envolve a pilha inteira,
+      inclusive o que os guards lançam. Sem ele, o 429 do throttler — o
+      primeiro erro que o aplicativo encontra — saía sem `codigo`.
+    */
+    { provide: APP_FILTER, useClass: ErroFiltro },
+
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AutenticacaoGuard },
     { provide: APP_GUARD, useClass: PermissoesGuard },
@@ -92,6 +103,15 @@ import { VisaoGeralModule } from './visao-geral/visao-geral.module';
     // Abre o contexto de tenant para o handler. Depois dos guards, porque
     // depende do principal que eles resolvem.
     { provide: APP_INTERCEPTOR, useClass: ContextoInterceptor },
+
+    /*
+      Idempotência DEPOIS do contexto, e a ordem é o que a faz funcionar.
+
+      `chave_idempotencia` tem `tenant_id` e está sob RLS: sem o contexto
+      aberto, a consulta não devolve linha nenhuma e toda repetição passaria
+      como se fosse a primeira — o oposto do que ela existe para fazer.
+    */
+    { provide: APP_INTERCEPTOR, useClass: IdempotenciaInterceptor },
   ],
 })
 export class AppModule {}

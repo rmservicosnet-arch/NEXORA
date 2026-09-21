@@ -31,6 +31,22 @@ export const esquemaRenovacao = z.object({
 export type RenovacaoDto = z.infer<typeof esquemaRenovacao>;
 
 /**
+ * Sair, no canal `app`.
+ *
+ * O `logout` só lia o cookie. Para o celular isso significava devolver 204 e
+ * **não revogar nada**: o refresh seguia válido os 30 dias inteiros depois de
+ * a pessoa apertar "Sair". Aparelho perdido era sessão viva.
+ *
+ * O corpo é opcional para o web continuar funcionando sem mandar nada.
+ */
+export const esquemaSaida = z.object({
+  refreshToken: z.string().optional(),
+  canal: z.enum(['web', 'app']).default('web'),
+});
+
+export type SaidaDto = z.infer<typeof esquemaSaida>;
+
+/**
  * Troca de senha pelo próprio dono.
  *
  * Exige a senha atual mesmo havendo sessão válida: uma aba esquecida aberta
