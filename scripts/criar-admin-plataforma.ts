@@ -18,7 +18,7 @@
 
 import { randomInt } from 'node:crypto';
 
-import { criarPrisma, gerarHashSenha } from '../packages/db/src';
+import { conferirSenha, criarPrisma, gerarHashSenha } from '../packages/db/src';
 
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
@@ -82,9 +82,25 @@ async function principal(): Promise<void> {
       console.log(`\nAdministrador de plataforma CRIADO: ${nome} <${alvo}>`);
     }
 
-    console.log('\n  Senha (aparece uma vez só):');
+    /*
+      Relê do banco e CONFERE antes de imprimir.
+
+      Sem isto o comando anunciava uma senha sem nenhuma prova de que ela
+      abria a porta — e anunciou uma que não abria. Só se descobriu quando
+      alguém tentou entrar. Comando que entrega credencial prova a credencial
+      que entrega, pelo mesmo caminho que o login vai percorrer.
+    */
+    const gravado = await prisma.plataformaAdmin.findUnique({ where: { email: alvo } });
+    if (!gravado || !(await conferirSenha(gravado.senhaHash, senha))) {
+      console.error('\n  A senha gerada NAO confere com o hash gravado. Nada foi anunciado.');
+      console.error('  Rode de novo; se repetir, o defeito esta na gravacao, nao na senha.\n');
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log('\n  Senha (aparece uma vez só, conferida contra o hash gravado):');
     console.log(`  ${senha}\n`);
-    console.log('  Entre em /plataforma/entrar. O domínio é outro: esta senha não');
+    console.log('  Entre em /plataforma/login. O domínio é outro: esta senha não');
     console.log('  serve em nenhuma empresa, e a de empresa não serve aqui.\n');
   } finally {
     await prisma.$disconnect();

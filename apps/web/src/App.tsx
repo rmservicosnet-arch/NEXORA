@@ -3,7 +3,9 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 
 import { ErroRequisicao } from './api/cliente';
 import { ProvedorSessao, useSessao } from './auth/sessao';
+import { ProvedorSessaoPlataforma } from './auth/sessaoPlataforma';
 import { ProvedorSessaoPortal } from './auth/sessaoPortal';
+import { PlataformaShell } from './layout/PlataformaShell';
 import { PortalShell } from './layout/PortalShell';
 import { Shell } from './layout/Shell';
 import { Caixa } from './paginas/Caixa';
@@ -15,6 +17,10 @@ import { VendaDetalhe } from './paginas/VendaDetalhe';
 import { Equipe } from './paginas/Equipe';
 import { UsuarioEditar } from './paginas/UsuarioEditar';
 import { Perfis } from './paginas/Perfis';
+import { Plataforma } from './paginas/Plataforma';
+import { PlataformaEmpresa } from './paginas/PlataformaEmpresa';
+import { PlataformaEmpresaNova } from './paginas/PlataformaEmpresaNova';
+import { PlataformaLogin } from './paginas/PlataformaLogin';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -106,6 +112,30 @@ function AreaDoPortal() {
         </Route>
       </Routes>
     </ProvedorSessaoPortal>
+  );
+}
+
+/**
+ * A plataforma: o terceiro domínio, na sua própria árvore.
+ *
+ * Mesmo motivo do portal ter a dele. Aninhar faria toda tela da equipe
+ * carregar uma restauração de sessão da plataforma — e vice-versa: dois
+ * `POST /…/refresh` em todo carregamento, um deles fadado a falhar. São
+ * domínios de autenticação independentes (ADR-009, ADR-011), e a árvore
+ * reflete isso.
+ */
+function AreaDaPlataforma() {
+  return (
+    <ProvedorSessaoPlataforma>
+      <Routes>
+        <Route path="login" element={<PlataformaLogin />} />
+        <Route element={<PlataformaShell />}>
+          <Route index element={<Plataforma />} />
+          <Route path="nova" element={<PlataformaEmpresaNova />} />
+          <Route path="empresas/:id" element={<PlataformaEmpresa />} />
+        </Route>
+      </Routes>
+    </ProvedorSessaoPlataforma>
   );
 }
 
@@ -223,6 +253,7 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/portal/*" element={<AreaDoPortal />} />
+          <Route path="/plataforma/*" element={<AreaDaPlataforma />} />
           <Route path="/*" element={<AreaDaEquipe />} />
         </Routes>
       </BrowserRouter>

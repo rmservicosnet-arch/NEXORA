@@ -190,7 +190,7 @@ describe.runIf(temBanco)('plataforma — criar empresa', () => {
     expect(usuario.permissoes).toContain('loja.criar');
   });
 
-  it('nasce SEM loja, e o administrador consegue criar a primeira', async () => {
+  it('nasce SEM loja, e o administrador nasce podendo criar a primeira', async () => {
     const criada = await novaEmpresa();
     expect(criada.empresa.lojas).toBe(0);
 
@@ -198,30 +198,44 @@ describe.runIf(temBanco)('plataforma — criar empresa', () => {
       .post('/api/auth/login')
       .send({ email: criada.admin.email, senha: criada.senhaProvisoria, canal: 'app' })
       .expect(200);
-    const daEmpresa = (entrada.body as { tokenAcesso: string }).tokenAcesso;
 
-    // `loja.criar` é permissão de EMPRESA, não de loja. Se fosse de loja, a
-    // empresa nova ficaria num impasse: sem loja para criar a primeira loja.
-    await http
-      .post('/api/lojas')
-      .set('Authorization', `Bearer ${daEmpresa}`)
-      .send({ nome: 'Primeira Loja' })
-      .expect(201);
+    /*
+      `loja.criar` é permissão de EMPRESA, não de loja. Se fosse de loja, a
+      empresa nova ficaria num impasse: precisaria de uma loja para criar a
+      primeira loja.
 
-    // E deixa de estar vazia: agora a exclusão tem de recusar.
-    const recusa = await comToken('delete', `/api/plataforma/empresas/${criada.empresa.id}`).expect(
-      409,
-    );
+      O teste confere a PERMISSÃO em vez de criar a loja de verdade. Criar
+      deixava a empresa com histórico, e aí ela não se excluía mais — eu a
+      tirava da limpeza e ela ficava na lista da plataforma, suspensa, para
+      sempre. Teste que cria dado visível e não limpa, de novo.
+    */
+    const usuario = (entrada.body as { usuario: { permissoes: string[]; lojaIds: string[] } })
+      .usuario;
 
-    expect((recusa.body as { codigo: string }).codigo).toBe('EMPRESA_NAO_ESTA_VAZIA');
-    expect((recusa.body as { mensagem: string }).mensagem).toContain('Suspenda');
+    expect(usuario.permissoes).toContain('loja.criar');
+    expect(usuario.lojaIds).toHaveLength(0);
+  });
 
-    // Some da lista de limpeza: com loja dentro, ela não se exclui mais.
-    const i = empresasCriadas.indexOf(criada.empresa.id);
-    if (i >= 0) empresasCriadas.splice(i, 1);
-    await comToken('put', `/api/plataforma/empresas/${criada.empresa.id}/suspender`)
-      .send({ motivo: 'empresa de teste automatizado' })
-      .expect(200);
+  it('empresa COM histórico não se exclui — a resposta manda suspender', async () => {
+    /*
+      Usa a empresa do seed, que tem loja, produto e venda. Não cria nada:
+      provar a recusa criando uma empresa com histórico seria produzir
+      justamente o resíduo que não se apaga depois.
+    */
+    const pagina = (await comToken('get', '/api/plataforma/empresas').expect(200))
+      .body as PaginaEmpresas;
+
+    const comHistorico = pagina.itens.find((e) => e.lojas > 0);
+    expect(comHistorico).toBeDefined();
+
+    const recusa = await comToken(
+      'delete',
+      `/api/plataforma/empresas/${String(comHistorico?.id)}`,
+    ).expect(409);
+
+    const corpo = recusa.body as { codigo: string; mensagem: string };
+    expect(corpo.codigo).toBe('EMPRESA_NAO_ESTA_VAZIA');
+    expect(corpo.mensagem).toContain('Suspenda');
   });
 
   it('a empresa nasce com os 8 perfis de sistema e a configuração', async () => {

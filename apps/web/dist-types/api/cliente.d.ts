@@ -1,4 +1,4 @@
-import type { ErroApi, Sessao } from '@estoque/contracts';
+import type { ErroApi, Sessao, SessaoPlataformaResposta } from '@estoque/contracts';
 /**
  * O token de acesso vive em memória, não em `localStorage`.
  *
@@ -8,12 +8,15 @@ import type { ErroApi, Sessao } from '@estoque/contracts';
  * ficado exposto ao JavaScript.
  */
 /**
- * Equipe e cliente são domínios de autenticação DIFERENTES (ADR-009): tabelas,
- * rotas, segredos e cookies separados. Um token só serviria para um deles, e
- * guardar os dois no mesmo lugar faria entrar no portal derrubar o token da
- * equipe — no mesmo navegador, na mesma aba.
+ * Equipe, cliente e plataforma são domínios de autenticação DIFERENTES
+ * (ADR-009, ADR-011): tabelas, rotas, segredos e cookies separados. Um token
+ * só serviria para um deles, e guardar os três no mesmo lugar faria entrar
+ * num derrubar a sessão do outro — no mesmo navegador, na mesma aba.
+ *
+ * O terceiro é o da plataforma, e ele não tem empresa: o token dele não
+ * carrega `tid`, e por isso nenhuma rota de empresa o aceita.
  */
-export type Dominio = 'equipe' | 'portal';
+export type Dominio = 'equipe' | 'portal' | 'plataforma';
 export declare function definirToken(token: string | null, dominio?: Dominio): void;
 export declare function tokenAtual(dominio?: Dominio): string | null;
 export declare class ErroRequisicao extends Error {
@@ -47,6 +50,12 @@ export declare const api: {
     portal: {
         entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<Sessao>;
         restaurar: () => Promise<Sessao | null>;
+        sair: () => Promise<void>;
+    };
+    /** A plataforma. Não tem empresa, e é isso que a separa das outras duas. */
+    plataforma: {
+        entrar: (email: string, senha: string) => Promise<SessaoPlataformaResposta>;
+        restaurar: () => Promise<SessaoPlataformaResposta | null>;
         sair: () => Promise<void>;
     };
     entrar: (email: string, senha: string, manterConectado?: boolean) => Promise<Sessao>;

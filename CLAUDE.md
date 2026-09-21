@@ -257,6 +257,10 @@ o runtime.
 | `ALTER TYPE … ADD VALUE` usado na mesma migração | "unsafe use of new value": o PostgreSQL exige o valor COMMITADO antes do uso. Cada migração roda na sua transação — o valor novo vai sozinho numa, o resto vem na seguinte |
 | Teste que loga e não confere o login | O `POST /auth/entrar` não existia (é `/login`), o token vinha `undefined`, e a rota recusava com 401 — que era exatamente o que o teste esperava. Passava provando nada. Todo passo que prepara o cenário leva `.expect()` |
 | Rota nova com vocabulário próprio | Eu escrevi `entrar`/`renovar`/`sair` enquanto `auth/` e `portal/auth` usam `login`/`refresh`/`logout`. Duas linguagens para a mesma coisa na mesma API. Antes de nomear rota, olhe como a irmã dela se chama |
+| Comando que entrega credencial sem conferi-la | `plataforma:admin` anunciava a senha gerada sem provar que ela abria a porta — e anunciou uma que não abria. Só se descobriu quando alguém tentou entrar, e a conclusão natural foi "o sistema está quebrado". Releia do banco e confira pelo mesmo caminho que o login percorre |
+| Estado vazio que afirma o que não aconteceu | "Nada além da criação" mentia nas empresas nascidas pelo SEED: a plataforma não as criou, então nem esse registro existe. O vazio diz o que é verdade nos dois casos |
+| Diagnosticar pelo caminho errado e culpar o código | Chamei `/api/...` relativo achando que havia proxy do Vite; o app chama `http://localhost:3333/api` direto. O 404 era do MEU teste, não da rota. Confira como o app fala com a API antes de concluir que a API não responde |
+| `1 ativas`, `nas 1 empresas` | Concordância montada com template no meio do JSX sai errada no singular. Uma função `contagem(n, singular, plural)`, e o artigo junto |
 
 ## Testes
 

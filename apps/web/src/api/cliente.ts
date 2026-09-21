@@ -1,4 +1,4 @@
-import type { ErroApi, Sessao } from '@estoque/contracts';
+import type { ErroApi, Sessao, SessaoPlataformaResposta } from '@estoque/contracts';
 
 const BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:3333/api';
 
@@ -11,24 +11,34 @@ const BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:3333/api';
  * ficado exposto ao JavaScript.
  */
 /**
- * Equipe e cliente são domínios de autenticação DIFERENTES (ADR-009): tabelas,
- * rotas, segredos e cookies separados. Um token só serviria para um deles, e
- * guardar os dois no mesmo lugar faria entrar no portal derrubar o token da
- * equipe — no mesmo navegador, na mesma aba.
+ * Equipe, cliente e plataforma são domínios de autenticação DIFERENTES
+ * (ADR-009, ADR-011): tabelas, rotas, segredos e cookies separados. Um token
+ * só serviria para um deles, e guardar os três no mesmo lugar faria entrar
+ * num derrubar a sessão do outro — no mesmo navegador, na mesma aba.
+ *
+ * O terceiro é o da plataforma, e ele não tem empresa: o token dele não
+ * carrega `tid`, e por isso nenhuma rota de empresa o aceita.
  */
-export type Dominio = 'equipe' | 'portal';
+export type Dominio = 'equipe' | 'portal' | 'plataforma';
 
-const tokensAcesso: Record<Dominio, string | null> = { equipe: null, portal: null };
+const tokensAcesso: Record<Dominio, string | null> = {
+  equipe: null,
+  portal: null,
+  plataforma: null,
+};
 
 /**
  * O domínio sai do CAMINHO, não de um parâmetro em cada chamada.
  *
- * Tudo sob `/portal` é do cliente; o resto é da equipe. Um parâmetro a mais
- * em cada `pedir` seria uma chance a mais de esquecê-lo — e esquecê-lo
- * mandaria o token errado.
+ * Tudo sob `/portal` é do cliente, tudo sob `/plataforma` é de quem
+ * administra a plataforma, e o resto é da equipe. Um parâmetro a mais em cada
+ * `pedir` seria uma chance a mais de esquecê-lo — e esquecê-lo mandaria o
+ * token errado.
  */
 function dominioDe(caminho: string): Dominio {
-  return caminho.startsWith('/portal/') ? 'portal' : 'equipe';
+  if (caminho.startsWith('/portal/')) return 'portal';
+  if (caminho.startsWith('/plataforma/')) return 'plataforma';
+  return 'equipe';
 }
 
 export function definirToken(token: string | null, dominio: Dominio = 'equipe'): void {
@@ -101,18 +111,21 @@ async function bruto(caminho: string, opcoes: Opcoes = {}): Promise<Response> {
 const renovacaoEmAndamento: Record<Dominio, Promise<boolean> | null> = {
   equipe: null,
   portal: null,
+  plataforma: null,
 };
 
 /** Restauração de boot em andamento, por domínio. Ver o comentário em `restaurar`. */
 const restauracaoEmAndamento: Record<Dominio, Promise<Sessao | null> | null> = {
   equipe: null,
   portal: null,
+  plataforma: null,
 };
 
 /** A raiz das rotas de autenticação de cada domínio. */
 const RAIZ_AUTH: Record<Dominio, string> = {
   equipe: '/auth',
   portal: '/portal/auth',
+  plataforma: '/plataforma',
 };
 
 /**
@@ -321,8 +334,59 @@ function autenticacao(dominio: Dominio) {
   };
 }
 
+/**
+ * A plataforma tem a mesma mecânica e uma resposta diferente.
+ *
+ * `entrar` e `restaurar` de empresa devolvem `{ tokenAcesso, usuario }`; aqui
+ * é `{ tokenAcesso, admin }`, porque quem entra não é usuário de empresa
+ * nenhuma. Forçar essa resposta no formato dos outros dois seria escrever um
+ * tipo que mente — e o cofre do token, a rotação e a fila de restauração são
+ * os mesmos de cima, herdados por `dominioDe`.
+ */
+function autenticacaoPlataforma() {
+  const raiz = RAIZ_AUTH.plataforma;
+
+  return {
+    entrar: async (email: string, senha: string): Promise<SessaoPlataformaResposta> => {
+      const sessao = await pedir<SessaoPlataformaResposta>(`${raiz}/login`, {
+        method: 'POST',
+        body: { email, senha },
+        semRenovar: true,
+      });
+      definirToken(sessao.tokenAcesso, 'plataforma');
+      return sessao;
+    },
+
+    restaurar: async (): Promise<SessaoPlataformaResposta | null> => {
+      try {
+        const sessao = await emFila('estoque:restaurar-plataforma', () =>
+          pedir<SessaoPlataformaResposta>(`${raiz}/refresh`, {
+            method: 'POST',
+            semRenovar: true,
+          }),
+        );
+        definirToken(sessao.tokenAcesso, 'plataforma');
+        return sessao;
+      } catch {
+        definirToken(null, 'plataforma');
+        return null;
+      }
+    },
+
+    sair: async (): Promise<void> => {
+      try {
+        await pedir<void>(`${raiz}/logout`, { method: 'POST', semRenovar: true });
+      } finally {
+        definirToken(null, 'plataforma');
+      }
+    },
+  };
+}
+
 export const api = {
   ...autenticacao('equipe'),
   /** O portal do cliente. Sessão própria, cookie próprio, token próprio. */
   portal: autenticacao('portal'),
+  /** A plataforma. Não tem empresa, e é isso que a separa das outras duas. */
+  plataforma: autenticacaoPlataforma(),
 };
