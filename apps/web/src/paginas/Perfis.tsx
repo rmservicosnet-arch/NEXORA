@@ -46,6 +46,23 @@ export function Perfis() {
   const [rascunho, setRascunho] = useState<string[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  /*
+    Perfil novo nasce como RASCUNHO no painel da direita, não como uma linha
+    já gravada esperando ajuste: `novoPerfilSchema` exige ao menos uma
+    permissão, porque um perfil vazio não deixa ninguém fazer nada. Criar
+    primeiro e marcar depois obrigaria a tela a inventar uma permissão
+    inicial — e quem grava é o botão.
+  */
+  const [novo, setNovo] = useState<{ nome: string; permissoes: string[] } | null>(null);
+
+  /*
+    Qual perfil está sendo excluído, esperando confirmação. Mora no estado com
+    o id do DONO porque trocar de perfil não remonta o componente — e exclusão
+    não volta. `window.confirm` não tem o estilo, nem o foco, nem o celular:
+    a confirmação é uma faixa na própria tela.
+  */
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+
   const podeEditar = pode(PERM.usuario.editar);
 
   /*
@@ -80,7 +97,7 @@ export function Perfis() {
     setErro(null);
   }
 
-  const marcadas = rascunho ?? atual?.permissoes ?? [];
+  const marcadas = novo ? novo.permissoes : (rascunho ?? atual?.permissoes ?? []);
   const sujo = rascunho !== null && atual !== null && !mesmos(rascunho, atual.permissoes);
 
   const salvar = useMutation({
@@ -96,6 +113,38 @@ export function Perfis() {
     },
     onError: (e) => {
       setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível salvar.');
+    },
+  });
+
+  const criar = useMutation({
+    mutationFn: () =>
+      pedir<Perfil>('/equipe/perfis', {
+        method: 'POST',
+        body: { nome: novo?.nome.trim(), permissoes: novo?.permissoes },
+      }),
+    onSuccess: async (criado) => {
+      setErro(null);
+      setNovo(null);
+      setEscolhido(criado.id);
+      await fila.invalidateQueries({ queryKey: ['equipe'] });
+    },
+    onError: (e) => {
+      setErro(e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível criar o perfil.');
+    },
+  });
+
+  const excluir = useMutation({
+    mutationFn: (id: string) => pedir<void>(`/equipe/perfis/${id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      setErro(null);
+      setExcluindo(null);
+      setEscolhido(null);
+      await fila.invalidateQueries({ queryKey: ['equipe'] });
+    },
+    onError: (e) => {
+      setErro(
+        e instanceof ErroRequisicao ? e.corpo.mensagem : 'Não foi possível excluir o perfil.',
+      );
     },
   });
 
@@ -140,7 +189,13 @@ export function Perfis() {
   }
 
   const grupos = [...new Set(dados.permissoes.map((p) => p.grupo))];
-  const travado = !podeEditar || (atual?.sistema ?? false);
+  const travado = novo ? !podeEditar : !podeEditar || (atual?.sistema ?? false);
+
+  /** As marcações vão para o rascunho de quem está aberto: o novo ou o atual. */
+  const marcar = (chaves: string[]): void => {
+    if (novo) setNovo({ ...novo, permissoes: chaves });
+    else setRascunho(chaves);
+  };
 
   return (
     <>
@@ -184,19 +239,54 @@ export function Perfis() {
 
         <div className="flex flex-col items-stretch gap-3.5 lg:min-h-0 lg:flex-1 lg:flex-row">
           <section className="flex max-h-[340px] w-full shrink-0 flex-col overflow-hidden rounded-md border border-neutral-100 bg-white shadow-sm lg:max-h-none lg:w-[320px]">
-            <p className="shrink-0 border-b border-neutral-100 px-3.5 py-3 text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
-              Perfis
-            </p>
+            <div className="flex shrink-0 items-center gap-2 border-b border-neutral-100 px-3.5 py-2.5">
+              <p className="flex-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-neutral-500">
+                Perfis
+              </p>
+              {podeEditar ? (
+                <button
+                  type="button"
+                  disabled={novo !== null}
+                  onClick={() => {
+                    setErro(null);
+                    setRascunho(null);
+                    setNovo({ nome: '', permissoes: [] });
+                  }}
+                  className="h-7 rounded-md border border-neutral-200 px-2.5 text-[12px] text-neutral-700 hover:border-neutral-300 disabled:opacity-40"
+                >
+                  Novo perfil
+                </button>
+              ) : null}
+            </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-auto p-2.5">
+              {novo ? (
+                <div className="rounded-md border border-primary-200 bg-primary-50 px-3 py-2.5">
+                  <span className="block text-[13px] font-medium text-neutral-900">
+                    {novo.nome.trim() === '' ? 'Perfil novo' : novo.nome}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-primary-800">
+                    rascunho · {novo.permissoes.length}{' '}
+                    {novo.permissoes.length === 1 ? 'permissão marcada' : 'permissões marcadas'}
+                  </span>
+                </div>
+              ) : null}
+
               {perfis.map((p) => (
                 <button
                   key={p.id}
                   type="button"
+                  /*
+                    Com rascunho aberto, trocar de perfil apagaria o que foi
+                    marcado sem avisar. Em vez de sumir com o trabalho, a lista
+                    espera: o rodapé diz por quê, e "Cancelar" é a saída.
+                  */
+                  disabled={novo !== null}
                   onClick={() => setEscolhido(p.id)}
                   className={juntar(
                     'flex items-center gap-2.5 rounded-md border px-3 py-2.5 text-left',
-                    atual?.id === p.id
+                    novo !== null && 'opacity-40',
+                    atual?.id === p.id && novo === null
                       ? 'border-primary-100 bg-primary-50'
                       : 'border-neutral-100 bg-white hover:bg-neutral-25',
                   )}
@@ -230,34 +320,79 @@ export function Perfis() {
               ))}
             </div>
 
-            <p className="shrink-0 border-t border-neutral-100 px-3.5 py-2.5 text-[11.5px] leading-4 text-neutral-400">
-              Perfil de <strong className="font-semibold text-neutral-600">sistema</strong> não se
-              exclui nem muda de chave — <code>db:sync-perfis</code> reescreve as permissões dele.
-              Duplicar e ajustar é o caminho.
-            </p>
+            {novo ? (
+              <p className="shrink-0 border-t border-neutral-100 bg-[#fefbf3] px-3.5 py-2.5 text-[11.5px] leading-4 text-[var(--color-atencao)]">
+                Rascunho aberto. A lista volta a responder quando este perfil for criado ou
+                cancelado.
+              </p>
+            ) : (
+              <p className="shrink-0 border-t border-neutral-100 px-3.5 py-2.5 text-[11.5px] leading-4 text-neutral-400">
+                Perfil de <strong className="font-semibold text-neutral-600">sistema</strong> não se
+                exclui nem muda de chave — <code>db:sync-perfis</code> reescreve as permissões dele.
+                Duplicar e ajustar é o caminho.
+              </p>
+            )}
           </section>
 
-          {atual ? (
+          {novo || atual ? (
             <section className="flex min-w-0 flex-col rounded-md border border-neutral-100 bg-white shadow-sm lg:flex-1 lg:overflow-hidden">
               <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-neutral-100 px-4 py-3">
-                <span className="font-display text-[15px] font-bold text-neutral-900">
-                  {atual.nome}
-                </span>
-                {atual.sistema ? (
+                {novo ? (
+                  <input
+                    value={novo.nome}
+                    autoFocus
+                    onChange={(e) => {
+                      setNovo({ ...novo, nome: e.target.value });
+                    }}
+                    maxLength={80}
+                    placeholder="Nome do perfil"
+                    className="h-8 w-52 rounded-md border border-neutral-200 px-2.5 font-display text-[14px] font-bold text-neutral-900 outline-none placeholder:font-normal placeholder:text-neutral-400 focus:border-primary-300"
+                  />
+                ) : (
+                  <span className="font-display text-[15px] font-bold text-neutral-900">
+                    {atual?.nome}
+                  </span>
+                )}
+                {atual && !novo && atual.sistema ? (
                   <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10.5px] font-semibold text-neutral-500">
                     sistema
                   </span>
                 ) : null}
                 <span className="text-[12.5px] text-neutral-500">
-                  {marcadas.length} de {dados.permissoes.length} permissões ·{' '}
-                  {atual.usuarios === 0
-                    ? 'ninguém usa'
-                    : `${String(atual.usuarios)} ${atual.usuarios === 1 ? 'pessoa' : 'pessoas'}`}
+                  {marcadas.length} de {dados.permissoes.length} permissões
+                  {novo || !atual
+                    ? ''
+                    : ` · ${atual.usuarios === 0 ? 'ninguém usa' : `${String(atual.usuarios)} ${atual.usuarios === 1 ? 'pessoa' : 'pessoas'}`}`}
                 </span>
 
                 <div className="flex-1" />
 
-                {podeEditar && atual.sistema ? (
+                {novo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNovo(null);
+                        setErro(null);
+                      }}
+                      className="h-8 rounded-md border border-neutral-200 px-3 text-[12.5px] text-neutral-600 hover:border-neutral-300"
+                    >
+                      Cancelar
+                    </button>
+                    <Botao
+                      variante="primario"
+                      carregando={criar.isPending}
+                      disabled={novo.nome.trim().length < 2 || novo.permissoes.length === 0}
+                      onClick={() => {
+                        criar.mutate();
+                      }}
+                    >
+                      Criar perfil
+                    </Botao>
+                  </>
+                ) : null}
+
+                {atual && !novo && podeEditar && atual.sistema ? (
                   <Botao
                     variante="secundario"
                     carregando={duplicar.isPending}
@@ -267,7 +402,30 @@ export function Perfis() {
                   </Botao>
                 ) : null}
 
-                {podeEditar && !atual.sistema ? (
+                {/*
+                  Perfil criado por engano tinha de ficar para sempre: a rota
+                  existia desde o começo e nenhuma tela a chamava. Em uso, o
+                  botão não aparece — a API recusaria, e oferecer caminho que
+                  falha é o contrário do que os controles servem. No lugar
+                  dele vai o motivo, escrito.
+                */}
+                {atual && !novo && podeEditar && !atual.sistema && atual.usuarios > 0 ? (
+                  <span className="text-[12px] text-neutral-400">Em uso — não se exclui</span>
+                ) : null}
+
+                {atual && !novo && podeEditar && !atual.sistema && atual.usuarios === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExcluindo(atual.id);
+                    }}
+                    className="h-8 rounded-md border border-neutral-200 px-3 text-[12.5px] text-[var(--color-perigo)] hover:border-[#f0c9cb]"
+                  >
+                    Excluir
+                  </button>
+                ) : null}
+
+                {atual && !novo && podeEditar && !atual.sistema ? (
                   <Botao
                     variante="primario"
                     carregando={salvar.isPending}
@@ -279,7 +437,34 @@ export function Perfis() {
                 ) : null}
               </div>
 
-              {atual.sistema ? (
+              {atual && excluindo === atual.id ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-[#f0c9cb] bg-[#fdf5f5] px-4 py-2.5">
+                  <p className="flex-1 text-[12.5px] text-[var(--color-perigo)]">
+                    Excluir <strong className="font-semibold">{atual.nome}</strong>? Não volta — e
+                    quem for cadastrado com ele depois terá de escolher outro.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExcluindo(null);
+                    }}
+                    className="h-7 rounded-md border border-neutral-200 bg-white px-2.5 text-[12px] text-neutral-600"
+                  >
+                    Cancelar
+                  </button>
+                  <Botao
+                    variante="perigo"
+                    carregando={excluir.isPending}
+                    onClick={() => {
+                      excluir.mutate(atual.id);
+                    }}
+                  >
+                    Excluir perfil
+                  </Botao>
+                </div>
+              ) : null}
+
+              {atual && !novo && atual.sistema ? (
                 <p className="shrink-0 border-b border-neutral-100 bg-neutral-25 px-4 py-2 text-[12px] text-neutral-500">
                   Só leitura. Para um perfil parecido e editável, use{' '}
                   <strong className="font-semibold text-neutral-700">Duplicar</strong>.
@@ -301,7 +486,7 @@ export function Perfis() {
                           disabled={travado}
                           onChange={() => {
                             const chaves = doGrupo.map((p) => p.chave);
-                            setRascunho(
+                            marcar(
                               todas
                                 ? marcadas.filter((c) => !chaves.includes(c))
                                 : [...new Set([...marcadas, ...chaves])],
@@ -341,7 +526,7 @@ export function Perfis() {
                               checked={marcada}
                               disabled={travado}
                               onChange={() =>
-                                setRascunho(
+                                marcar(
                                   marcada
                                     ? marcadas.filter((c) => c !== p.chave)
                                     : [...marcadas, p.chave],
@@ -370,7 +555,17 @@ export function Perfis() {
                 })}
               </div>
 
-              {sujo ? (
+              {novo ? (
+                <p className="shrink-0 border-t-2 border-neutral-200 bg-[#fefbf3] px-4 py-2.5 text-[12.5px] text-[var(--color-atencao)]">
+                  {novo.nome.trim().length < 2
+                    ? 'Dê um nome ao perfil.'
+                    : novo.permissoes.length === 0
+                      ? 'Marque ao menos uma permissão — um perfil vazio não deixa ninguém fazer nada.'
+                      : 'Rascunho. Quem grava é o botão Criar perfil.'}
+                </p>
+              ) : null}
+
+              {!novo && sujo ? (
                 <p className="shrink-0 border-t-2 border-neutral-200 bg-[#fefbf3] px-4 py-2.5 text-[12.5px] text-[var(--color-atencao)]">
                   Alterações não salvas. Quem grava é o botão{' '}
                   <strong className="font-semibold">Salvar</strong>.

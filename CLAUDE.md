@@ -245,6 +245,9 @@ o runtime.
 | `toISOString().slice(0, 10)` como "hoje" | Corta o dia em UTC: às 21h de Brasília já é amanhã lá. O campo "pago em" da baixa nascia com a data de AMANHÃ, e o teste de dias de atraso passava o dia inteiro e falhava toda noite. `diaISO` monta o dia do calendário local — o dia do negócio é o de quem opera |
 | Teste que desativa o usuário e tenta excluir o perfil dele | Desativar não solta o vínculo, e perfil EM USO não se exclui: o `delete` da limpeza falhava em silêncio. Dois perfis "Em uso ..." ficaram na tela de cadastro ao lado dos de verdade. Devolva ao perfil comum antes de excluir |
 | Duas colunas `flex-1` empilhadas no celular dentro de altura travada | O `overflow-hidden` do cartão anula o `min-height:auto` e a de baixo vira 2px, sem erro nenhum. Abaixo do ponto de corte quem rola é o `main`: `flex-1` e `overflow` só no `lg:` |
+| Botão do artboard que não foi construído | `POST /equipe/perfis` e `DELETE /equipe/perfis/:id` existiam, o artboard tinha "Novo perfil", e a tela saiu sem nenhum dos dois: dava para duplicar e ajustar, nunca para começar do zero. Antes de dar a tela por pronta, procure no artboard cada controle que ela deveria ter |
+| Criar sem poder desfazer | Perfil criado por engano ficaria para sempre — o mesmo defeito da baixa de título sem estorno. Botão de criar nasce com o de excluir, e a exclusão pede confirmação NA TELA, nunca `window.confirm` |
+| Rascunho que some ao clicar em outra linha da lista | O painel não remonta: trocar de perfil apagaria as permissões marcadas sem avisar. Com rascunho aberto a lista espera, e o rodapé diz por quê |
 
 ## Testes
 

@@ -391,6 +391,32 @@ describe.runIf(temBanco)('equipe — perfis', () => {
       .expect(400);
   });
 
+  it('perfil criado nasce com o caminho de volta: aparece na lista e se exclui', async () => {
+    /*
+      A rota de criar existia desde o começo e nenhuma tela a chamava — e a de
+      excluir também. Criar sem poder desfazer prende um perfil errado para
+      sempre, que é o mesmo defeito da baixa de título sem estorno.
+    */
+    const nome = `Conferente ${sufixo()}`;
+    const perfil = (
+      await autenticado('post', '/api/equipe/perfis')
+        .send({ nome, permissoes: ['caixa.conferir'] })
+        .expect(201)
+    ).body as Perfil;
+
+    expect(perfil.sistema).toBe(false);
+    expect(perfil.usuarios).toBe(0);
+    expect(perfil.permissoes).toEqual(['caixa.conferir']);
+
+    const lista = (await autenticado('get', '/api/equipe/perfis').expect(200)).body as Perfil[];
+    expect(lista.some((p) => p.id === perfil.id)).toBe(true);
+
+    await autenticado('delete', `/api/equipe/perfis/${perfil.id}`).expect(200);
+
+    const depois = (await autenticado('get', '/api/equipe/perfis').expect(200)).body as Perfil[];
+    expect(depois.some((p) => p.id === perfil.id)).toBe(false);
+  });
+
   it('perfil em uso não se exclui — deixaria gente sem menu nenhum', async () => {
     const perfil = (
       await autenticado('post', '/api/equipe/perfis')
