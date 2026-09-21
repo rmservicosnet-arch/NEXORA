@@ -275,6 +275,12 @@ o runtime.
 | Idempotência que guarda o fracasso | Reenviar é o que o app faz quando a conexão cai. Se a falha ficar gravada, o reenvio recebe o mesmo erro para sempre e nunca tenta de novo. A reserva é solta quando o handler lança — idempotência protege o que DEU CERTO |
 | `logout` que só lê cookie | No celular não há cookie: `sair()` nunca era chamado, o 204 dizia que tudo certo, e o refresh valia os 30 dias inteiros. Aparelho perdido era sessão viva. O token vem do CORPO no canal `app` |
 | Teste que exige do ambiente o que ele desliga | Martelei o login doze vezes esperando 429 — e o throttler é desligado sob teste, de propósito e documentado. O teste nunca passaria, por um motivo que nada tem a ver com o código. Exercite a TRADUÇÃO, não o gatilho |
+| Duas cópias de `@types/react` no monorepo | A raiz tinha 19.3.0 e o `apps/mobile` 19.1.1, que eu fixei pelo peer do React Native. O sintoma não parece de versão: `'View' cannot be used as a JSX component`, com `ReactPortal` no meio. Uma versão para o monorepo inteiro |
+| API de biblioteca escrita pelo exemplo da internet | `react-native-vision-camera` 5 foi reescrito sobre Nitro: `useCodeScanner` e a prop `codeScanner` são da v4, e é o que aparece em toda documentação de terceiros. A v5 usa `usePreviewOutput` + `useObjectOutput` em `outputs`. Leia os `.d.ts` da versão INSTALADA |
+| `localhost` no aplicativo de celular | Ali é o próprio aparelho — a mesma armadilha do contêiner. Em desenvolvimento o IP sai do `hostUri` do Expo; no APK, de `EXPO_PUBLIC_API_URL`, e sem ela o aplicativo falha ALTO em vez de tentar `localhost` |
+| Chave de idempotência gerada no clique | Cada tentativa teria uma chave nova, e duas tentativas com chaves diferentes são duas vendas. A chave nasce com a TELA e sobrevive ao reenvio |
+| `ListEmptyComponent` recebendo `null` de um ternário | A lista some inteira em vez de mostrar nada. Um fragmento vazio, sim |
+| Campo inventado no contrato do app | Escrevi `item.faltando` de memória; não existe. O que existe é `disponivelAgora`, e a falta se calcula contra o solicitado. O `tsc` pegou — porque o app usa o MESMO `@estoque/contracts` |
 
 ## Testes
 

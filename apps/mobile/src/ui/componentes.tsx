@@ -21,7 +21,13 @@ import { cor, espaco, fonte, raio, TOQUE_MINIMO } from './tema';
  * vendedor instala.
  */
 
-export function Titulo({ children, style }: { readonly children: ReactNode; readonly style?: StyleProp<TextStyle> }) {
+export function Titulo({
+  children,
+  style,
+}: {
+  readonly children: ReactNode;
+  readonly style?: StyleProp<TextStyle>;
+}) {
   return <Text style={[e.titulo, style]}>{children}</Text>;
 }
 
@@ -66,17 +72,7 @@ export function Numero({
 }) {
   const tons = { normal: cor.tinta, apagado: cor.apagado, perigo: cor.perigo, bom: cor.bom };
 
-  return (
-    <Text
-      style={[
-        e.numero,
-        { fontSize: tamanho, color: tons[tom] },
-        style,
-      ]}
-    >
-      {children}
-    </Text>
-  );
+  return <Text style={[e.numero, { fontSize: tamanho, color: tons[tom] }, style]}>{children}</Text>;
 }
 
 export function Rotulo({ children }: { readonly children: ReactNode }) {
@@ -196,7 +192,13 @@ export function Aviso({
   );
 }
 
-export function Vazio({ titulo, descricao }: { readonly titulo: string; readonly descricao: string }) {
+export function Vazio({
+  titulo,
+  descricao,
+}: {
+  readonly titulo: string;
+  readonly descricao: string;
+}) {
   return (
     <View style={e.vazio}>
       <Text style={e.vazioTitulo}>{titulo}</Text>

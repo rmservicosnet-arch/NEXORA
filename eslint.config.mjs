@@ -99,6 +99,24 @@ export default tseslint.config(
   },
 
   // Scripts de manutenção falam com o operador pelo terminal.
+  /*
+    `metro.config.js` e `babel.config.js` do Expo sao CommonJS de verdade:
+    o bundler os carrega com `require`, antes de qualquer transpilacao. Nao
+    da para converte-los em ESM, entao o ambiente e que muda aqui.
+  */
+  {
+    files: ['apps/mobile/*.config.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', module: 'writable', __dirname: 'readonly' },
+    },
+    rules: {
+      // A regra existe para o codigo do produto, que e ESM. Aqui `require`
+      // nao e escolha: e o unico jeito de o bundler carregar o arquivo.
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+
   {
     files: ['scripts/**/*.ts', 'packages/db/prisma/**/*.ts'],
     rules: {

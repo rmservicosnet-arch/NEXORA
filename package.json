@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @estoque/api\" \"npm run dev -w @estoque/web\"",
     "build": "npm run build -w @estoque/contracts && npm run build -w @estoque/core && npm run build -w @estoque/db && npm run build -w @estoque/api && npm run build -w @estoque/web",
-    "typecheck": "tsc -b --pretty && npm run typecheck:tests",
+    "typecheck": "tsc -b --pretty && npm run typecheck:tests && npm run typecheck -w @estoque/mobile",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

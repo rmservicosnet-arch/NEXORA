@@ -135,3 +135,27 @@ o schema dava a impressão de resolvido.
 
 Os dois que faltam não impedem o aplicativo de existir; impedem que ele
 envelheça bem. Estão registrados aqui para não serem descobertos de novo.
+
+## 6. O aplicativo — `apps/mobile`
+
+Existe desde 21/09/2026. Domínio de FUNCIONÁRIO; o do cliente fica para
+depois. Telas: entrar, fila de pedidos, conferência, PDV com leitor,
+consulta de estoque e conta.
+
+**O pagamento ainda não.** O carrinho está pronto e a tela DIZ isso, em vez
+de oferecer um botão que não leva a lugar nenhum.
+
+Duas coisas descobertas ao construir, e as duas contrariam o que se encontra
+escrito por aí:
+
+- **A API do `react-native-vision-camera` 5 não é a da v4.** A versão fixada
+  na tabela acima está certa; o exemplo que aparece em toda documentação de
+  terceiros — `useCodeScanner` e a prop `codeScanner` — é da v4. A v5 foi
+  reescrita sobre Nitro: `usePreviewOutput` e `useObjectOutput` montam as
+  saídas, e elas vão em `outputs`.
+- **`@types/react` precisa ser ÚNICO no monorepo.** Fixar 19.1.1 aqui (o peer
+  do React Native) contra 19.3.0 na raiz produz `'View' cannot be used as a
+  JSX component` — um erro que não parece de versão.
+
+Para compilar: `apps/mobile/README.md`. O APK exige JDK 17 e Android SDK, que
+não estão nesta máquina; o código está pronto e o `prebuild` configurado.
