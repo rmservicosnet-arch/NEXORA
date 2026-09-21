@@ -18,6 +18,8 @@
 
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { PaginaMovimentos } from '@estoque/contracts';
+import { diaISO } from '@estoque/core';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -492,6 +494,54 @@ describe.runIf(temBanco)('permissão e escopo', () => {
       .expect(400);
 
     expect((recusa.body as { codigo: string }).codigo).toBe('LOCAL_DE_OUTRA_LOJA');
+  });
+
+  it('o recorte por dia pega o dia INTEIRO, dos dois lados', async () => {
+    /*
+      `de` e `ate` são dias do calendário de quem opera, e o serviço traduz
+      cada um para o começo e o fim do dia.
+
+      `new Date('2026-09-20')` é meia-noite em UTC — 21h do dia 19 em
+      Brasília. Como teto, escondia o dia 20 inteiro; como piso, só deixava
+      passar o que fosse gravado depois das 21h. O filtro não dava erro: a
+      lista vinha vazia, e quem olhasse concluiria que nada se movimentou.
+    */
+    const variacaoId = await novaVariacao(tokenAdmin);
+    const local = locais[0]!;
+
+    await entrada(tokenAdmin, variacaoId, local, '7', '11.00').expect(201);
+
+    const hoje = diaISO();
+
+    const doDia = (
+      await http
+        .get(`/api/estoque/movimentos?variacaoId=${variacaoId}&de=${hoje}&ate=${hoje}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200)
+    ).body as PaginaMovimentos;
+
+    expect(doDia.itens).toHaveLength(1);
+
+    // Amanhã em diante não pode pegar o que foi gravado hoje.
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+
+    const depois = (
+      await http
+        .get(`/api/estoque/movimentos?variacaoId=${variacaoId}&de=${diaISO(amanha)}`)
+        .set('Authorization', `Bearer ${tokenAdmin}`)
+        .expect(200)
+    ).body as PaginaMovimentos;
+
+    expect(depois.itens).toHaveLength(0);
+  });
+
+  it('data em formato que não é dia é recusada com mensagem, não com pilha', async () => {
+    // `new Date('ontem')` é Invalid Date, e o Prisma devolveria 500.
+    await http
+      .get('/api/estoque/movimentos?de=ontem')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .expect(400);
   });
 
   it('omite o custo no razão para quem não tem produto.ver_custo', async () => {

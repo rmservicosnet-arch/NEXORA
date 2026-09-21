@@ -55,4 +55,4 @@ export {
 } from './custo-medio';
 
 export { chaveDe } from './chave';
-export { diaISO } from './dia';
+export { diaISO, fimDoDia, inicioDoDia } from './dia';

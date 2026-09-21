@@ -25,6 +25,8 @@ import {
   aplicarSaida,
   aplicarSaidaComCustoEspecifico,
   dec,
+  fimDoDia,
+  inicioDoDia,
   posicao,
   type Dec,
   type ResultadoMovimento as ResultadoCalculo,
@@ -673,9 +675,15 @@ export class EstoqueService {
         ...(filtro.apenasNegativos ? { saldoNegativo: true } : {}),
         ...(filtro.de || filtro.ate
           ? {
+              /*
+                O teto é o FIM do dia. `new Date('2026-09-20')` é meia-noite
+                em UTC — 21h do dia 19 em Brasília —, então "até 20/09"
+                escondia o dia 20 inteiro e ainda o fim do 19, sem erro
+                nenhum: a lista só vinha mais curta.
+              */
               criadoEm: {
-                ...(filtro.de ? { gte: new Date(filtro.de) } : {}),
-                ...(filtro.ate ? { lte: new Date(filtro.ate) } : {}),
+                ...(filtro.de ? { gte: inicioDoDia(filtro.de) } : {}),
+                ...(filtro.ate ? { lte: fimDoDia(filtro.ate) } : {}),
               },
             }
           : {}),

@@ -248,6 +248,9 @@ o runtime.
 | Botão do artboard que não foi construído | `POST /equipe/perfis` e `DELETE /equipe/perfis/:id` existiam, o artboard tinha "Novo perfil", e a tela saiu sem nenhum dos dois: dava para duplicar e ajustar, nunca para começar do zero. Antes de dar a tela por pronta, procure no artboard cada controle que ela deveria ter |
 | Criar sem poder desfazer | Perfil criado por engano ficaria para sempre — o mesmo defeito da baixa de título sem estorno. Botão de criar nasce com o de excluir, e a exclusão pede confirmação NA TELA, nunca `window.confirm` |
 | Rascunho que some ao clicar em outra linha da lista | O painel não remonta: trocar de perfil apagaria as permissões marcadas sem avisar. Com rascunho aberto a lista espera, e o rodapé diz por quê |
+| Dia do calendário usado como instante | `new Date('2026-09-20')` é meia-noite em UTC — 21h do dia 19 em Brasília. Como TETO escondia o dia 20 inteiro; como PISO só deixava passar o que fosse gravado depois das 21h. O filtro por data do razão não devolvia nada e não dava erro. `inicioDoDia` e `fimDoDia`, e o recorte é por DIA |
+| Filtro que a API aceita e a tela não oferece | `de` e `ate` estavam no contrato do razão desde o começo, o serviço os usava, e a tela nunca os mandava. O defeito nem aparecia: ninguém conseguia chegar nele |
+| Recorte vazio explicado como lista vazia | "Nenhum movimento" faz quem lê achar que o razão está vazio. Quando há recorte, o vazio DIZ o recorte: "nenhum movimento de 01/01/2020 até 02/01/2020 — o razão não está vazio" |
 
 ## Testes
 

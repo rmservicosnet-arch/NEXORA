@@ -193,6 +193,8 @@ export type ResultadoTransferencia = z.infer<typeof resultadoTransferenciaSchema
 // Consultas
 // ---------------------------------------------------------------------------
 
+const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data no formato AAAA-MM-DD');
+
 export const filtroMovimentosSchema = z.object({
   variacaoId: z.string().uuid().optional(),
   produtoId: z.string().uuid().optional(),
@@ -202,8 +204,14 @@ export const filtroMovimentosSchema = z.object({
   sentido: sentidoMovimentoSchema.optional(),
   /** Só os que deixaram saldo negativo. */
   apenasNegativos: z.coerce.boolean().optional(),
-  de: z.string().optional(),
-  ate: z.string().optional(),
+  /*
+    Dia do calendário, nunca instante. `z.string()` aceitava qualquer coisa,
+    e `new Date('lixo')` vira Invalid Date que o Prisma rejeita com uma pilha
+    em vez de uma mensagem. O recorte é por DIA porque é assim que se pergunta:
+    "o que entrou entre segunda e sexta".
+  */
+  de: dia.optional(),
+  ate: dia.optional(),
   cursor: z.string().uuid().optional(),
   limite: z.coerce.number().int().min(1).max(200).default(50),
 });
