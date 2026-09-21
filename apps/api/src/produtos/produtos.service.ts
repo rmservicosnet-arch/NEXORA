@@ -515,6 +515,43 @@ export class ProdutosService {
   }
 
   /**
+   * Renomeia.
+   *
+   * Faltava, e a falta prendia um erro de digitação para sempre: a saída
+   * seria criar outra e trocar a de todos os produtos, um a um. A mesma
+   * conferência de nome repetido da criação — ignorando a própria linha,
+   * senão renomear para o mesmo nome se recusaria.
+   */
+  async renomearOpcao(tipo: 'categoria' | 'marca', id: string, nome: string): Promise<Opcao> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const limpo = nome.trim();
+
+      const colidente =
+        tipo === 'categoria'
+          ? await tx.categoria.findFirst({
+              where: { nome: { equals: limpo, mode: 'insensitive' }, id: { not: id } },
+            })
+          : await tx.marca.findFirst({
+              where: { nome: { equals: limpo, mode: 'insensitive' }, id: { not: id } },
+            });
+
+      if (colidente) {
+        throw new ConflictException({
+          codigo: tipo === 'categoria' ? 'CATEGORIA_JA_EXISTE' : 'MARCA_JA_EXISTE',
+          mensagem: `Já existe ${tipo === 'categoria' ? 'a categoria' : 'a marca'} "${colidente.nome}".`,
+        });
+      }
+
+      const alterada =
+        tipo === 'categoria'
+          ? await tx.categoria.update({ where: { id }, data: { nome: limpo } })
+          : await tx.marca.update({ where: { id }, data: { nome: limpo } });
+
+      return { id: alterada.id, nome: alterada.nome };
+    });
+  }
+
+  /**
    * Desativa ou reativa.
    *
    * É a saída para a que TEM vínculo: excluir apagaria a categoria de

@@ -364,6 +364,59 @@ describe.runIf(temBanco)('detalhe do produto', () => {
     expect(voltou.categorias.find((c) => c.id === alvo?.id)?.ativo).toBe(true);
   });
 
+  it('renomear corrige o erro de digitação, e não aceita o nome de outra', async () => {
+    /*
+      Faltava: dava para criar, desativar e excluir. Um nome errado ficava
+      preso — a saída seria criar outra e trocar a de todos os produtos.
+    */
+    const sessao = await entrar(ADMIN);
+    const cabecalho = { Authorization: `Bearer ${sessao.tokenAcesso}` };
+    const s = Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    const criada = (
+      await http
+        .post('/api/produtos/categorias')
+        .set(cabecalho)
+        .send({ nome: `Kimonoss ${s}` })
+        .expect(201)
+    ).body as { id: string };
+
+    const corrigida = (
+      await http
+        .put(`/api/produtos/categorias/${criada.id}`)
+        .set(cabecalho)
+        .send({ nome: `Kimonos ${s}` })
+        .expect(200)
+    ).body as { nome: string };
+
+    expect(corrigida.nome).toBe(`Kimonos ${s}`);
+
+    // Renomear para o PRÓPRIO nome não pode colidir consigo mesma.
+    await http
+      .put(`/api/produtos/categorias/${criada.id}`)
+      .set(cabecalho)
+      .send({ nome: `Kimonos ${s}` })
+      .expect(200);
+
+    // Mas o nome de outra, sim.
+    const outra = (
+      await http
+        .post('/api/produtos/categorias')
+        .set(cabecalho)
+        .send({ nome: `Faixas ${s}` })
+        .expect(201)
+    ).body as { id: string };
+
+    await http
+      .put(`/api/produtos/categorias/${outra.id}`)
+      .set(cabecalho)
+      .send({ nome: `kimonos ${s}` })
+      .expect(409);
+
+    await http.delete(`/api/produtos/categorias/${criada.id}`).set(cabecalho).expect(204);
+    await http.delete(`/api/produtos/categorias/${outra.id}`).set(cabecalho).expect(204);
+  });
+
   it('quem não tem produto.criar não cria categoria', async () => {
     const sessao = await entrar(VENDEDORA);
 

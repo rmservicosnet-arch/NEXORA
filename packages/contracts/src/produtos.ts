@@ -253,6 +253,16 @@ export const novaOpcaoSchema = z.object({
 });
 export type NovaOpcao = z.infer<typeof novaOpcaoSchema>;
 
+/**
+ * Renomear.
+ *
+ * Faltava: dava para criar, desativar e excluir, e um nome digitado errado
+ * ficava preso para sempre — a saída seria criar outra e trocar a de todos
+ * os produtos. O mesmo schema do nome na criação.
+ */
+export const renomearOpcaoSchema = novaOpcaoSchema;
+export type RenomearOpcao = NovaOpcao;
+
 /** Desativar e reativar. Com vínculo, é a única saída — e ela volta atrás. */
 export const situacaoOpcaoSchema = z.object({ ativo: z.boolean() });
 export type SituacaoOpcao = z.infer<typeof situacaoOpcaoSchema>;

@@ -265,6 +265,11 @@ o runtime.
 | Excluir o que tem vínculo | Apagar a categoria de produtos que a usam os deixa órfãos, e quem olhar depois não saberá que já tiveram uma. Sem vínculo, exclui; COM vínculo, desativa — some das escolhas novas, não mexe no passado, e volta atrás. É o mesmo raciocínio de suspender empresa |
 | Filtrar o desativado também de quem JÁ o usa | Tirar a categoria inativa da resposta faz o campo do produto que a tem mostrar "Não definida": o valor segue gravado e a tela mente. A API devolve as duas com a bandeira; quem decide o que OFERECER é a tela, que mantém a escolhida marcada |
 | Botão de excluir sem saber se vai poder | Sem a contagem de uso vinda do servidor, "Excluir" apareceria em todas e a maioria responderia 409. O `_count` vem no apoio: sem vínculo mostra excluir, com vínculo mostra quantos e oferece desativar |
+| Criar no fluxo confundido com ter tela | O botão "+ Nova" ao lado do campo resolve criar sem perder o formulário — e não dá onde VER todas, renomear e organizar. Criar no fluxo e a tela de cadastro respondem perguntas diferentes; uma não substitui a outra |
+| Criar, desativar e excluir sem RENOMEAR | Um nome digitado errado ficava preso: a saída seria criar outra e trocar a de todos os produtos, um a um. E renomear confere nome repetido ignorando a própria linha, senão salvar sem mexer no nome se recusaria |
+| Coluna de árvore que ninguém escreve nem lê | `categoria.pai_id` existe desde a migração inicial e a única leitura é o guard que eu escrevi. Dar uma tela a ela seria oferecer uma organização que nenhuma outra parte do sistema enxerga |
+| Hook chamado dentro de função comum | `const agir = (x) => useHook(x)` funciona enquanto as chamadas forem fixas e na mesma ordem — e convida o próximo a pôr uma dentro de um `if`. Chame direto |
+| Erro de HMR do Vite lido como erro do código | "does not provide an export named 'App'" depois de um patch que gravou o arquivo em duas etapas: o navegador segurava o módulo quebrado do meio do caminho. O arquivo estava certo. Toque o arquivo e recarregue antes de caçar o defeito |
 
 ## Testes
 

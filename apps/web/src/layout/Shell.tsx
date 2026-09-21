@@ -21,6 +21,13 @@ interface ItemMenu {
 }
 
 const ICONE = {
+  classificacao: (
+    <>
+      <path d="M3 7.5 10 4l8 4.5v7L10 20l-7-4.5z" />
+      <path d="M7 6.2v4.3" />
+      <path d="M21 9v8l-7 4" />
+    </>
+  ),
   equipe: (
     <>
       <circle cx="9" cy="8" r="3.2" />
@@ -200,6 +207,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Cadastros',
     permissoes: [PERM.produto.visualizar],
     icone: ICONE.caixa,
+  },
+  {
+    rotulo: 'Categorias e marcas',
+    para: '/produtos/classificacao',
+    grupo: 'Cadastros',
+    permissoes: [PERM.produto.visualizar],
+    icone: ICONE.classificacao,
   },
   {
     rotulo: 'Tabelas de preço',

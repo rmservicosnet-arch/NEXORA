@@ -23,6 +23,7 @@ import { PlataformaEmpresaNova } from './paginas/PlataformaEmpresaNova';
 import { PlataformaLogin } from './paginas/PlataformaLogin';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
+import { Classificacao } from './paginas/Classificacao';
 import { Cliente } from './paginas/Cliente';
 import { Clientes } from './paginas/Clientes';
 import { Configuracoes } from './paginas/Configuracoes';
@@ -179,6 +180,7 @@ function AreaDaEquipe() {
           <Route path="catalogo" element={<Catalogo />} />
           <Route path="produtos" element={<Produtos />} />
           <Route path="produtos/novo" element={<NovoProduto />} />
+          <Route path="produtos/classificacao" element={<Classificacao />} />
           <Route path="produtos/:produtoId" element={<Produto />} />
           <Route path="tabelas-preco" element={<TabelasPreco />} />
           <Route path="tabelas-preco/:tabelaId" element={<PrecosDaTabela />} />

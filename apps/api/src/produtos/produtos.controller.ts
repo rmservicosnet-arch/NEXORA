@@ -25,9 +25,11 @@ import {
   type PrecosDoProduto,
   type ProdutoDetalhe,
   novaOpcaoSchema,
+  renomearOpcaoSchema,
   situacaoOpcaoSchema,
   type NovaOpcao,
   type Opcao,
+  type RenomearOpcao,
   type SituacaoOpcao,
 } from '@estoque/contracts';
 
@@ -79,6 +81,25 @@ export class ProdutosController {
   @Permissoes(PERM.produto.criar)
   async criarMarca(@Body(new ZodPipe(novaOpcaoSchema)) dto: NovaOpcao): Promise<Opcao> {
     return this.produtos.criarOpcao('marca', dto.nome);
+  }
+
+  /* Renomear: sem isto, um nome errado ficava preso para sempre. */
+  @Put('categorias/:id')
+  @Permissoes(PERM.produto.criar)
+  async renomearCategoria(
+    @Param('id') id: string,
+    @Body(new ZodPipe(renomearOpcaoSchema)) dto: RenomearOpcao,
+  ): Promise<Opcao> {
+    return this.produtos.renomearOpcao('categoria', id, dto.nome);
+  }
+
+  @Put('marcas/:id')
+  @Permissoes(PERM.produto.criar)
+  async renomearMarca(
+    @Param('id') id: string,
+    @Body(new ZodPipe(renomearOpcaoSchema)) dto: RenomearOpcao,
+  ): Promise<Opcao> {
+    return this.produtos.renomearOpcao('marca', id, dto.nome);
   }
 
   /* Com vínculo, a saída é desativar — e ela volta atrás. */
