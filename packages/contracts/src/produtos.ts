@@ -213,11 +213,49 @@ export type AlteracaoProduto = z.infer<typeof alteracaoProdutoSchema>;
 // Apoio aos formulários
 // ---------------------------------------------------------------------------
 
+/**
+ * Opção com quantos produtos a usam.
+ *
+ * O número existe para a tela não oferecer um caminho que vai falhar: só a
+ * que ninguém usa mostra "Excluir", e a que tem produtos mostra QUANTOS, em
+ * texto visível. Descobrir isso apertando o botão e lendo um 409 é pior.
+ */
+export const opcaoComUsoSchema = opcaoSchema.extend({
+  produtos: z.number().int(),
+  /**
+   * Desativada some das escolhas NOVAS e continua valendo nos produtos que
+   * já a têm. A tela ainda a mostra quando é a escolhida — senão o valor
+   * sumiria do campo sem ninguém ter mexido nele.
+   */
+  ativo: z.boolean(),
+});
+export type OpcaoComUso = z.infer<typeof opcaoComUsoSchema>;
+
 export const apoioProdutoSchema = z.object({
-  categorias: z.array(opcaoSchema),
-  marcas: z.array(opcaoSchema),
+  categorias: z.array(opcaoComUsoSchema),
+  marcas: z.array(opcaoComUsoSchema),
 });
 export type ApoioProduto = z.infer<typeof apoioProdutoSchema>;
+
+/**
+ * Criar categoria e marca.
+ *
+ * As duas existiam apenas no seed: `/produtos/apoio` as LISTAVA e nenhuma
+ * rota as criava. Numa empresa nova — e a plataforma cria empresas vazias —
+ * os dois campos do cadastro de produto ficavam presos em "Não definida"
+ * para sempre. Campo que o sistema lê e ninguém consegue gravar.
+ *
+ * O nome é único por empresa, e o erro diz isso em vez de estourar um P2002
+ * sem tradução.
+ */
+export const novaOpcaoSchema = z.object({
+  nome: z.string().trim().min(2, 'Informe um nome').max(120),
+});
+export type NovaOpcao = z.infer<typeof novaOpcaoSchema>;
+
+/** Desativar e reativar. Com vínculo, é a única saída — e ela volta atrás. */
+export const situacaoOpcaoSchema = z.object({ ativo: z.boolean() });
+export type SituacaoOpcao = z.infer<typeof situacaoOpcaoSchema>;
 
 // ---------------------------------------------------------------------------
 // Preços por tabela

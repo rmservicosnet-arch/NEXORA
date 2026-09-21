@@ -261,6 +261,10 @@ o runtime.
 | Estado vazio que afirma o que não aconteceu | "Nada além da criação" mentia nas empresas nascidas pelo SEED: a plataforma não as criou, então nem esse registro existe. O vazio diz o que é verdade nos dois casos |
 | Diagnosticar pelo caminho errado e culpar o código | Chamei `/api/...` relativo achando que havia proxy do Vite; o app chama `http://localhost:3333/api` direto. O 404 era do MEU teste, não da rota. Confira como o app fala com a API antes de concluir que a API não responde |
 | `1 ativas`, `nas 1 empresas` | Concordância montada com template no meio do JSX sai errada no singular. Uma função `contagem(n, singular, plural)`, e o artigo junto |
+| Lista que o sistema LÊ e nenhuma rota escreve | Categoria e marca só existiam pelo seed: `/produtos/apoio` as listava e nada as criava. Empresa nova nascia com os dois campos presos em "Não definida" para sempre — e agora a plataforma cria empresas vazias. O mesmo defeito de `cliente.tabelaPrecoId` |
+| Excluir o que tem vínculo | Apagar a categoria de produtos que a usam os deixa órfãos, e quem olhar depois não saberá que já tiveram uma. Sem vínculo, exclui; COM vínculo, desativa — some das escolhas novas, não mexe no passado, e volta atrás. É o mesmo raciocínio de suspender empresa |
+| Filtrar o desativado também de quem JÁ o usa | Tirar a categoria inativa da resposta faz o campo do produto que a tem mostrar "Não definida": o valor segue gravado e a tela mente. A API devolve as duas com a bandeira; quem decide o que OFERECER é a tela, que mantém a escolhida marcada |
+| Botão de excluir sem saber se vai poder | Sem a contagem de uso vinda do servidor, "Excluir" apareceria em todas e a maioria responderia 409. O `_count` vem no apoio: sem vínculo mostra excluir, com vínculo mostra quantos e oferece desativar |
 
 ## Testes
 

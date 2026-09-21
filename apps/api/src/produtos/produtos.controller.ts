@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   alteracaoPrecosSchema,
   alteracaoProdutoSchema,
@@ -13,6 +24,11 @@ import {
   type PaginaProdutos,
   type PrecosDoProduto,
   type ProdutoDetalhe,
+  novaOpcaoSchema,
+  situacaoOpcaoSchema,
+  type NovaOpcao,
+  type Opcao,
+  type SituacaoOpcao,
 } from '@estoque/contracts';
 
 import type { Principal } from '../auth/dominios';
@@ -44,6 +60,59 @@ export class ProdutosController {
   @Permissoes(PERM.produto.visualizar)
   async apoio(): Promise<ApoioProduto> {
     return this.produtos.apoio();
+  }
+
+  /*
+    Criar categoria e marca — também antes de `:id`.
+
+    Exigem `produto.criar`, não uma permissão própria: quem cadastra produto
+    é quem descobre que falta a categoria, e uma permissão a mais que ninguém
+    atribuísse deixaria o campo inalcançável do mesmo jeito.
+  */
+  @Post('categorias')
+  @Permissoes(PERM.produto.criar)
+  async criarCategoria(@Body(new ZodPipe(novaOpcaoSchema)) dto: NovaOpcao): Promise<Opcao> {
+    return this.produtos.criarOpcao('categoria', dto.nome);
+  }
+
+  @Post('marcas')
+  @Permissoes(PERM.produto.criar)
+  async criarMarca(@Body(new ZodPipe(novaOpcaoSchema)) dto: NovaOpcao): Promise<Opcao> {
+    return this.produtos.criarOpcao('marca', dto.nome);
+  }
+
+  /* Com vínculo, a saída é desativar — e ela volta atrás. */
+  @Put('categorias/:id/situacao')
+  @Permissoes(PERM.produto.criar)
+  async situacaoCategoria(
+    @Param('id') id: string,
+    @Body(new ZodPipe(situacaoOpcaoSchema)) dto: SituacaoOpcao,
+  ): Promise<Opcao> {
+    return this.produtos.mudarSituacaoOpcao('categoria', id, dto.ativo);
+  }
+
+  @Put('marcas/:id/situacao')
+  @Permissoes(PERM.produto.criar)
+  async situacaoMarca(
+    @Param('id') id: string,
+    @Body(new ZodPipe(situacaoOpcaoSchema)) dto: SituacaoOpcao,
+  ): Promise<Opcao> {
+    return this.produtos.mudarSituacaoOpcao('marca', id, dto.ativo);
+  }
+
+  /* Só o que ninguém usa. Com produto apontando, a recusa diz quantos. */
+  @Delete('categorias/:id')
+  @HttpCode(204)
+  @Permissoes(PERM.produto.criar)
+  async excluirCategoria(@Param('id') id: string): Promise<void> {
+    await this.produtos.excluirOpcao('categoria', id);
+  }
+
+  @Delete('marcas/:id')
+  @HttpCode(204)
+  @Permissoes(PERM.produto.criar)
+  async excluirMarca(@Param('id') id: string): Promise<void> {
+    await this.produtos.excluirOpcao('marca', id);
   }
 
   // Depois de `apoio`: o NestJS casa as rotas na ordem de declaração, e

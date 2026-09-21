@@ -248,6 +248,131 @@ describe.runIf(temBanco)('detalhe do produto', () => {
     expect(resposta.body).toHaveProperty('categorias');
     expect(resposta.body).toHaveProperty('marcas');
   });
+
+  /*
+    Categoria e marca só existiam no seed: `apoio` as LISTAVA e nenhuma rota
+    as criava. Numa empresa nova — e a plataforma cria empresas vazias — os
+    dois campos do cadastro de produto ficavam presos em "Não definida" para
+    sempre. Campo que o sistema lê e ninguém consegue gravar.
+  */
+  it.each([
+    ['categorias', 'Categoria'],
+    ['marcas', 'Marca'],
+  ])('%s: cria, aparece no apoio, repete recusa e a vazia se exclui', async (onde, rotulo) => {
+    const sessao = await entrar(ADMIN);
+    const cabecalho = { Authorization: `Bearer ${sessao.tokenAcesso}` };
+    const nome = `${rotulo} de teste ${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+    const criada = (
+      await http.post(`/api/produtos/${onde}`).set(cabecalho).send({ nome }).expect(201)
+    ).body as { id: string; nome: string };
+
+    expect(criada.nome).toBe(nome);
+
+    const apoio = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string }[];
+      marcas: { id: string }[];
+    };
+    const lista = onde === 'categorias' ? apoio.categorias : apoio.marcas;
+    expect(lista.some((o) => o.id === criada.id)).toBe(true);
+
+    // O nome é único por empresa, e o erro diz isso em vez de estourar um
+    // P2002 sem tradução.
+    const repetida = await http
+      .post(`/api/produtos/${onde}`)
+      .set(cabecalho)
+      .send({ nome: nome.toLowerCase() })
+      .expect(409);
+    expect((repetida.body as { mensagem: string }).mensagem).toContain(nome);
+
+    // Criar nasce com o contrário: ninguém usa, então se exclui.
+    await http.delete(`/api/produtos/${onde}/${criada.id}`).set(cabecalho).expect(204);
+
+    const depois = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string }[];
+      marcas: { id: string }[];
+    };
+    const restante = onde === 'categorias' ? depois.categorias : depois.marcas;
+    expect(restante.some((o) => o.id === criada.id)).toBe(false);
+  });
+
+  it('categoria em uso não se exclui — apagar deixaria produtos órfãos', async () => {
+    const sessao = await entrar(ADMIN);
+    const cabecalho = { Authorization: `Bearer ${sessao.tokenAcesso}` };
+
+    const apoio = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string; nome: string }[];
+    };
+
+    // As do seed têm produto. Usar uma delas prova a recusa sem criar nada.
+    const emUso = apoio.categorias[0];
+    expect(emUso).toBeDefined();
+
+    const recusa = await http
+      .delete(`/api/produtos/categorias/${String(emUso?.id)}`)
+      .set(cabecalho)
+      .expect(409);
+
+    expect((recusa.body as { codigo: string }).codigo).toBe('CATEGORIA_EM_USO');
+  });
+
+  it('categoria em uso se DESATIVA, some das escolhas e volta atrás', async () => {
+    /*
+      Excluir com vínculo apagaria a categoria de produtos que já a usam, e
+      quem olhasse depois não saberia que eles tiveram uma. Desativar é a
+      saída: some das escolhas NOVAS, não mexe no passado, e reativa.
+    */
+    const sessao = await entrar(ADMIN);
+    const cabecalho = { Authorization: `Bearer ${sessao.tokenAcesso}` };
+
+    const apoio = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string; nome: string; produtos: number; ativo: boolean }[];
+    };
+
+    const alvo = apoio.categorias.find((c) => c.produtos > 0 && c.ativo);
+    expect(alvo).toBeDefined();
+
+    await http
+      .put(`/api/produtos/categorias/${String(alvo?.id)}/situacao`)
+      .set(cabecalho)
+      .send({ ativo: false })
+      .expect(200);
+
+    // Continua na resposta — a tela precisa dela para o produto que já a usa
+    // não mostrar "Não definida" — mas marcada como desativada.
+    const desativada = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string; ativo: boolean }[];
+    };
+    const depois = desativada.categorias.find((c) => c.id === alvo?.id);
+    expect(depois?.ativo).toBe(false);
+
+    // E nem assim se exclui: o vínculo continua lá.
+    await http
+      .delete(`/api/produtos/categorias/${String(alvo?.id)}`)
+      .set(cabecalho)
+      .expect(409);
+
+    await http
+      .put(`/api/produtos/categorias/${String(alvo?.id)}/situacao`)
+      .set(cabecalho)
+      .send({ ativo: true })
+      .expect(200);
+
+    const voltou = (await http.get('/api/produtos/apoio').set(cabecalho).expect(200)).body as {
+      categorias: { id: string; ativo: boolean }[];
+    };
+    expect(voltou.categorias.find((c) => c.id === alvo?.id)?.ativo).toBe(true);
+  });
+
+  it('quem não tem produto.criar não cria categoria', async () => {
+    const sessao = await entrar(VENDEDORA);
+
+    await http
+      .post('/api/produtos/categorias')
+      .set('Authorization', `Bearer ${sessao.tokenAcesso}`)
+      .send({ nome: 'Tentativa da vendedora' })
+      .expect(403);
+  });
 });
 
 describe.runIf(temBanco)('cadastro de produto', () => {

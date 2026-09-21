@@ -1051,13 +1051,22 @@ model BaixaTitulo {
 // ===========================================================================
 
 model Categoria {
-  id       String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String      @map("tenant_id") @db.Uuid
-  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  nome     String      @db.VarChar(120)
-  paiId    String?     @map("pai_id") @db.Uuid
-  pai      Categoria?  @relation("CategoriaArvore", fields: [paiId], references: [id], onDelete: SetNull)
-  filhos   Categoria[] @relation("CategoriaArvore")
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome     String @db.VarChar(120)
+
+  /// Desativada some das escolhas NOVAS e não abandona as antigas.
+  ///
+  /// Excluir só é possível quando ninguém usa. Com produto apontando, apagar
+  /// deixaria os produtos sem categoria e quem olhasse depois não saberia
+  /// que já tiveram uma — desativar é a operação reversível, como suspender
+  /// é para a empresa.
+  status StatusRegistro @default(ATIVO)
+
+  paiId  String?     @map("pai_id") @db.Uuid
+  pai    Categoria?  @relation("CategoriaArvore", fields: [paiId], references: [id], onDelete: SetNull)
+  filhos Categoria[] @relation("CategoriaArvore")
 
   produtos Produto[]
 
@@ -1071,6 +1080,9 @@ model Marca {
   tenantId String @map("tenant_id") @db.Uuid
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   nome     String @db.VarChar(120)
+
+  /// Mesma regra da categoria: sem vínculo se exclui, com vínculo se desativa.
+  status StatusRegistro @default(ATIVO)
 
   produtos Produto[]
 

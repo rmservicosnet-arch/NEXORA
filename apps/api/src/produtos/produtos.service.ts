@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import type {
   AlteracaoProduto,
   ApoioProduto,
+  Opcao,
   FiltroProdutos,
   NovoProduto,
   PaginaProdutos,
@@ -383,11 +384,158 @@ export class ProdutosService {
 
   async apoio(): Promise<ApoioProduto> {
     return comEscopoAtual(this.prisma, async (tx) => {
+      /*
+        O `_count` vem junto para a tela saber o que PODE excluir.
+
+        Sem ele, "Excluir" apareceria em todas e a maioria responderia 409 —
+        oferecer caminho que falha é o contrário do que o controle serve. Com
+        o número, a que tem produtos mostra quantos, em texto visível.
+      */
       const [categorias, marcas] = await Promise.all([
-        tx.categoria.findMany({ select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
-        tx.marca.findMany({ select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
+        tx.categoria.findMany({
+          select: {
+            id: true,
+            nome: true,
+            status: true,
+            _count: { select: { produtos: true } },
+          },
+          orderBy: { nome: 'asc' },
+        }),
+        tx.marca.findMany({
+          select: {
+            id: true,
+            nome: true,
+            status: true,
+            _count: { select: { produtos: true } },
+          },
+          orderBy: { nome: 'asc' },
+        }),
       ]);
-      return { categorias, marcas };
+
+      /*
+        Devolve ATIVAS e DESATIVADAS, com a bandeira.
+
+        Filtrar as desativadas aqui faria a categoria do produto que está
+        sendo editado sumir do campo — o valor continuaria gravado e a tela
+        mostraria "Não definida". Quem decide o que oferecer é a tela: ela
+        lista as ativas e mantém a escolhida, marcada.
+      */
+      const comUso = (o: {
+        id: string;
+        nome: string;
+        status: string;
+        _count: { produtos: number };
+      }) => ({
+        id: o.id,
+        nome: o.nome,
+        produtos: o._count.produtos,
+        ativo: o.status === 'ATIVO',
+      });
+
+      return { categorias: categorias.map(comUso), marcas: marcas.map(comUso) };
+    });
+  }
+
+  /**
+   * Cria uma categoria ou uma marca.
+   *
+   * As duas só existiam pelo seed: `apoio` as listava e nada as criava. Numa
+   * empresa nova — e a plataforma cria empresas vazias — os dois campos do
+   * cadastro de produto ficavam presos em "Não definida" para sempre.
+   *
+   * O nome é único por empresa. Traduzir a colisão aqui evita um P2002 cru
+   * chegando à tela como erro de banco, e diz a coisa útil: já existe.
+   */
+  async criarOpcao(tipo: 'categoria' | 'marca', nome: string): Promise<Opcao> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const contexto = exigirContexto();
+      const limpo = nome.trim();
+
+      const existente =
+        tipo === 'categoria'
+          ? await tx.categoria.findFirst({
+              where: { nome: { equals: limpo, mode: 'insensitive' } },
+            })
+          : await tx.marca.findFirst({ where: { nome: { equals: limpo, mode: 'insensitive' } } });
+
+      if (existente) {
+        throw new ConflictException({
+          codigo: tipo === 'categoria' ? 'CATEGORIA_JA_EXISTE' : 'MARCA_JA_EXISTE',
+          mensagem: `Já existe ${tipo === 'categoria' ? 'a categoria' : 'a marca'} "${existente.nome}".`,
+        });
+      }
+
+      const criada =
+        tipo === 'categoria'
+          ? await tx.categoria.create({ data: { tenantId: contexto.tenantId, nome: limpo } })
+          : await tx.marca.create({ data: { tenantId: contexto.tenantId, nome: limpo } });
+
+      return { id: criada.id, nome: criada.nome };
+    });
+  }
+
+  /**
+   * Exclui uma categoria ou marca que NINGUÉM usa.
+   *
+   * Criar sem poder desfazer prende um engano de digitação para sempre — foi
+   * o mesmo defeito do perfil sem exclusão e da empresa sem exclusão. Com
+   * produto apontando para ela a resposta é recusar e dizer quantos: apagar
+   * silenciosamente deixaria os produtos sem categoria, e quem olhasse depois
+   * não saberia que já tiveram uma.
+   */
+  async excluirOpcao(tipo: 'categoria' | 'marca', id: string): Promise<void> {
+    await comEscopoAtual(this.prisma, async (tx) => {
+      const usos = await tx.produto.count({
+        where: tipo === 'categoria' ? { categoriaId: id } : { marcaId: id },
+      });
+
+      if (usos > 0) {
+        throw new ConflictException({
+          codigo: tipo === 'categoria' ? 'CATEGORIA_EM_USO' : 'MARCA_EM_USO',
+          mensagem:
+            `${usos} ${usos === 1 ? 'produto usa' : 'produtos usam'} ` +
+            `${tipo === 'categoria' ? 'esta categoria' : 'esta marca'}. ` +
+            'Troque a deles antes de excluir.',
+        });
+      }
+
+      if (tipo === 'categoria') {
+        const filhos = await tx.categoria.count({ where: { paiId: id } });
+        if (filhos > 0) {
+          throw new ConflictException({
+            codigo: 'CATEGORIA_TEM_FILHAS',
+            mensagem: `Esta categoria tem ${String(filhos)} subcategoria(s). Exclua as filhas primeiro.`,
+          });
+        }
+        await tx.categoria.delete({ where: { id } });
+      } else {
+        await tx.marca.delete({ where: { id } });
+      }
+    });
+  }
+
+  /**
+   * Desativa ou reativa.
+   *
+   * É a saída para a que TEM vínculo: excluir apagaria a categoria de
+   * produtos que já a usam, e quem olhasse depois não saberia que eles já
+   * tiveram uma. Desativar some das escolhas novas e não mexe no passado —
+   * o mesmo raciocínio de suspender uma empresa em vez de apagá-la.
+   */
+  async mudarSituacaoOpcao(
+    tipo: 'categoria' | 'marca',
+    id: string,
+    ativo: boolean,
+  ): Promise<Opcao> {
+    return comEscopoAtual(this.prisma, async (tx) => {
+      const status = ativo ? 'ATIVO' : 'INATIVO';
+
+      const alterada =
+        tipo === 'categoria'
+          ? await tx.categoria.update({ where: { id }, data: { status } })
+          : await tx.marca.update({ where: { id }, data: { status } });
+
+      return { id: alterada.id, nome: alterada.nome };
     });
   }
 
