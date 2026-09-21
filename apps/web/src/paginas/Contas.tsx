@@ -14,6 +14,7 @@ import { useSessao } from '../auth/sessao';
 import { Aviso } from '../ui/Aviso';
 import { Botao } from '../ui/Botao';
 import { EstadoCarregando, EstadoVazio } from '../ui/Estados';
+import { diaISO } from '../ui/datas';
 import { juntar } from '../ui/juntar';
 
 function brl(v: string | number): string {
@@ -505,7 +506,7 @@ function PainelBaixa({
   const fila = useQueryClient();
 
   const [valor, setValor] = useState(titulo.emAberto);
-  const [pagoEm, setPagoEm] = useState(new Date().toISOString().slice(0, 10));
+  const [pagoEm, setPagoEm] = useState(diaISO());
   const [forma, setForma] = useState<(typeof FORMAS)[number]['chave']>('TRANSFERENCIA');
   const [observacao, setObservacao] = useState('');
 

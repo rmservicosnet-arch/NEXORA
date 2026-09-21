@@ -23,7 +23,7 @@ import type {
   RelatorioTransferencias,
   RelatorioVendas,
 } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { dec, diaISO as diaLocalISO, type Dec } from '@estoque/core';
 import { comEscopoAtual, type ClienteEmTransacao, type PrismaClient } from '@estoque/db';
 
 import { PRISMA } from '../infra/prisma/prisma.module';
@@ -1217,11 +1217,17 @@ export class RelatoriosService {
     return valor.minus(custo).dividedBy(valor).times(100).toFixed(1);
   }
 
-  /** O dia, em ISO, contado para trás a partir de hoje no fuso da loja. */
+  /**
+   * O dia, em ISO, contado para trás a partir de hoje no fuso da loja.
+   *
+   * Dizia "no fuso da loja" e fazia o contrário: `toISOString` corta o dia em
+   * UTC, e depois das 21h em Brasília lá já é amanhã. O recorte inteiro
+   * andava um dia — sem erro, só com os números de outro período.
+   */
   private diaISO(deslocamento: number): string {
     const agora = new Date();
     agora.setDate(agora.getDate() + deslocamento);
-    return agora.toISOString().slice(0, 10);
+    return diaLocalISO(agora);
   }
 
   private async resumoDeVendas(

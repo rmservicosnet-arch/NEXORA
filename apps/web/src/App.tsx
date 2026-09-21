@@ -12,6 +12,9 @@ import { Contas } from './paginas/Contas';
 import { Fornecedores } from './paginas/Fornecedores';
 import { Vendas } from './paginas/Vendas';
 import { VendaDetalhe } from './paginas/VendaDetalhe';
+import { Equipe } from './paginas/Equipe';
+import { UsuarioEditar } from './paginas/UsuarioEditar';
+import { Perfis } from './paginas/Perfis';
 import { CarteiraDoCliente, Carteiras } from './paginas/Carteiras';
 import { Catalogo } from './paginas/Catalogo';
 import { Cliente } from './paginas/Cliente';
@@ -154,6 +157,11 @@ function AreaDaEquipe() {
           <Route path="fornecedores" element={<Fornecedores />} />
           <Route path="vendas" element={<Vendas />} />
           <Route path="vendas/:id" element={<VendaDetalhe />} />
+          <Route path="equipe" element={<Equipe />} />
+          {/* `perfis` antes de `:id`, senão a palavra vira um id. */}
+          <Route path="equipe/perfis" element={<Perfis />} />
+          <Route path="equipe/novo" element={<UsuarioEditar />} />
+          <Route path="equipe/:id" element={<UsuarioEditar />} />
           <Route path="financeiro" element={<Contas />} />
           <Route path="estoque" element={<Estoque />} />
           <Route path="caixa" element={<Caixa />} />

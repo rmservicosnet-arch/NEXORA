@@ -61,11 +61,7 @@ function ehJpeg(b: Uint8Array): boolean {
 }
 
 function ehWebp(b: Uint8Array): boolean {
-  return (
-    b.length >= 16 &&
-    texto(b, 0, 4) === 'RIFF' &&
-    texto(b, 8, 4) === 'WEBP'
-  );
+  return b.length >= 16 && texto(b, 0, 4) === 'RIFF' && texto(b, 8, 4) === 'WEBP';
 }
 
 function texto(b: Uint8Array, inicio: number, tamanho: number): string {
@@ -82,11 +78,12 @@ function u16be(b: Uint8Array, i: number): number {
 
 function u32be(b: Uint8Array, i: number): number {
   return (
-    ((b[i] as number) << 24) |
-    ((b[i + 1] as number) << 16) |
-    ((b[i + 2] as number) << 8) |
-    (b[i + 3] as number)
-  ) >>> 0;
+    (((b[i] as number) << 24) |
+      ((b[i + 1] as number) << 16) |
+      ((b[i + 2] as number) << 8) |
+      (b[i + 3] as number)) >>>
+    0
+  );
 }
 
 function u24le(b: Uint8Array, i: number): number {
@@ -103,9 +100,7 @@ function dimensoesPng(b: Uint8Array): { largura: number; altura: number } {
 }
 
 /** Marcadores SOF (Start Of Frame). Os demais 0xC_ não carregam dimensão. */
-const SOF = new Set([
-  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
-]);
+const SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
 
 function dimensoesJpeg(b: Uint8Array): { largura: number; altura: number } {
   let i = 2;
@@ -193,10 +188,7 @@ export function lerImagem(bytes: Uint8Array): Imagem {
     return { tipo: 'image/webp', ...dimensoesWebp(bytes) };
   }
 
-  throw new ImagemInvalidaError(
-    'TIPO_NAO_ACEITO',
-    'O arquivo enviado não é JPEG, PNG nem WebP.',
-  );
+  throw new ImagemInvalidaError('TIPO_NAO_ACEITO', 'O arquivo enviado não é JPEG, PNG nem WebP.');
 }
 
 /**

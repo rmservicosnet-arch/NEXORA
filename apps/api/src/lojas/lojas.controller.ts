@@ -17,29 +17,13 @@ import {
   type LojaPainel,
   type NovaLoja,
 } from '@estoque/contracts';
-import { dec } from '@estoque/core';
+import { chaveDe, dec } from '@estoque/core';
 import { comEscopoAtual, exigirContexto, type PrismaClient } from '@estoque/db';
 
 import { PrincipalAtual, EscopoLoja, Permissoes } from '../comum/decoradores';
 import { ZodPipe } from '../comum/zod.pipe';
 import type { Principal } from '../auth/dominios';
 import { PRISMA } from '../infra/prisma/prisma.module';
-
-/**
- * Deriva o codigo a partir do nome.
- *
- * "Loja Shopping" vira LOJA_SHOPPING. Acentos caem: o codigo e identificador
- * e vai aparecer em log, em `where` e em conversa de suporte.
- */
-function codigoDe(nome: string): string {
-  return nome
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 30);
-}
 
 interface LojaResumo {
   readonly id: string;
@@ -98,7 +82,7 @@ export class LojasController {
     @Body(new ZodPipe(novaLojaSchema)) dados: NovaLoja,
     @PrincipalAtual() principal: Principal,
   ): Promise<{ id: string }> {
-    const codigo = dados.codigo ?? codigoDe(dados.nome);
+    const codigo = dados.codigo ?? chaveDe(dados.nome, 30);
 
     if (codigo.length < 2) {
       throw new ConflictException({
@@ -153,7 +137,7 @@ export class LojasController {
             tenantId: contexto.tenantId,
             lojaId: loja.id,
             nome: dados.localPadrao,
-            codigo: codigoDe(dados.localPadrao).slice(0, 30),
+            codigo: chaveDe(dados.localPadrao, 30),
             padraoVenda: true,
           },
         });

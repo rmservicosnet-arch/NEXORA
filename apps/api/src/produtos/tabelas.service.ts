@@ -8,7 +8,7 @@ import type {
   PaginaItensTabela,
   TabelaPreco,
 } from '@estoque/contracts';
-import { dec, type Dec } from '@estoque/core';
+import { chaveDe, dec, type Dec } from '@estoque/core';
 import {
   comEscopoAtual,
   exigirContexto,
@@ -19,22 +19,6 @@ import {
 import type { Principal } from '../auth/dominios';
 import { AuditoriaService } from '../comum/auditoria.service';
 import { PRISMA } from '../infra/prisma/prisma.module';
-
-/**
- * Deriva a chave a partir do nome.
- *
- * "Revendedor Atacado" → REVENDEDOR_ATACADO. Acentos caem, porque a chave é
- * identificador e vai aparecer em log, em `where` e em conversa de suporte.
- */
-function chaveDe(nome: string): string {
-  return nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 40);
-}
 
 /**
  * As tabelas de preço.

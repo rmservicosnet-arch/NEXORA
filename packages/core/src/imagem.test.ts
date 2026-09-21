@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  ImagemInvalidaError,
-  conferirImagemDeCatalogo,
-  lerImagem,
-  type Imagem,
-} from './imagem';
+import { ImagemInvalidaError, conferirImagemDeCatalogo, lerImagem, type Imagem } from './imagem';
 
 // ---------------------------------------------------------------------------
 // Cabeçalhos montados à mão.

@@ -21,6 +21,14 @@ interface ItemMenu {
 }
 
 const ICONE = {
+  equipe: (
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20a6 6 0 0 1 12 0" />
+      <path d="M16.5 5.6a3.4 3.4 0 0 1 0 4.8" />
+      <path d="M18.5 20a6 6 0 0 0-2-4.4" />
+    </>
+  ),
   venda: (
     <>
       <path d="M4 6h16v13H4z" />
@@ -206,6 +214,13 @@ const MENU: readonly ItemMenu[] = [
     grupo: 'Cadastros',
     permissoes: [PERM.cliente.visualizar],
     icone: ICONE.cliente,
+  },
+  {
+    rotulo: 'Equipe',
+    para: '/equipe',
+    grupo: 'Cadastros',
+    permissoes: [PERM.usuario.visualizar],
+    icone: ICONE.equipe,
   },
   {
     rotulo: 'Fornecedores',

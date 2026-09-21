@@ -241,6 +241,10 @@ o runtime.
 | Bandeira que promete um recurso que não existe | `usaCarteira: true` não criava carteira nenhuma: o cadastro dizia "usa carteira", a venda a prazo procurava uma e caía no outro caminho. Ligar a bandeira CRIA o recurso; desligar não apaga o razão |
 | Chave de idempotência sem o que distingue os lançamentos | `venda:${id}` colidia quando a mesma venda tinha parte paga com saldo e parte a prazo: o segundo débito sumia em silêncio. A chave carrega o TIPO |
 | Preço congelado revalidado com a quantidade CONFIRMADA | Antes de confirmar ela é ZERO: todo total virava R$ 0,00 e o cliente receberia um pedido de zero para aceitar. A quantidade que vale é a acordada — o maior entre pedida e confirmada |
+| Tela que oferece a escolha errada por definição | O cadastro de funcionário listava o perfil `CLIENTE_PORTAL` com "Nunca atribuído a funcionário" escrito logo abaixo. Some da lista de APOIO e é recusado no servidor — mas o INVENTÁRIO de perfis continua mostrando, senão a contagem mente e quem audita o portal não o acha |
+| `toISOString().slice(0, 10)` como "hoje" | Corta o dia em UTC: às 21h de Brasília já é amanhã lá. O campo "pago em" da baixa nascia com a data de AMANHÃ, e o teste de dias de atraso passava o dia inteiro e falhava toda noite. `diaISO` monta o dia do calendário local — o dia do negócio é o de quem opera |
+| Teste que desativa o usuário e tenta excluir o perfil dele | Desativar não solta o vínculo, e perfil EM USO não se exclui: o `delete` da limpeza falhava em silêncio. Dois perfis "Em uso ..." ficaram na tela de cadastro ao lado dos de verdade. Devolva ao perfil comum antes de excluir |
+| Duas colunas `flex-1` empilhadas no celular dentro de altura travada | O `overflow-hidden` do cartão anula o `min-height:auto` e a de baixo vira 2px, sem erro nenhum. Abaixo do ponto de corte quem rola é o `main`: `flex-1` e `overflow` só no `lg:` |
 
 ## Testes
 

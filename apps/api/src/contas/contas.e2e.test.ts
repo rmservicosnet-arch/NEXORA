@@ -18,6 +18,7 @@
 
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { diaISO } from '@estoque/core';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -91,10 +92,16 @@ function autenticado(metodo: 'get' | 'post' | 'put' | 'patch' | 'delete', rota: 
 }
 
 /** Data relativa a hoje, em AAAA-MM-DD. Negativo é passado. */
+/*
+  Dia do CALENDÁRIO local, nunca `toISOString`.
+  Às 21h de Brasília o dia em UTC já é o seguinte, e o vencimento de "9 dias
+  atrás" virava 8 contra o `hoje()` do serviço, que usa o dia local. O teste
+  passava o dia inteiro e falhava toda noite.
+*/
 function emDias(dias: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
-  return d.toISOString().slice(0, 10);
+  return diaISO(d);
 }
 
 async function novoTitulo(corpo: Record<string, unknown>): Promise<Titulo[]> {

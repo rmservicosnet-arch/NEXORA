@@ -53,3 +53,6 @@ export {
   type Saida,
   type SaidaComCusto,
 } from './custo-medio';
+
+export { chaveDe } from './chave';
+export { diaISO } from './dia';

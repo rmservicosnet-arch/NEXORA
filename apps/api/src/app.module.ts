@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { CaixaModule } from './caixa/caixa.module';
 import { CarteiraModule } from './carteira/carteira.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { EquipeModule } from './equipe/equipe.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { AutenticacaoGuard } from './comum/autenticacao.guard';
 import { ComumModule } from './comum/comum.module';
@@ -62,6 +63,7 @@ import { VisaoGeralModule } from './visao-geral/visao-geral.module';
     CaixaModule,
     CarteiraModule,
     ClientesModule,
+    EquipeModule,
     ConfiguracoesModule,
     VendasModule,
     RelatoriosModule,
